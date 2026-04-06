@@ -98,7 +98,7 @@ class Notification::PushNotificationService
 
     begin
       project_id = GlobalConfigService.load('FIREBASE_PROJECT_ID', nil)
-      credentials = GlobalConfigService.load('FIREBASE_CREDENTIALS', nil)
+      credentials = GlobalConfigService.load('FIREBASE_CREDENTIALS_SECRET', nil)
 
       Rails.logger.info("🔥 [FCM] Attempting to send push to #{user.email} (Project: #{project_id})")
 
@@ -123,7 +123,7 @@ class Notification::PushNotificationService
 
   def firebase_credentials_present?
     project_id = GlobalConfigService.load('FIREBASE_PROJECT_ID', nil)
-    credentials = GlobalConfigService.load('FIREBASE_CREDENTIALS', nil)
+    credentials = GlobalConfigService.load('FIREBASE_CREDENTIALS_SECRET', nil)
 
     if project_id.present? && credentials.present?
       Rails.logger.info("✅ [FCM] Firebase credentials found (Project ID: #{project_id})")

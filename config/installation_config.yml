@@ -436,12 +436,24 @@
   value:
   locked: false
   description: 'Firebase project ID'
-- name: FIREBASE_CREDENTIALS
-  display_title: 'Firebase Credentials'
+- name: FIREBASE_CREDENTIALS_SECRET
+  display_title: 'Firebase Credentials JSON'
   value:
   locked: false
   type: secret
-  description: 'Contents on your firebase credentials json file'
+  description: 'Firebase service account credentials JSON for push notifications'
+- name: IOS_APP_ID
+  display_title: 'iOS App ID'
+  value:
+  locked: false
+  description: 'iOS application bundle identifier for push notifications'
+  type: text
+- name: ANDROID_BUNDLE_ID
+  display_title: 'Android Bundle ID'
+  value:
+  locked: false
+  description: 'Android application package name for push notifications'
+  type: text
 ## ------ End of Configs added for FCM v1 notifications ------ ##
 
 ## ------ Configs added for Evolution ------ ##

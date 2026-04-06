@@ -130,7 +130,7 @@ class DashboardController < ActionController::Base
       BMS_API_SECRET: GlobalConfigService.load('BMS_API_SECRET', ''),
       BMS_IPPOOL: GlobalConfigService.load('BMS_IPPOOL', ''),
       FIREBASE_PROJECT_ID: GlobalConfigService.load('FIREBASE_PROJECT_ID', ''),
-      FIREBASE_CREDENTIALS: GlobalConfigService.load('FIREBASE_CREDENTIALS', '')
+      FIREBASE_CREDENTIALS_SECRET: GlobalConfigService.load('FIREBASE_CREDENTIALS_SECRET', '')
     }
   end
 end
