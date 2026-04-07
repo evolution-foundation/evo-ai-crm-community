@@ -90,8 +90,8 @@ class AgentBots::HttpRequestService
   def setup_http_client(uri)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = uri.scheme == 'https'
-    http.read_timeout = 10
-    http.open_timeout = 5
+    http.read_timeout = 120
+    http.open_timeout = 10
     http
   end
 

@@ -9,6 +9,9 @@ end
 Sidekiq.configure_server do |config|
   config.redis = Redis::Config.app
 
+  # Poll scheduled jobs more frequently (default is 5-15s which delays debounce jobs)
+  config[:average_scheduled_poll_interval] = 1
+
   # skip the default start stop logging
   if Rails.env.production?
     config.logger.formatter = Sidekiq::Logger::Formatters::JSON.new

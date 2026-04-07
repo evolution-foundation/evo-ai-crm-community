@@ -227,7 +227,6 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                                 :assignee,
                                 :team,
                                 :inbox,
-                                :account,
                                 messages: [:attachments, :sender]
                               ]
                             ]

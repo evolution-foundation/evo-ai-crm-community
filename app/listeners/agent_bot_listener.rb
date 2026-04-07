@@ -3,6 +3,7 @@ class AgentBotListener < BaseListener
     conversation = extract_conversation_and_account(event)[0]
     inbox = conversation.inbox
     return unless connected_agent_bot_exist?(inbox)
+    return if BotRuntime::Config.enabled? # Bot Runtime does not process conversation events
     return unless should_process_conversation_event?(inbox, conversation)
 
     event_name = __method__.to_s
@@ -14,6 +15,7 @@ class AgentBotListener < BaseListener
     conversation = extract_conversation_and_account(event)[0]
     inbox = conversation.inbox
     return unless connected_agent_bot_exist?(inbox)
+    return if BotRuntime::Config.enabled? # Bot Runtime does not process conversation events
     return unless should_process_conversation_event?(inbox, conversation)
 
     event_name = __method__.to_s
@@ -353,6 +355,10 @@ class AgentBotListener < BaseListener
     conversation = extract_conversation_and_account(event)[0]
     inbox = conversation.inbox
     return unless connected_agent_bot_exist?(inbox)
+
+    # Bot Runtime manages its own sessions via Redis TTLs
+    return if BotRuntime::Config.enabled?
+
     return unless inbox.agent_bot.evo_ai_provider?
 
     Rails.logger.info "[AgentBot Listener] conversation_deleted event received for conversation #{conversation.id}"
@@ -420,66 +426,6 @@ class AgentBotListener < BaseListener
     process_webhook_bot_event(agent_bot, payload)
   end
 
-  def should_use_debounce?(agent_bot, payload)
-    # Usa debounce se:
-    # 1. Debounce time > 0
-    # 2. É um evento de mensagem incoming
-    # Note: A validação de should_process_conversation? já foi feita antes de chegar aqui
-    return false unless debounce_enabled?(agent_bot)
-    return false unless incoming_message_event?(payload)
-
-    # Se chegou até aqui, significa que a conversa já passou pela validação
-    # e deve ser processada. O debounce é apenas uma otimização.
-    true
-  end
-
-  def process_with_debounce(agent_bot, payload)
-    Rails.logger.info "[AgentBot Listener] === Using debounce for agent #{agent_bot.name} ==="
-    Rails.logger.info "[AgentBot Listener] Payload keys: #{payload.keys.inspect}"
-    Rails.logger.info "[AgentBot Listener] Payload conversation: #{payload[:conversation].inspect}"
-    Rails.logger.info "[AgentBot Listener] Payload conversation_id: #{payload[:conversation_id].inspect}"
-    Rails.logger.info "[AgentBot Listener] Payload inbox: #{payload[:inbox].inspect}"
-    Rails.logger.info "[AgentBot Listener] Payload inbox_id: #{payload[:inbox_id].inspect}"
-
-    begin
-      conversation = find_conversation_from_payload(payload)
-      unless conversation
-        Rails.logger.warn "[AgentBot Listener] ⚠️  Conversation not found from payload, skipping debounce"
-        return
-      end
-
-      Rails.logger.info "[AgentBot Listener] Found conversation: #{conversation.id}"
-
-      # Cria um objeto Message virtual com o payload
-      message = create_message_from_payload(payload, conversation)
-      Rails.logger.info "[AgentBot Listener] Created virtual message: id=#{message.id}, content=#{message.content[0..100]}"
-
-      # Adiciona ao sistema de debounce
-      Rails.logger.info "[AgentBot Listener] Creating DebounceService and adding message"
-      debounce_service = AgentBots::DebounceService.new(agent_bot, conversation)
-      debounce_service.add_message(message)
-      Rails.logger.info "[AgentBot Listener] ✅ Message added to debounce service"
-    rescue StandardError => e
-      Rails.logger.error "[AgentBot Listener] ❌ Error in process_with_debounce: #{e.message}"
-      Rails.logger.error "[AgentBot Listener] Backtrace: #{e.backtrace.first(10).join("\n")}"
-      raise e
-    end
-  end
-
-  def process_without_debounce(agent_bot, payload)
-    Rails.logger.info "[AgentBot Listener] Processing without debounce for agent #{agent_bot.name}"
-
-    # Note: A validação de should_process_conversation? já foi feita antes de chegar aqui
-    # no método message_created ou message_updated
-
-    if agent_bot.webhook_provider?
-      AgentBots::WebhookJob.perform_later(agent_bot.outgoing_url, payload)
-    elsif agent_bot.n8n_provider?
-      AgentBots::N8nRequestService.new(agent_bot, payload).perform
-    else
-      AgentBots::HttpRequestService.new(agent_bot, payload).perform
-    end
-  end
 
   def find_conversation_from_payload(payload)
     # Handle both ActiveRecord object and hash
@@ -559,17 +505,36 @@ class AgentBotListener < BaseListener
   def process_webhook_bot_event(agent_bot, payload)
     return if agent_bot.outgoing_url.blank?
 
-    # Se for mensagem incoming e debounce habilitado, usa o sistema de debounce
-    if should_use_debounce?(agent_bot, payload)
-      process_with_debounce(agent_bot, payload)
+    # Bot Runtime handles debounce, AI calls and dispatch externally
+    if BotRuntime::Config.enabled?
+      delegate_to_bot_runtime(agent_bot, payload)
+      return
+    end
+
+    # Fallback: direct call for webhook/n8n providers (no debounce)
+    if agent_bot.webhook_provider?
+      AgentBots::WebhookJob.perform_later(agent_bot.outgoing_url, payload)
+    elsif agent_bot.n8n_provider?
+      AgentBots::N8nRequestService.new(agent_bot, payload).perform
     else
-      # Processamento normal sem debounce
-      process_without_debounce(agent_bot, payload)
+      AgentBots::HttpRequestService.new(agent_bot, payload).perform
     end
   end
 
-  def debounce_enabled?(agent_bot)
-    agent_bot.debounce_time.positive?
+  def delegate_to_bot_runtime(agent_bot, payload)
+    return unless incoming_message_event?(payload)
+
+    conversation = find_conversation_from_payload(payload)
+    return unless conversation
+
+    message = create_message_from_payload(payload, conversation)
+    BotRuntime::DelegationService.new(agent_bot, message, conversation).delegate
+
+    Rails.logger.info "[BotRuntime] Delegated message to Bot Runtime: " \
+                      "conversation=#{conversation.display_id} bot=#{agent_bot.name}"
+  rescue StandardError => e
+    Rails.logger.error "[BotRuntime] Delegation failed: #{e.message}"
+    Rails.logger.error "[BotRuntime] Backtrace: #{e.backtrace.first(5).join("\n")}"
   end
 
   def incoming_message_event?(payload)

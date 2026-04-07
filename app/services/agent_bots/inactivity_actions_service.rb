@@ -206,9 +206,9 @@ class AgentBots::InactivityActionsService
   def build_inactivity_payload(suggested_message, action_config)
     # Build clear prompt for AI to understand it should generate an inactivity re-engagement message
     prompt_message = if suggested_message.present?
-      "<system_message>[SYSTEM - INACTIVITY ACTION] The customer has been inactive for #{calculate_inactive_time_minutes} minutes. Generate a proactive message to re-engage the customer. Suggestion: #{suggested_message}<important>DON'T REPLY TO THIS MESSAGE</important></system_message>"
+      "<system_message>[SYSTEM - INACTIVITY ACTION] The customer has been inactive for #{calculate_inactive_time_minutes} minutes. Generate a proactive message to re-engage the customer and send it directly as your reply. Suggestion: #{suggested_message}<important>Reply ONLY with the message text for the customer. Do NOT use any tools like send_private_message. Do NOT add meta-commentary. Just write the reengagement message directly.</important></system_message>"
     else
-      "<system_message>[SYSTEM - INACTIVITY ACTION] The customer has been inactive for #{calculate_inactive_time_minutes} minutes. Generate an appropriate and contextualized message to re-engage the customer in the conversation. Be natural, empathetic, and relevant to the conversation context.<important>DON'T REPLY TO THIS MESSAGE</important></system_message>"
+      "<system_message>[SYSTEM - INACTIVITY ACTION] The customer has been inactive for #{calculate_inactive_time_minutes} minutes. Generate an appropriate and contextualized message to re-engage the customer in the conversation. Be natural, empathetic, and relevant to the conversation context.<important>Reply ONLY with the message text for the customer. Do NOT use any tools like send_private_message. Do NOT add meta-commentary. Just write the reengagement message directly.</important></system_message>"
     end
 
     {

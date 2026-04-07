@@ -32,6 +32,10 @@ class ContactInbox < ApplicationRecord
 
   has_many :conversations, dependent: :destroy_async
 
+  def bsuid?
+    bsuid.present?
+  end
+
   # contact_inboxes that are not associated with any conversation
   scope :stale_without_conversations, lambda { |time_period|
     left_joins(:conversations)

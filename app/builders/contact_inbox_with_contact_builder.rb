@@ -17,6 +17,11 @@ class ContactInboxWithContactBuilder
     # For non-Evolution Go channels, use the simple source_id lookup
     unless evolution_go_channel?
       @contact_inbox = inbox.contact_inboxes.find_by(source_id: source_id) if source_id.present?
+      # BSUID fallback: if source_id lookup failed and source_id looks like a BSUID,
+      # try finding by bsuid column (contact was previously created with phone as source_id)
+      if @contact_inbox.nil? && whatsapp_cloud_channel? && source_id.present? && source_id.match?(RegexHelper::BSUID_REGEX)
+        @contact_inbox = inbox.contact_inboxes.find_by(bsuid: source_id)
+      end
       return @contact_inbox if @contact_inbox
     end
 

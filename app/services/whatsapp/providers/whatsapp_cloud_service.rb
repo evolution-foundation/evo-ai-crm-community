@@ -24,7 +24,7 @@ module Whatsapp
           headers: api_headers,
           body: {
             messaging_product: 'whatsapp',
-            to: phone_number,
+            **build_recipient_field(phone_number),
             template: template_body_parameters(template_info),
             type: 'template'
           }.to_json
@@ -122,7 +122,7 @@ module Whatsapp
           body: {
             messaging_product: 'whatsapp',
             context: whatsapp_reply_context(message),
-            to: phone_number,
+            **build_recipient_field(phone_number),
             text: { body: html_to_whatsapp(message.content) },
             type: 'text'
           }.to_json
@@ -179,7 +179,7 @@ module Whatsapp
           headers: api_headers,
           body: {
             messaging_product: 'whatsapp',
-            to: phone_number,
+            **build_recipient_field(phone_number),
             interactive: payload,
             type: 'interactive'
           }.to_json
@@ -283,6 +283,14 @@ module Whatsapp
 
       private
 
+      def build_recipient_field(phone_or_bsuid)
+        if phone_or_bsuid.present? && phone_or_bsuid.match?(RegexHelper::BSUID_REGEX)
+          { recipient: phone_or_bsuid }
+        else
+          { to: phone_or_bsuid }
+        end
+      end
+
       # Send audio message via media upload endpoint with voice: true
       def send_audio_via_media_upload(phone_number, message, attachment)
         started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -308,7 +316,7 @@ module Whatsapp
             body: {
               messaging_product: 'whatsapp',
               context: whatsapp_reply_context(message),
-              to: phone_number,
+              **build_recipient_field(phone_number),
               type: 'audio',
               audio: {
                 id: media_id,
@@ -342,11 +350,11 @@ module Whatsapp
           "#{phone_id_path}/messages",
           headers: api_headers,
           body: {
-            :messaging_product => 'whatsapp',
-            :context => whatsapp_reply_context(message),
-            'to' => phone_number,
-            'type' => type,
-            type.to_s => type_content
+            messaging_product: 'whatsapp',
+            context: whatsapp_reply_context(message),
+            **build_recipient_field(phone_number),
+            type: type,
+            type.to_sym => type_content
           }.to_json
         )
 

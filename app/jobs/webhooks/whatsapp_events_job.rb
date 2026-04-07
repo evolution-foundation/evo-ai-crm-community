@@ -25,7 +25,7 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
   def sync_event?(params)
     # WhatsApp Cloud sync events
     whatsapp_cloud_field = params.dig(:entry, 0, :changes, 0, :field)
-    whatsapp_cloud_sync_fields = %w[smb_app_state_sync smb_message_echoes history account_update]
+    whatsapp_cloud_sync_fields = %w[smb_app_state_sync smb_message_echoes history account_update user_id_update]
 
     # Evolution API sync events
     evolution_event = params[:event]
@@ -70,6 +70,8 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       end
     when 'account_update'
       handle_account_update(channel, params)
+    when 'user_id_update'
+      handle_user_id_update(channel, params)
     else
       Rails.logger.warn "Unknown WhatsApp Cloud sync event field: #{field}"
     end
@@ -94,6 +96,35 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       Rails.logger.info "[WHATSAPP] Account status changed for #{phone_number}"
     else
       Rails.logger.warn "[WHATSAPP] Unknown account update event: #{event}"
+    end
+  end
+
+  def handle_user_id_update(channel, params)
+    value = params.dig(:entry, 0, :changes, 0, :value)
+    updates = value[:user_id_update]
+    return unless updates.is_a?(Array)
+
+    updates.each do |update|
+      previous_bsuid = update.dig(:user_id, :previous)
+      current_bsuid = update.dig(:user_id, :current)
+      wa_id = update[:wa_id]
+
+      next if previous_bsuid.blank? || current_bsuid.blank?
+
+      Rails.logger.info "[WHATSAPP] user_id_update: #{previous_bsuid} -> #{current_bsuid} (wa_id: #{wa_id})"
+
+      contact_inbox = channel.inbox.contact_inboxes.find_by(bsuid: previous_bsuid)
+      if contact_inbox
+        attrs = { bsuid: current_bsuid }
+        # If source_id was set to the old BSUID (BSUID-only contact), update it too
+        attrs[:source_id] = current_bsuid if contact_inbox.source_id == previous_bsuid
+        contact_inbox.update!(attrs)
+        Rails.logger.info "[WHATSAPP] Updated BSUID for ContactInbox #{contact_inbox.id}"
+      else
+        Rails.logger.warn "[WHATSAPP] No ContactInbox found with BSUID #{previous_bsuid} for user_id_update"
+      end
+    rescue StandardError => e
+      Rails.logger.error "[WHATSAPP] user_id_update failed for #{previous_bsuid}: #{e.message}"
     end
   end
 

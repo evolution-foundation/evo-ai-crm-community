@@ -43,10 +43,15 @@ class ContactInboxBuilder
   end
 
   def wa_source_id
-    raise ActionController::ParameterMissing, 'contact phone number' unless @contact.phone_number
-
-    # whatsapp doesn't want the + in e164 format
-    @contact.phone_number.delete('+').to_s
+    if @contact.phone_number.present?
+      # whatsapp doesn't want the + in e164 format
+      @contact.phone_number.delete('+').to_s
+    elsif @source_id.present?
+      # BSUID-only contact: source_id was already set externally
+      @source_id
+    else
+      raise ActionController::ParameterMissing, 'contact phone number or BSUID'
+    end
   end
 
   def twilio_source_id
@@ -101,7 +106,12 @@ class ContactInboxBuilder
 
   def new_source_id
     if @inbox.whatsapp? || @inbox.sms? || @inbox.twilio?
-      "whatsapp:#{@source_id}#{rand(100)}"
+      if @source_id.match?(RegexHelper::BSUID_REGEX)
+        # BSUID format: append random suffix to keep it valid
+        "#{@source_id}#{rand(100)}"
+      else
+        "whatsapp:#{@source_id}#{rand(100)}"
+      end
     else
       "#{rand(10)}#{@source_id}"
     end

@@ -174,8 +174,19 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
         contact_inbox.source_id
       end
     else
-      # Fallback to original behavior for other providers
-      contact_inbox.source_id
+      # Default behavior for whatsapp_cloud and other providers
+      source_id = contact_inbox.source_id
+      # If source_id is a BSUID, prefer phone_number if available
+      if source_id.match?(RegexHelper::BSUID_REGEX)
+        if contact.phone_number.present?
+          contact.phone_number.delete('+')
+        else
+          # BSUID-only: return BSUID, WhatsappCloudService will use `recipient` field
+          source_id
+        end
+      else
+        source_id
+      end
     end
   end
 

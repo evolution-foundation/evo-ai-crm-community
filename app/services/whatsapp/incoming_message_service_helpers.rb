@@ -66,6 +66,8 @@ module Whatsapp::IncomingMessageServiceHelpers
   end
 
   def processed_waid(waid)
+    return waid if waid.blank? || bsuid_format?(waid)
+
     # in case of Brazil, we need to do additional processing
     # https://github.com/evolution/evolution/issues/5840
     if brazil_phone_number?(waid)
@@ -78,6 +80,10 @@ module Whatsapp::IncomingMessageServiceHelpers
       waid = contact_inbox.source_id if contact_inbox.present?
     end
     waid
+  end
+
+  def bsuid_format?(value)
+    value.present? && value.match?(RegexHelper::BSUID_REGEX)
   end
 
   def error_webhook_event?(message)

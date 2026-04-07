@@ -41,8 +41,24 @@ class Whatsapp::IncomingMessageBaseService
     return unless find_message_by_source_id(@processed_params[:statuses].first[:id])
 
     update_message_with_status(@message, @processed_params[:statuses].first)
+    persist_bsuid_from_status
   rescue ArgumentError => e
     Rails.logger.error "Error while processing whatsapp status update #{e.message}"
+  end
+
+  def persist_bsuid_from_status
+    return unless @message&.conversation&.contact_inbox
+
+    contact_inbox = @message.conversation.contact_inbox
+
+    # Status webhooks now include contacts[] with user_id and recipient_user_id
+    bsuid = @processed_params.dig(:contacts, 0, :user_id) ||
+            @processed_params[:statuses]&.first&.dig(:recipient_user_id)
+    username = @processed_params.dig(:contacts, 0, :profile, :username)
+
+    update_bsuid_fields(contact_inbox, bsuid, username)
+  rescue StandardError => e
+    Rails.logger.error "Error persisting BSUID from status webhook: #{e.message}"
   end
 
   def update_message_with_status(message, status)
@@ -82,19 +98,53 @@ class Whatsapp::IncomingMessageBaseService
     contact_params = @processed_params[:contacts]&.first
     return if contact_params.blank?
 
-    waid = processed_waid(contact_params[:wa_id])
+    bsuid = contact_params[:user_id]
+    username = contact_params.dig(:profile, :username)
+    waid = contact_params[:wa_id]
+    phone_from = @processed_params[:messages]&.first&.dig(:from)
+
+    if waid.present?
+      # Phone available: use existing flow
+      source_id = processed_waid(waid)
+      phone_number = "+#{phone_from}" if phone_from.present?
+    elsif bsuid.present?
+      # BSUID-only: try to find existing contact_inbox by bsuid column first
+      existing_ci = inbox.contact_inboxes.find_by(bsuid: bsuid)
+      if existing_ci
+        @contact_inbox = existing_ci
+        @contact = existing_ci.contact
+        update_bsuid_fields(existing_ci, bsuid, username)
+        return
+      end
+      source_id = bsuid
+      phone_number = nil
+    else
+      return
+    end
 
     contact_inbox = ::ContactInboxWithContactBuilder.new(
-      source_id: waid,
+      source_id: source_id,
       inbox: inbox,
-      contact_attributes: { name: contact_params.dig(:profile, :name), phone_number: "+#{@processed_params[:messages].first[:from]}" }
+      contact_attributes: { name: contact_params.dig(:profile, :name), phone_number: phone_number }
     ).perform
 
     @contact_inbox = contact_inbox
     @contact = contact_inbox.contact
 
+    # Always persist BSUID and username when present
+    update_bsuid_fields(contact_inbox, bsuid, username)
+
     # Schedule avatar fetch for existing contacts without avatar (WhatsApp Cloud only)
     schedule_avatar_fetch_if_needed
+  end
+
+  def update_bsuid_fields(contact_inbox, bsuid, username)
+    return unless bsuid.present? || username.present?
+
+    attrs = {}
+    attrs[:bsuid] = bsuid if bsuid.present? && contact_inbox.bsuid != bsuid
+    attrs[:whatsapp_username] = username if username.present? && contact_inbox.whatsapp_username != username
+    contact_inbox.update!(attrs) if attrs.present?
   end
 
   def set_conversation

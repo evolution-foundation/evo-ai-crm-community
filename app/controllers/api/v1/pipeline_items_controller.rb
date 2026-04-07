@@ -16,7 +16,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
         :contact,
         :assignee,
         :team,
-        :account,
         messages: [:attachments, :sender]
       ]
     )
@@ -130,7 +129,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
           :contact,
           :assignee,
           :team,
-          :account,
           messages: [:attachments, :sender]
         ]
       ).find(@pipeline_item.id)
@@ -448,7 +446,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
   def set_pipeline
     @pipeline = Pipeline.find(params[:pipeline_id])
-    authorize @pipeline, :view?
+    authorize @pipeline, :view? unless service_authenticated?
   end
 
   # rubocop:disable Metrics/AbcSize
@@ -582,6 +580,8 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   end
 
   def ensure_authorized_user
+    return if service_authenticated?
+
     authorize @pipeline, :view?
   end
 end

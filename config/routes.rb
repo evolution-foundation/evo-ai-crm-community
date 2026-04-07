@@ -663,6 +663,9 @@ Rails.application.routes.draw do
   post 'webhooks/whatsapp/evolution_go', to: 'webhooks/whatsapp#process_evolution_go_payload'
   post 'webhooks/whatsapp/zapi', to: 'webhooks/whatsapp#process_payload'
 
+  # Bot Runtime postback
+  post 'webhooks/bot_runtime/postback/:conversation_display_id', to: 'webhooks/bot_runtime#postback'
+
   namespace :twitter do
     resource :callback, only: [:show]
   end
