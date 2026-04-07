@@ -55,6 +55,12 @@ module EvoAuthConcern
     @current_user = user
     Current.authentication_method = token_type
 
+    # Store role key from evo-auth for permission checks
+    role_key = user_data.dig('user', 'role', 'key') || user_data.dig('role', 'key')
+    Current.evo_role_key = role_key
+
+    Current.account ||= RuntimeConfig.account
+
     # Store tokens for downstream services
     if token_type == 'bearer'
       Current.bearer_token = token

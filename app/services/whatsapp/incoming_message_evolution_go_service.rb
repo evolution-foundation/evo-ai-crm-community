@@ -6,7 +6,6 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
 
   def perform
     Rails.logger.info "Evolution Go API: Service initialized with inbox: #{@inbox.present? ? @inbox.id : 'NIL'}"
-    Rails.logger.info "Evolution Go API: Inbox account: single-tenant"
 
     # Evolution Go API structure: { event: 'Message', data: { Info: {...}, Message: {...} }, instanceId: '...', instanceToken: '...' }
     event_type = processed_params[:event]

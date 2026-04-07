@@ -4,7 +4,6 @@ class Api::V1::Oauth::AccountsController < Api::BaseController
   before_action :authenticate_user!
 
   def index
-    # Single-tenant mode: no Account model
     accounts = if current_user.administrator?
                  [{
                    account_name: GlobalConfigService.load('BRAND_NAME', 'Evo CRM'),

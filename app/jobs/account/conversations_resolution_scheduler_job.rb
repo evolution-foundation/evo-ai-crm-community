@@ -2,8 +2,6 @@ class Account::ConversationsResolutionSchedulerJob < ApplicationJob
   queue_as :scheduled_jobs
 
   def perform
-    # Single-tenant: auto-resolve conversations directly without Account model.
-    # Find all open conversations past the auto-resolve threshold.
     auto_resolve_duration = GlobalConfigService.load('AUTO_RESOLVE_DURATION', nil)&.to_i
     return if auto_resolve_duration.nil? || auto_resolve_duration.zero?
 

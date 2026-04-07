@@ -16,7 +16,7 @@ module OauthAuthorizationHelper
     },
     'messages' => { actions: %w[show index create update], controller: 'messages' },
     'inboxes' => { actions: %w[show index create update destroy avatar set_agent_bot assignable_agents campaigns], controller: 'inboxes' },
-    'agents' => { actions: %w[show index create update destroy bulk_create], controller: 'agents' },
+    'agents' => { actions: %w[index create update destroy bulk_create], controller: 'agents' },
     'reports' => { actions: %w[show index], controller: 'reports' },
 
     # Novos recursos - Gestão de Pipelines

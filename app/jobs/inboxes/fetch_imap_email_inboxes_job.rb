@@ -28,7 +28,6 @@ class Inboxes::FetchImapEmailInboxesJob < ApplicationJob
   private
 
   def should_fetch_emails?(inbox)
-    # Single-tenant: account is never suspended
     return false if inbox.channel.use_push_notifications?
     # Skip Gmail channels (always use push)
     return false if inbox.channel.google?

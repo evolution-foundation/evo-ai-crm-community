@@ -52,7 +52,6 @@ class CustomAttributeDefinition < ApplicationRecord
   }
   enum attribute_display_type: { text: 0, number: 1, currency: 2, percent: 3, link: 4, date: 5, list: 6, checkbox: 7, datetime: 8 }
 
-  # Single-tenant: no account association needed
   # Widget pre-chat sync trigger chain:
   # - create: sync metadata to matching pre-chat fields (if any) + dispatch event
   # - update: sync metadata to matching pre-chat fields + dispatch event

@@ -1,5 +1,5 @@
 # Herda diretamente do controller de accounts
-class Api::V1::Oauth::PipelinesController < Api::V1::Accounts::PipelinesController
+class Api::V1::Oauth::PipelinesController < Api::V1::PipelinesController
   # Remove parent controller middlewares for OAuth
   skip_before_action :authenticate_request!
 

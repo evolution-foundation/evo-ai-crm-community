@@ -1,5 +1,5 @@
 # Herda diretamente do controller de accounts
-class Api::V1::Oauth::ContactsController < Api::V1::Accounts::ContactsController
+class Api::V1::Oauth::ContactsController < Api::V1::ContactsController
   require_permissions({
     index: 'oauth_contacts.read',
     show: 'oauth_contacts.read',

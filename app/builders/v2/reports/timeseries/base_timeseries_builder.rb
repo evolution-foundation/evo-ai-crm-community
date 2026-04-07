@@ -8,7 +8,6 @@ class V2::Reports::Timeseries::BaseTimeseriesBuilder
   def scope
     case params[:type].to_sym
     when :account
-      # In single-tenant, return a neutral scope object
       self
     when :inbox
       inbox

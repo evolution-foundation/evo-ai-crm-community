@@ -19,6 +19,8 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def show?
+    return true if service_authenticated?
+
     # FIXME: for agent bots, lets bring this validation to policies as well in future
     return true if @user.is_a?(AgentBot)
 
@@ -26,7 +28,7 @@ class InboxPolicy < ApplicationPolicy
     return true if @user&.administrator? || @user&.has_permission?('inboxes.read')
 
     # Regular users can only view assigned inboxes
-    Current.user.assigned_inboxes.include? record
+    Current.user&.assigned_inboxes&.include?(record) || false
   end
 
   def assignable_agents?
@@ -42,31 +44,38 @@ class InboxPolicy < ApplicationPolicy
   end
 
   def create?
-    @user.administrator? || @user.has_permission?('inboxes.create')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.create')
   end
 
   def update?
-    @user.administrator? || @user.has_permission?('inboxes.update')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.update')
   end
 
   def destroy?
-    @user.administrator? || @user.has_permission?('inboxes.delete')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.delete')
   end
 
   def set_agent_bot?
-    @user.administrator? || @user.has_permission?('inboxes.update')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.update')
   end
 
   def avatar?
-    @user.administrator? || @user.has_permission?('inboxes.update')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.update')
   end
 
   def setup_channel_provider?
-    @user.administrator? || @user.has_permission?('inboxes.update')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.update')
   end
 
   def disconnect_channel_provider?
-    @user.administrator? || @user.has_permission?('inboxes.update')
+    return true if service_authenticated?
+    @user&.administrator? || @user&.has_permission?('inboxes.update')
   end
 
   def sync_whatsapp_templates?

@@ -1,5 +1,5 @@
 # Herda diretamente do controller de accounts
-class Api::V1::Oauth::ConversationsController < Api::V1::Accounts::ConversationsController
+class Api::V1::Oauth::ConversationsController < Api::V1::ConversationsController
   # Remove parent controller middlewares for OAuth
   skip_before_action :authenticate_request!
 
@@ -35,7 +35,7 @@ class Api::V1::Oauth::ConversationsController < Api::V1::Accounts::Conversations
       )
     end
 
-    render 'api/v1/accounts/conversations/available_for_pipeline'
+    render 'api/v1/conversations/available_for_pipeline'
   end
 
   private

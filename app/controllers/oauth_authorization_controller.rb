@@ -45,7 +45,6 @@ class OauthAuthorizationController < Doorkeeper::AuthorizationsController
         redirect_to "#{frontend_url}/login?returnUrl=#{encoded_return_url}" and return
       end
 
-      # Auto-bind MCP app (single-tenant, no account binding needed)
       auto_bind_mcp_app_to_account(existing_app, current_resource_owner)
     end
   end
@@ -81,7 +80,6 @@ class OauthAuthorizationController < Doorkeeper::AuthorizationsController
       return
     end
 
-    # Single-tenant: RFC7591 apps don't need account binding
     if existing_app && existing_app.rfc7591_registered?
       Rails.logger.debug "⏭️ RFC7591 App #{existing_app.name} - deixando Doorkeeper processar" if Rails.env.development?
       return
@@ -177,7 +175,6 @@ class OauthAuthorizationController < Doorkeeper::AuthorizationsController
   end
 
   def bind_rfc7591_app_to_account(application, _deprecated = nil, _current_user = nil)
-    # Single-tenant: no account binding needed
     if Rails.env.development?
       Rails.logger.debug "RFC 7591: Application #{application.name} (#{application.uid}) ready"
     end

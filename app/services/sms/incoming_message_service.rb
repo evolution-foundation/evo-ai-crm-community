@@ -20,7 +20,7 @@ class Sms::IncomingMessageService
   private
 
   def account
-    nil # Account model removed in single-tenant mode
+    RuntimeConfig.account
   end
 
   def channel

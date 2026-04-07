@@ -52,7 +52,6 @@ class Conversations::CacheInvalidationListener
     # Add all users with inbox access
     users.merge(conversation.inbox.inbox_members.includes(:user).map(&:user))
 
-    # Add all admins (single-tenant: query User directly)
     users.merge(User.where(type: 'SuperAdmin'))
 
     users.compact

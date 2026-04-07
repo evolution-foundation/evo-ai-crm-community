@@ -2,7 +2,7 @@ Rails.application.routes.draw do
   get '/health/live', to: 'health#live'
   get '/health/ready', to: 'health#ready'
   get '/metrics', to: 'health#metrics'
-  post '/api/v1/dynamic_oauth/validate_client', to: 'api/v1/accounts/dynamic_oauth#validate_dynamic_client'
+  post '/api/v1/dynamic_oauth/validate_client', to: 'api/v1/dynamic_oauth#validate_dynamic_client'
 
   ## renders the frontend paths only if its not an api only server
   if ActiveModel::Type::Boolean.new.cast(ENV.fetch('EVOLUTION_API_ONLY_SERVER', false))
@@ -80,11 +80,11 @@ Rails.application.routes.draw do
         resources :authorization, only: [:create]
       end
 
-      resource :dashboard, only: [], controller: 'accounts/dashboard' do
+      resource :dashboard, only: [], controller: 'dashboard' do
         get :customer
       end
 
-      resources :inboxes, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/inboxes' do
+      resources :inboxes, only: [:index, :show, :create, :update, :destroy], controller: 'inboxes' do
         get :assignable_agents, on: :member
         get :agent_bot, on: :member
         post :set_agent_bot, on: :member
@@ -99,24 +99,24 @@ Rails.application.routes.draw do
         delete 'message_templates/:template_id', action: :delete_message_template, on: :member
       end
 
-      resources :conversations, only: [:index, :create, :show, :update, :destroy], controller: 'accounts/conversations' do
-        resources :facebook_comment_moderations, only: [:index], controller: 'accounts/facebook_comment_moderations'
+      resources :conversations, only: [:index, :create, :show, :update, :destroy], controller: 'conversations' do
+        resources :facebook_comment_moderations, only: [:index], controller: 'facebook_comment_moderations'
         collection do
           get :meta
           get :search
           post :filter
           get :available_for_pipeline
         end
-        resources :messages, only: [:index, :create, :destroy, :update], controller: 'accounts/conversations/messages' do
+        resources :messages, only: [:index, :create, :destroy, :update], controller: 'conversations/messages' do
           member do
             post :retry
           end
         end
-        resources :assignments, only: [:create], controller: 'accounts/conversations/assignments'
-        resources :labels, only: [:create, :index], controller: 'accounts/conversations/labels'
-        resource :participants, only: [:show, :create, :update, :destroy], controller: 'accounts/conversations/participants'
-        resource :direct_uploads, only: [:create], controller: 'accounts/conversations/direct_uploads'
-        resource :draft_messages, only: [:show, :update, :destroy], controller: 'accounts/conversations/draft_messages'
+        resources :assignments, only: [:create], controller: 'conversations/assignments'
+        resources :labels, only: [:create, :index], controller: 'conversations/labels'
+        resource :participants, only: [:show, :create, :update, :destroy], controller: 'conversations/participants'
+        resource :direct_uploads, only: [:create], controller: 'conversations/direct_uploads'
+        resource :draft_messages, only: [:show, :update, :destroy], controller: 'conversations/draft_messages'
         member do
           post :mute
           post :unmute
@@ -136,8 +136,8 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :teams, controller: 'accounts/teams' do
-        resources :team_members, only: [:index, :create], controller: 'accounts/team_members' do
+      resources :teams, controller: 'teams' do
+        resources :team_members, only: [:index, :create], controller: 'team_members' do
           collection do
             delete :destroy
             patch :update
@@ -145,15 +145,15 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :labels, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/labels'
+      resources :labels, only: [:index, :show, :create, :update, :destroy], controller: 'labels'
 
-      resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'accounts/agent_bots' do
+      resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'agent_bots' do
         delete :avatar, on: :member
       end
 
-      resources :canned_responses, only: [:index, :create, :update, :destroy], controller: 'accounts/canned_responses'
+      resources :canned_responses, only: [:index, :create, :update, :destroy], controller: 'canned_responses'
 
-      resources :facebook_comment_moderations, only: [:index, :show], controller: 'accounts/facebook_comment_moderations' do
+      resources :facebook_comment_moderations, only: [:index, :show], controller: 'facebook_comment_moderations' do
         member do
           post :approve
           post :reject
@@ -161,7 +161,7 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :notifications, only: [:index, :update, :destroy], controller: 'accounts/notifications' do
+      resources :notifications, only: [:index, :update, :destroy], controller: 'notifications' do
         collection do
           post :read_all
           get :unread_count
@@ -173,24 +173,24 @@ Rails.application.routes.draw do
         end
       end
 
-      resource :notification_settings, only: [:show, :update], controller: 'accounts/notification_settings'
+      resource :notification_settings, only: [:show, :update], controller: 'notification_settings'
 
-      resources :scheduled_actions, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/scheduled_actions' do
+      resources :scheduled_actions, only: [:index, :show, :create, :update, :destroy], controller: 'scheduled_actions' do
         collection do
           get 'by_deal/:deal_id', action: :by_deal, as: :by_deal
           get 'by_contact/:contact_id', action: :by_contact, as: :by_contact
         end
       end
 
-      resources :agents, only: [:index, :create, :update, :destroy], controller: 'accounts/agents' do
+      resources :agents, only: [:index, :create, :update, :destroy], controller: 'agents' do
         post :bulk_create, on: :collection
       end
 
-      resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'accounts/agent_bots' do
+      resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'agent_bots' do
         delete :avatar, on: :member
       end
 
-      resources :contacts, only: [:index, :show, :update, :create, :destroy], controller: 'accounts/contacts' do
+      resources :contacts, only: [:index, :show, :update, :create, :destroy], controller: 'contacts' do
         collection do
           get :active
           get :search
@@ -206,8 +206,7 @@ Rails.application.routes.draw do
           get :companies
           get :pipelines
         end
-        # Controllers est??o em Api::V1::Accounts::Contacts::*
-        scope module: 'accounts/contacts' do
+        scope module: 'contacts' do
           resources :conversations, only: [:index]
           resources :contact_inboxes, only: [:create]
           resources :labels, only: [:create, :index]
@@ -215,37 +214,37 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :contact_companies, only: [:create, :destroy], path: 'contacts/:contact_id/companies', controller: 'accounts/contact_companies'
-      resource :contact_bulk_transfer, only: [:create], path: 'contacts/bulk_transfer', controller: 'accounts/contact_bulk_transfers'
+      resources :contact_companies, only: [:create, :destroy], path: 'contacts/:contact_id/companies', controller: 'contact_companies'
+      resource :contact_bulk_transfer, only: [:create], path: 'contacts/bulk_transfer', controller: 'contact_bulk_transfers'
 
-      resources :csat_survey_responses, only: [:index], controller: 'accounts/csat_survey_responses' do
+      resources :csat_survey_responses, only: [:index], controller: 'csat_survey_responses' do
         collection do
           get :metrics
           get :download
         end
       end
 
-      resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/custom_attribute_definitions'
-      resources :custom_filters, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/custom_filters'
+      resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy], controller: 'custom_attribute_definitions'
+      resources :custom_filters, only: [:index, :show, :create, :update, :destroy], controller: 'custom_filters'
 
-      resources :automation_rules, only: [:index, :create, :show, :update, :destroy], controller: 'accounts/automation_rules' do
+      resources :automation_rules, only: [:index, :create, :show, :update, :destroy], controller: 'automation_rules' do
         post :clone, on: :member
       end
 
-      resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'accounts/macros' do
+      resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'macros' do
         post :execute, on: :member
       end
 
-      resources :dashboard_apps, only: [:index, :show, :create, :update, :destroy], controller: 'accounts/dashboard_apps'
+      resources :dashboard_apps, only: [:index, :show, :create, :update, :destroy], controller: 'dashboard_apps'
 
-      resources :inbox_members, only: [:create, :show], param: :inbox_id, controller: 'accounts/inbox_members' do
+      resources :inbox_members, only: [:create, :show], param: :inbox_id, controller: 'inbox_members' do
         collection do
           delete :destroy
           patch :update
         end
       end
 
-      resources :search, only: [:index], controller: 'accounts/search' do
+      resources :search, only: [:index], controller: 'search' do
         collection do
           get :conversations
           get :messages
@@ -254,7 +253,7 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :webhooks, only: [:index, :create, :update, :destroy], controller: 'accounts/webhooks' do
+      resources :webhooks, only: [:index, :create, :update, :destroy], controller: 'webhooks' do
         # Public webhook endpoints that need accountId in URL for external services
         collection do
           # SMS webhooks
@@ -293,21 +292,21 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :assignable_agents, only: [:index], controller: 'accounts/assignable_agents'
+      resources :assignable_agents, only: [:index], controller: 'assignable_agents'
 
-      resources :contact_inboxes, only: [], controller: 'accounts/contact_inboxes' do
+      resources :contact_inboxes, only: [], controller: 'contact_inboxes' do
         collection do
           post :filter
         end
       end
 
       namespace :actions do
-        resource :contact_merge, only: [:create], controller: 'accounts/actions/contact_merges'
+        resource :contact_merge, only: [:create], controller: 'contact_merges'
       end
 
-      resource :bulk_actions, only: [:create], controller: 'accounts/bulk_actions'
+      resource :bulk_actions, only: [:create], controller: 'bulk_actions'
 
-      resources :callbacks, only: [], controller: 'accounts/callbacks' do
+      resources :callbacks, only: [], controller: 'callbacks' do
         collection do
           post :register_facebook_page
           get :register_facebook_page
@@ -317,14 +316,14 @@ Rails.application.routes.draw do
       end
 
       scope path: 'channels', as: 'channels' do
-        resource :twilio_channel, only: [:create], controller: 'accounts/channels/twilio_channels'
+        resource :twilio_channel, only: [:create], controller: 'channels/twilio_channels'
       end
 
       scope path: 'notificame', as: 'notificame' do
-        resources :channels, only: [:index], controller: 'accounts/notificame/channels'
+        resources :channels, only: [:index], controller: 'notificame/channels'
       end
 
-      resources :facebook_comment_moderations, only: [:index, :show], controller: 'accounts/facebook_comment_moderations' do
+      resources :facebook_comment_moderations, only: [:index, :show], controller: 'facebook_comment_moderations' do
         member do
           post :approve
           post :reject
@@ -332,51 +331,51 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :working_hours, only: [:update], controller: 'accounts/working_hours'
+      resources :working_hours, only: [:update], controller: 'working_hours'
 
       scope path: 'twitter', as: 'twitter' do
-        resource :authorization, only: [:create], controller: 'accounts/twitter/authorizations'
+        resource :authorization, only: [:create], controller: 'twitter/authorizations'
       end
 
       scope path: 'microsoft', as: 'microsoft' do
-        resource :authorization, only: [:create], controller: 'accounts/microsoft/authorizations'
-        post :callback, to: 'accounts/microsoft/authorizations#callback'
+        resource :authorization, only: [:create], controller: 'microsoft/authorizations'
+        post :callback, to: 'microsoft/authorizations#callback'
       end
 
       scope path: 'google', as: 'google' do
-        resource :authorization, only: [:create], controller: 'accounts/google/authorizations'
-        post :callback, to: 'accounts/google/authorizations#callback'
+        resource :authorization, only: [:create], controller: 'google/authorizations'
+        post :callback, to: 'google/authorizations#callback'
       end
 
       scope path: 'instagram', as: 'instagram' do
-        resource :authorization, only: [:create], controller: 'accounts/instagram/authorizations'
-        post :callback, to: 'accounts/instagram/authorizations#callback'
+        resource :authorization, only: [:create], controller: 'instagram/authorizations'
+        post :callback, to: 'instagram/authorizations#callback'
       end
 
       scope path: 'whatsapp', as: 'whatsapp' do
-        resource :authorization, only: [:create], controller: 'accounts/whatsapp/authorizations'
-        resources :callback, only: [:index], controller: 'accounts/whatsapp/callbacks'
+        resource :authorization, only: [:create], controller: 'whatsapp/authorizations'
+        resources :callback, only: [:index], controller: 'whatsapp/callbacks'
       end
 
       scope path: 'evolution', as: 'evolution' do
-        resource :authorization, only: [:create], controller: 'accounts/evolution/authorizations'
-        resources :qrcodes, only: [:create, :show], controller: 'accounts/evolution/qrcodes'
-        resources :proxies, only: [:create, :show], controller: 'accounts/evolution/proxies'
-        resources :settings, only: [:create, :show, :update], controller: 'accounts/evolution/settings'
-        resources :instances, only: [:index], controller: 'accounts/evolution/instances' do
+        resource :authorization, only: [:create], controller: 'evolution/authorizations'
+        resources :qrcodes, only: [:create, :show], controller: 'evolution/qrcodes'
+        resources :proxies, only: [:create, :show], controller: 'evolution/proxies'
+        resources :settings, only: [:create, :show, :update], controller: 'evolution/settings'
+        resources :instances, only: [:index], controller: 'evolution/instances' do
           member do
             delete :logout
           end
         end
-        post 'profile/:instance_name/fetch', to: 'accounts/evolution/profile#fetch', as: :profile_fetch
-        post 'profile/:instance_name/name', to: 'accounts/evolution/profile#update_name', as: :profile_update_name
-        post 'profile/:instance_name/status', to: 'accounts/evolution/profile#update_status', as: :profile_update_status
-        post 'profile/:instance_name/picture', to: 'accounts/evolution/profile#update_picture', as: :profile_update_picture
-        delete 'profile/:instance_name/picture', to: 'accounts/evolution/profile#remove_picture', as: :profile_remove_picture
+        post 'profile/:instance_name/fetch', to: 'evolution/profile#fetch', as: :profile_fetch
+        post 'profile/:instance_name/name', to: 'evolution/profile#update_name', as: :profile_update_name
+        post 'profile/:instance_name/status', to: 'evolution/profile#update_status', as: :profile_update_status
+        post 'profile/:instance_name/picture', to: 'evolution/profile#update_picture', as: :profile_update_picture
+        delete 'profile/:instance_name/picture', to: 'evolution/profile#remove_picture', as: :profile_remove_picture
       end
 
       scope path: 'evolution_go', as: 'evolution_go' do
-        resource :authorization, only: [:create], controller: 'accounts/evolution_go/authorizations' do
+        resource :authorization, only: [:create], controller: 'evolution_go/authorizations' do
           collection do
             post :connect
             get :qrcode
@@ -385,22 +384,27 @@ Rails.application.routes.draw do
             delete :delete_instance
           end
         end
-        resources :settings, only: [:show, :update], controller: 'accounts/evolution_go/settings'
-        resources :qrcodes, only: [:show, :create], controller: 'accounts/evolution_go/qrcodes'
-        resources :privacy, only: [:show, :update], controller: 'accounts/evolution_go/privacy'
-        post 'profile/info', to: 'accounts/evolution_go/profile#info', as: :profile_info
-        post 'profile/avatar', to: 'accounts/evolution_go/profile#avatar', as: :profile_avatar
-        post 'profile/picture', to: 'accounts/evolution_go/profile#update_picture', as: :profile_update_picture
+        resources :settings, only: [:show, :update], controller: 'evolution_go/settings'
+        resources :qrcodes, only: [:show, :create], controller: 'evolution_go/qrcodes'
+        resources :privacy, only: [:show, :update], controller: 'evolution_go/privacy'
+        post 'profile/info', to: 'evolution_go/profile#info', as: :profile_info
+        post 'profile/avatar', to: 'evolution_go/profile#avatar', as: :profile_avatar
+        post 'profile/picture', to: 'evolution_go/profile#update_picture', as: :profile_update_picture
+        get 'profile/:id', to: 'evolution_go/profile#show', as: :profile_show
+        post 'profile/:id/name', to: 'evolution_go/profile#update_name', as: :profile_update_name
+        post 'profile/:id/status', to: 'evolution_go/profile#update_status', as: :profile_update_status
+        post 'profile/:id/picture', to: 'evolution_go/profile#update_picture_by_instance', as: :profile_update_picture_by_instance
+        delete 'profile/:id/picture', to: 'evolution_go/profile#remove_picture', as: :profile_remove_picture
       end
 
       scope path: 'zapi', as: 'zapi' do
-        resources :qrcodes, only: [:show, :create], controller: 'accounts/zapi/qrcodes' do
+        resources :qrcodes, only: [:show, :create], controller: 'zapi/qrcodes' do
           collection do
             get :status
           end
         end
-        post 'qrcodes/:id', to: 'accounts/zapi/qrcodes#refresh', as: :qrcode_refresh
-        resources :settings, only: [:show], controller: 'accounts/zapi/settings' do
+        post 'qrcodes/:id', to: 'zapi/qrcodes#refresh', as: :qrcode_refresh
+        resources :settings, only: [:show], controller: 'zapi/settings' do
           member do
             put :update_profile_picture
             put :update_profile_name
@@ -423,7 +427,7 @@ Rails.application.routes.draw do
       end
 
       namespace :oauth do
-        resources :applications, controller: 'accounts/oauth/applications' do
+        resources :applications do
           member do
             post :regenerate_secret
           end
@@ -431,26 +435,26 @@ Rails.application.routes.draw do
       end
 
       namespace :integrations do
-        resources :apps, only: [:index, :show], controller: '/api/v1/accounts/integrations/apps'
-        post 'openai/process_event', to: '/api/v1/accounts/integrations/openai#process_event'
-        resource :slack, only: [:create, :update, :destroy], controller: 'accounts/integrations/slack' do
+        resources :apps, only: [:index, :show], controller: '/api/v1/integrations/apps'
+        post 'openai/process_event', to: '/api/v1/integrations/openai#process_event'
+        resource :slack, only: [:create, :update, :destroy] do
           member do
             get :list_all_channels
           end
         end
-        resource :dyte, controller: 'accounts/integrations/dyte', only: [] do
+        resource :dyte, only: [] do
           collection do
             post :create_a_meeting
             post :add_participant_to_meeting
           end
         end
-        resource :shopify, controller: 'accounts/integrations/shopify', only: [:destroy] do
+        resource :shopify, only: [:destroy] do
           collection do
             post :auth
             get :orders
           end
         end
-        resource :linear, controller: 'accounts/integrations/linear', only: [] do
+        resource :linear, only: [] do
           collection do
             delete :destroy
             get :teams
@@ -462,7 +466,7 @@ Rails.application.routes.draw do
             get :linked_issues
           end
         end
-        resource :hubspot, controller: 'accounts/integrations/hubspot', only: [] do
+        resource :hubspot, only: [] do
           collection do
             delete :destroy
             get :pipelines
@@ -478,16 +482,16 @@ Rails.application.routes.draw do
       end
 
       scope :integrations, as: :integrations do
-        resources :hooks, only: [:show, :create, :update, :destroy], controller: 'accounts/integrations/hooks' do
+        resources :hooks, only: [:show, :create, :update, :destroy], controller: 'integrations/hooks' do
           member do
             post :process_event
           end
         end
       end
 
-      resources :upload, only: [:create], controller: 'accounts/uploads'
+      resources :upload, only: [:create], controller: 'uploads'
 
-      resources :pipelines, controller: 'accounts/pipelines' do
+      resources :pipelines, controller: 'pipelines' do
         collection do
           get :stats
           get 'by_conversation/:conversation_id', action: :by_conversation, as: :by_conversation
@@ -498,7 +502,7 @@ Rails.application.routes.draw do
           patch :set_as_default
           get :stats
         end
-        resources :pipeline_stages, except: [:new, :edit], controller: 'accounts/pipeline_stages' do
+        resources :pipeline_stages, except: [:new, :edit], controller: 'pipeline_stages' do
           member do
             patch :move_up
             patch :move_down
@@ -508,7 +512,7 @@ Rails.application.routes.draw do
             patch :reorder
           end
         end
-        resources :pipeline_items, except: [:new, :edit], controller: 'accounts/pipeline_items' do
+        resources :pipeline_items, except: [:new, :edit], controller: 'pipeline_items' do
           member do
             patch :move_to_stage
             patch :update_custom_fields
@@ -520,9 +524,9 @@ Rails.application.routes.draw do
             get :available_conversations
             get :available_contacts
           end
-          resources :tasks, controller: 'accounts/pipeline_tasks', only: [:index, :create]
+          resources :tasks, controller: 'pipeline_tasks', only: [:index, :create]
         end
-        resources :pipeline_tasks, only: [:show, :update, :destroy], controller: 'accounts/pipeline_tasks' do
+        resources :pipeline_tasks, only: [:show, :update, :destroy], controller: 'pipeline_tasks' do
           member do
             post :complete
             post :cancel
@@ -535,7 +539,7 @@ Rails.application.routes.draw do
             get :statistics
           end
         end
-        resources :pipeline_service_definitions, except: [:new, :edit], controller: 'accounts/pipeline_service_definitions'
+        resources :pipeline_service_definitions, except: [:new, :edit], controller: 'pipeline_service_definitions'
       end
 
       namespace :integrations do
@@ -586,14 +590,14 @@ Rails.application.routes.draw do
     end
 
     namespace :v2 do
-      resources :summary_reports, only: [], controller: 'accounts/summary_reports' do
+      resources :summary_reports, only: [], controller: 'summary_reports' do
         collection do
           get :agent
           get :team
           get :inbox
         end
       end
-      resources :reports, only: [:index], controller: 'accounts/reports' do
+      resources :reports, only: [:index], controller: 'reports' do
         collection do
           get :summary
           get :bot_summary
@@ -606,7 +610,7 @@ Rails.application.routes.draw do
           get :bot_metrics
         end
       end
-      resources :live_reports, only: [], controller: 'accounts/live_reports' do
+      resources :live_reports, only: [], controller: 'live_reports' do
         collection do
           get :conversation_metrics
           get :grouped_conversation_metrics

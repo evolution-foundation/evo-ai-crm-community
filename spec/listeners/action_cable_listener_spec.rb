@@ -59,7 +59,7 @@ RSpec.describe ActionCableListener do
     it 'skips broadcast when tokens are blank' do
       expect(ActionCableBroadcastJob).not_to receive(:perform_later)
 
-      listener.send(:broadcast, [], Events::Types::MESSAGE_CREATED, { id: 1 })
+      listener.send(:broadcast, nil, [], Events::Types::MESSAGE_CREATED, { id: 1 })
     end
   end
 end

@@ -480,6 +480,6 @@ class Whatsapp::ConversationSyncService
   end
 
   def account
-    nil # Account model removed in single-tenant mode
+    RuntimeConfig.account
   end
 end

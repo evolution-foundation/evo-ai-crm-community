@@ -1,27 +1,80 @@
-class Api::V1::WebhooksController < ApplicationController
-  skip_before_action :authenticate_user!, raise: false
+class Api::V1::WebhooksController < Api::V1::BaseController
+  require_permissions({
+    index: 'webhooks.read',
+    create: 'webhooks.create',
+    update: 'webhooks.update',
+    destroy: 'webhooks.delete'
+  })
 
-  def twitter_crc
-    render json: { response_token: "sha256=#{twitter_client.generate_crc(params[:crc_token])}" }
+  before_action :fetch_webhook, only: [:update, :destroy]
+
+  def index
+    @webhooks = Webhook.all
+    
+    apply_pagination
+    
+    paginated_response(
+      data: WebhookSerializer.serialize_collection(@webhooks),
+      collection: @webhooks,
+      message: 'Webhooks retrieved successfully'
+    )
   end
 
-  def twitter_events
-    twitter_consumer.consume
-    head :ok
-  rescue StandardError => e
-    EvolutionExceptionTracker.new(e).capture_exception
-    head :ok
+  def create
+    @webhook = Webhook.new(webhook_create_params)
+    @webhook.save!
+    
+    success_response(
+      data: WebhookSerializer.serialize(@webhook),
+      message: 'Webhook created successfully',
+      status: :created
+    )
+  rescue ActiveRecord::RecordInvalid => e
+    error_response(
+      code: ApiErrorCodes::VALIDATION_ERROR,
+      message: e.message
+    )
+  end
+
+  def update
+    @webhook.update!(webhook_update_params)
+    
+    success_response(
+      data: WebhookSerializer.serialize(@webhook),
+      message: 'Webhook updated successfully'
+    )
+  rescue ActiveRecord::RecordInvalid => e
+    error_response(
+      code: ApiErrorCodes::VALIDATION_ERROR,
+      message: e.message
+    )
+  end
+
+  def destroy
+    @webhook.destroy!
+    
+    success_response(
+      data: nil,
+      message: 'Webhook deleted successfully'
+    )
+  rescue ActiveRecord::RecordNotDestroyed => e
+    error_response(
+      code: ApiErrorCodes::CANNOT_DELETE_RESOURCE,
+      message: e.message
+    )
   end
 
   private
 
-  def twitter_client
-    Twitty::Facade.new do |config|
-      config.consumer_secret = ENV.fetch('TWITTER_CONSUMER_SECRET', nil)
-    end
+  def webhook_create_params
+    params.require(:webhook).permit(:inbox_id, :name, :url, subscriptions: [])
   end
 
-  def twitter_consumer
-    @twitter_consumer ||= ::Webhooks::Twitter.new(params)
+  def webhook_update_params
+    params.require(:webhook).permit(:name, subscriptions: [])
+  end
+
+  def fetch_webhook
+    @webhook = Webhook.find(params[:id])
   end
 end

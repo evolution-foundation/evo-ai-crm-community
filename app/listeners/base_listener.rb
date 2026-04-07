@@ -32,8 +32,7 @@ class BaseListener
   private
 
   def single_tenant_account
-    # Account model has been removed in single-tenant mode
-    nil
+    RuntimeConfig.account
   end
 
   def extract_changed_attributes(event)

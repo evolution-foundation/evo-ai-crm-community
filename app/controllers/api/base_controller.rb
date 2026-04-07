@@ -41,7 +41,7 @@ class Api::BaseController < ApplicationController
                   request.headers['Api-Access-Token'] ||
                   request.headers['X-Api-Access-Token']
       authenticate_user_with_evo_auth(api_token, 'api_access_token')
-      validate_bot_access_token!
+      validate_bot_access_token! unless performed?
     else
       render_unauthorized('Authentication required')
     end
@@ -145,6 +145,8 @@ class Api::BaseController < ApplicationController
     # Log the full error for debugging
     Rails.logger.error "Internal Server Error: #{exception.class} - #{exception.message}"
     Rails.logger.error exception.backtrace.join("\n")
+
+    return if performed?
 
     # In production, don't expose internal error details
     if Rails.env.production?

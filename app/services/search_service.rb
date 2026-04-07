@@ -81,7 +81,6 @@ class SearchService
   end
 
   def use_gin_search
-    # With single-tenant, check global config for GIN search
     ENV.fetch('ENABLE_GIN_SEARCH', 'false') == 'true'
   end
 

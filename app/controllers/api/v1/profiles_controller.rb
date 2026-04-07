@@ -2,7 +2,7 @@ class Api::V1::ProfilesController < Api::BaseController
   before_action :set_user
 
   def show
-    success_response(data: profile_data(@user), message: 'Profile retrieved successfully')
+    success_response(data: UserSerializer.serialize(@user, include_custom_attributes: true), message: 'Profile retrieved successfully')
   end
 
   def update

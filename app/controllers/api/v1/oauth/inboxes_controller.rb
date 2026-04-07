@@ -1,5 +1,5 @@
 # Herda diretamente do controller de accounts
-class Api::V1::Oauth::InboxesController < Api::V1::Accounts::InboxesController
+class Api::V1::Oauth::InboxesController < Api::V1::InboxesController
   # Remove parent controller middlewares for OAuth
   skip_before_action :authenticate_request!
 

@@ -206,9 +206,9 @@ module ApiResponseHelper
           page: pagination_meta[:page] || pagination_meta[:current_page],
           page_size: pagination_meta[:page_size] || pagination_meta[:pageSize] || pagination_meta[:per_page] || pagination_meta[:limit_value],
           total: pagination_meta[:total] || pagination_meta[:total_count],
-          total_pages: pagination_meta[:total_pages] || pagination_meta[:totalPages],
-          has_next_page: pagination_meta[:has_next_page] || pagination_meta[:hasNextPage],
-          has_previous_page: pagination_meta[:has_previous_page] || pagination_meta[:hasPreviousPage]
+          total_pages: [pagination_meta[:total_pages] || pagination_meta[:totalPages] || 0, 1].max,
+          has_next_page: pagination_meta.key?(:has_next_page) ? pagination_meta[:has_next_page] : pagination_meta[:hasNextPage],
+          has_previous_page: pagination_meta.key?(:has_previous_page) ? pagination_meta[:has_previous_page] : pagination_meta[:hasPreviousPage]
         }
       }),
       message: message,

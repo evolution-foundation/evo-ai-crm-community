@@ -84,7 +84,6 @@ class DynamicOauthService
   def self.available_accounts_for_user(user)
     return [] unless user
 
-    # Single-tenant mode: no Account model, return a single entry
     [{
       account_name: GlobalConfigService.load('BRAND_NAME', 'Evo CRM'),
       dynamic_client_id: generate_dynamic_client_id('default')

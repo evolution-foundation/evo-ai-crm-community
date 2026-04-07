@@ -1,8 +1,8 @@
 module AccessTokenAuthHelper
   BOT_ACCESSIBLE_ENDPOINTS = {
-    'api/v1/accounts/conversations' => %w[toggle_status toggle_priority create update custom_attributes],
-    'api/v1/accounts/conversations/messages' => ['create'],
-    'api/v1/accounts/conversations/assignments' => ['create']
+    'api/v1/conversations' => %w[toggle_status toggle_priority create update custom_attributes],
+    'api/v1/conversations/messages' => ['create'],
+    'api/v1/conversations/assignments' => ['create']
   }.freeze
 
   def ensure_access_token
@@ -35,6 +35,7 @@ module AccessTokenAuthHelper
     return if agent_bot_accessible?
 
     render_unauthorized('Access to this endpoint is not authorized for bots')
+    return
   end
 
   def agent_bot_accessible?

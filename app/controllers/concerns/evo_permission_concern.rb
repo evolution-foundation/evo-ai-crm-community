@@ -52,6 +52,7 @@ module EvoPermissionConcern
     unless has_permission
       Rails.logger.warn "EvoPermission: Access denied - user #{user_id} lacks #{permission_key}"
       render_permission_denied
+      return
     end
   end
 

@@ -191,10 +191,9 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
 
       # Create new conversation if none exists
       conversation = ::Conversation.create!(
-        account: account,
-        inbox: inbox,
-        contact: @contact,
-        contact_inbox: @contact_inbox,
+        inbox_id: inbox.id,
+        contact_id: @contact.id,
+        contact_inbox_id: @contact_inbox.id,
         additional_attributes: {
           evolution_go_chat_id: conversation_id
         }

@@ -156,7 +156,6 @@ class Api::V1::AuthController < ApplicationController
   end
 
   def switch_account
-    # Single-tenant mode: account switching is not supported
-    render json: { error: 'Account switching is not supported in single-tenant mode' }, status: :not_implemented
+    render json: { error: 'Account switching is not supported' }, status: :not_implemented
   end
 end

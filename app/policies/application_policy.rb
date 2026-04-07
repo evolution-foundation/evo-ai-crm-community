@@ -5,7 +5,12 @@ class ApplicationPolicy
     @user_context = user_context
     @user = user_context[:user]
     @account = user_context[:account]
+    @service_authenticated = user_context[:service_authenticated]
     @record = record
+  end
+
+  def service_authenticated?
+    @service_authenticated == true
   end
 
   def index?
