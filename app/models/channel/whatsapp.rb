@@ -26,6 +26,7 @@ class Channel::Whatsapp < ApplicationRecord
   # default at the moment is 360dialog lets change later.
   PROVIDERS = %w[default whatsapp_cloud baileys evolution evolution_go notificame zapi].freeze
   before_validation :ensure_webhook_verify_token
+  before_validation :merge_evolution_go_global_config, if: -> { provider == 'evolution_go' }
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :phone_number, presence: true, uniqueness: true
@@ -189,6 +190,18 @@ class Channel::Whatsapp < ApplicationRecord
 
   def ensure_webhook_verify_token
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys notificame])
+  end
+
+  def merge_evolution_go_global_config
+    self.provider_config ||= {}
+    if provider_config['api_url'].blank?
+      global_url = GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip
+      provider_config['api_url'] = global_url if global_url.present?
+    end
+    if provider_config['admin_token'].blank?
+      global_token = GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip
+      provider_config['admin_token'] = global_token if global_token.present?
+    end
   end
 
   def validate_provider_config

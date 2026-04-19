@@ -48,7 +48,8 @@ module EvolutionGoConcern
   end
 
   def webhook_url
-    api_url = ENV.fetch('BACKEND_URL', 'https://api.evoai.app')
-    "#{api_url.chomp('/')}/webhooks/whatsapp/evolution_go"
+    backend_url = ENV['BACKEND_URL'].presence ||
+                  GlobalConfigService.load('BACKEND_URL', 'https://api.evoai.app').to_s.strip
+    "#{backend_url.chomp('/')}/webhooks/whatsapp/evolution_go"
   end
 end
