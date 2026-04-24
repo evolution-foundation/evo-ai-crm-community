@@ -34,7 +34,6 @@ class CreateScheduledActions < ActiveRecord::Migration[7.0]
 
     add_foreign_key :scheduled_actions, :contacts, on_delete: :cascade
     add_foreign_key :scheduled_actions, :conversations, on_delete: :cascade
-    add_foreign_key :scheduled_actions, :users, column: :created_by, on_delete: :cascade
   end
 end
 

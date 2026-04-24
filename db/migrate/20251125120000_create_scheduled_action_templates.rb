@@ -18,7 +18,5 @@ class CreateScheduledActionTemplates < ActiveRecord::Migration[7.0]
     add_index :scheduled_action_templates, :action_type
     add_index :scheduled_action_templates, :is_default, name: 'idx_templates_default'
     add_index :scheduled_action_templates, :is_public, name: 'idx_templates_public'
-
-    add_foreign_key :scheduled_action_templates, :users, column: :created_by, on_delete: :cascade
   end
 end

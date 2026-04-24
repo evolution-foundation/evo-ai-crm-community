@@ -2,8 +2,8 @@ class CreatePipelineTasks < ActiveRecord::Migration[7.0]
   def change
     create_table :pipeline_tasks, id: :uuid do |t|
       t.references :pipeline_item, type: :uuid, null: false, foreign_key: true
-      t.references :created_by, type: :uuid, null: false, foreign_key: { to_table: :users }
-      t.references :assigned_to, type: :uuid, foreign_key: { to_table: :users }
+      t.uuid :created_by_id, null: false
+      t.uuid :assigned_to_id
 
       t.string :title, null: false, limit: 255
       t.text :description
@@ -28,6 +28,7 @@ class CreatePipelineTasks < ActiveRecord::Migration[7.0]
 
     add_index :pipeline_tasks, [:pipeline_item_id, :status]
     add_index :pipeline_tasks, [:assigned_to_id, :status, :due_date]
+    add_index :pipeline_tasks, :created_by_id
     add_index :pipeline_tasks, [:due_date]
     add_index :pipeline_tasks, [:status, :due_date], where: "status = 0", name: 'index_pipeline_tasks_on_pending_status_and_due_date'
   end

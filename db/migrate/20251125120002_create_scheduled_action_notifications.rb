@@ -21,6 +21,5 @@ class CreateScheduledActionNotifications < ActiveRecord::Migration[7.0]
     add_index :scheduled_action_notifications, [:scheduled_action_id, :notification_type], name: 'idx_notifications_action_type'
 
     add_foreign_key :scheduled_action_notifications, :scheduled_actions, on_delete: :cascade
-    add_foreign_key :scheduled_action_notifications, :users, on_delete: :cascade
   end
 end

@@ -74,11 +74,10 @@ vite: bundle exec vite dev
 EOF
 
 echo "🗄️ Preparing database..."
-# Run database migrations and seeds if needed
-bundle exec rails db:create 2>/dev/null || true
-bundle exec rails db:migrate 2>/dev/null || true
-# Use the evolution_prepare task from Makefile which handles everything
-bundle exec rails db:evolution_prepare 2>/dev/null || echo "Database preparation completed (or already prepared)"
+# db:evolution_prepare handles create + schema:load (on empty DB) + migrate (always).
+# Do NOT redirect stderr or mask failures — a broken migration must stop the boot
+# instead of leaving the database in a half-migrated state.
+bundle exec rails db:evolution_prepare
 
 echo "🧹 Cleaning up..."
 rm -f ./.overmind.sock
