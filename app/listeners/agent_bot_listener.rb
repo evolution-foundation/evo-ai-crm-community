@@ -409,14 +409,14 @@ class AgentBotListener < BaseListener
 
       # Use specific comment agent bot if configured, otherwise use main agent bot
       comment_agent_bot = agent_bot_inbox.facebook_comment_agent_bot || agent_bot_inbox.agent_bot
-      Rails.logger.info "[AgentBot Listener] Using agent bot: #{comment_agent_bot.name} (ID: #{comment_agent_bot.id})"
+      Rails.logger.info "[AgentBot Listener] Using agent bot: #{comment_agent_bot&.name} (ID: #{comment_agent_bot&.id})"
       Rails.logger.info "[AgentBot Listener] Is comment-specific bot: #{agent_bot_inbox.facebook_comment_agent_bot.present?}"
 
       return comment_agent_bot
     end
 
     # For regular conversations (including Facebook Messenger direct messages), use main agent bot
-    Rails.logger.info "[AgentBot Listener] Regular conversation, using main agent bot: #{agent_bot_inbox.agent_bot.name}"
+    Rails.logger.info "[AgentBot Listener] Regular conversation, using main agent bot: #{agent_bot_inbox.agent_bot&.name}"
     agent_bot_inbox.agent_bot
   end
 
