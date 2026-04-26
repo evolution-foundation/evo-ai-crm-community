@@ -50,9 +50,11 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
   end
 
   def conversation_params
-    super.merge(
-      additional_attributes: { evolution_go_chat_id: conversation_id }
+    base = super
+    base[:additional_attributes] = (base[:additional_attributes] || {}).merge(
+      evolution_go_chat_id: conversation_id
     )
+    base
   end
 
   def incoming?

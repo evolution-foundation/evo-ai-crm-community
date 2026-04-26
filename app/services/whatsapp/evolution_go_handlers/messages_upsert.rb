@@ -439,7 +439,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     if base64_data.present?
       Rails.logger.info 'Evolution Go API: Decoding base64 media'
       decoded = Base64.decode64(base64_data)
-      tmp = Tempfile.new(['evo_media', ".#{media_extension}"], binmode: true)
+      tmp = Tempfile.new(['evo_media', ".#{media_extension}"])
+      tmp.binmode
       tmp.write(decoded)
       tmp.rewind
       return tmp
