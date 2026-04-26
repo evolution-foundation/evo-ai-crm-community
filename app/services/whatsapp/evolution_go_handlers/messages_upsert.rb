@@ -428,11 +428,11 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   end
 
   def download_attachment_file
-    message = @evolution_go_message
+    media_url = extract_media_url
 
-    if message[:mediaUrl].present?
-      Rails.logger.info "Evolution Go API: Downloading from mediaUrl: #{message[:mediaUrl]}"
-      return Down.download(message[:mediaUrl])
+    if media_url.present?
+      Rails.logger.info "Evolution Go API: Downloading from mediaUrl: #{media_url}"
+      return Down.download(media_url)
     end
 
     Rails.logger.warn 'Evolution Go API: No media found - no mediaUrl'
@@ -445,7 +445,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   def debug_media_info
     Rails.logger.info 'Evolution Go API: Media debug info:'
     Rails.logger.info "- Message type: #{message_type}"
-    Rails.logger.info "- Media URL: #{@evolution_go_message[:mediaUrl]}"
+    Rails.logger.info "- Media URL: #{extract_media_url}"
     Rails.logger.info "- Mimetype: #{message_mimetype}"
   end
 
