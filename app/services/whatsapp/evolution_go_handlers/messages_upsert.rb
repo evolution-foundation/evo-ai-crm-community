@@ -110,31 +110,29 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
 
     Rails.logger.info "Evolution Go API: Outgoing echo - looking up contact by identifier: #{chat_lid}"
 
-    contact = account.contacts.find_by(identifier: chat_lid)
+    contact_inbox = inbox.contact_inboxes
+                         .joins(:contact)
+                         .find_by(contacts: { identifier: chat_lid })
 
-    if contact
-      contact_inbox = contact.contact_inboxes.find_by(inbox_id: inbox.id)
-      if contact_inbox
-        @contact_inbox = contact_inbox
-        @contact = contact
-        Rails.logger.info "Evolution Go API: Found contact #{@contact.id} (#{@contact.name}) via identifier for outgoing echo"
-        return
-      end
+    if contact_inbox
+      @contact_inbox = contact_inbox
+      @contact = contact_inbox.contact
+      Rails.logger.info "Evolution Go API: Found contact #{@contact.id} (#{@contact.name}) via identifier for outgoing echo"
+      return
     end
 
     # Fallback: tentar pelo RecipientAlt (telefone real do contato)
     recipient_alt = @evolution_go_info&.dig(:RecipientAlt)
     if recipient_alt.present?
       phone = recipient_alt.split('@').first.gsub(/:\d+$/, '')
-      contact = account.contacts.find_by(phone_number: "+#{phone}")
-      if contact
-        contact_inbox = contact.contact_inboxes.find_by(inbox_id: inbox.id)
-        if contact_inbox
-          @contact_inbox = contact_inbox
-          @contact = contact
-          Rails.logger.info "Evolution Go API: Found contact #{@contact.id} via RecipientAlt #{phone} for outgoing echo"
-          return
-        end
+      contact_inbox = inbox.contact_inboxes
+                           .joins(:contact)
+                           .find_by(contacts: { phone_number: "+#{phone}" })
+      if contact_inbox
+        @contact_inbox = contact_inbox
+        @contact = contact_inbox.contact
+        Rails.logger.info "Evolution Go API: Found contact #{@contact.id} via RecipientAlt #{phone} for outgoing echo"
+        return
       end
     end
 
@@ -234,7 +232,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       created_at: Time.zone.at(message_timestamp),
       sender: @contact,
       sender_type: 'Contact',
-      message_type: :incoming,
+      message_type: incoming? ? :incoming : :outgoing,
       content_attributes: content_attrs
     }
 
