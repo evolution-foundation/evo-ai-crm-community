@@ -13,24 +13,32 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     Rails.logger.info "Evolution Go API: Creating new message #{raw_message_id}"
 
     set_contact
+    return unless @contact_inbox
+
+    set_conversation
     create_message(attach_media: media_attachment?)
   end
 
   def set_contact
     Rails.logger.info "Evolution Go API: Setting contact - inbox present: #{inbox.present?}"
-    Rails.logger.info "Evolution Go API: Inbox details: #{inbox.inspect}" if inbox
 
+    if incoming?
+      set_contact_for_incoming
+    else
+      set_contact_for_outgoing
+    end
+  end
+
+  def set_contact_for_incoming
     push_name = contact_name
     phone_number = phone_number_from_jid
     sender_alt_value = sender_alt
     is_whatsapp_number = is_whatsapp_phone_number?
 
-    # Determine source_id: use identifier (SenderAlt) if available, otherwise phone_number
     source_id = determine_source_id(sender_alt_value, phone_number)
 
-    Rails.logger.info "Evolution Go API: Creating contact with source_id: #{source_id}, phone_number: #{phone_number}, push_name: #{push_name}, sender_alt: #{sender_alt_value}, is_whatsapp: #{is_whatsapp_number}"
+    Rails.logger.info "Evolution Go API: Incoming contact - source_id: #{source_id}, phone_number: #{phone_number}, push_name: #{push_name}"
 
-    # Build contact attributes with new logic
     contact_attributes = build_contact_attributes(push_name, phone_number, sender_alt_value, is_whatsapp_number)
 
     contact_inbox = ::ContactInboxWithContactBuilder.new(
@@ -42,13 +50,50 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     @contact_inbox = contact_inbox
     @contact = contact_inbox.contact
 
-    # Update contact with additional information
     update_contact_information(push_name, phone_number, sender_alt_value, is_whatsapp_number)
-
-    # Update contact profile picture if not already attached
     update_contact_profile_picture(@contact, phone_number)
 
     Rails.logger.info "Evolution Go API: Contact set - ID: #{@contact.id}, Name: #{@contact.name}, Identifier: #{@contact.identifier}, Source ID: #{@contact_inbox.source_id}"
+  end
+
+  def set_contact_for_outgoing
+    # Para mensagens IsFromMe (eco do celular), identificar o contato pelo Chat LID
+    # que coincide com o identifier gravado no contato durante o incoming
+    chat_lid = conversation_id
+
+    Rails.logger.info "Evolution Go API: Outgoing echo - looking up contact by identifier: #{chat_lid}"
+
+    contact = account.contacts.find_by(identifier: chat_lid)
+
+    if contact
+      contact_inbox = contact.contact_inboxes.find_by(inbox_id: inbox.id)
+      if contact_inbox
+        @contact_inbox = contact_inbox
+        @contact = contact
+        Rails.logger.info "Evolution Go API: Found contact #{@contact.id} (#{@contact.name}) via identifier for outgoing echo"
+        return
+      end
+    end
+
+    # Fallback: tentar pelo RecipientAlt (telefone real do contato)
+    recipient_alt = @evolution_go_info&.dig(:RecipientAlt)
+    if recipient_alt.present?
+      phone = recipient_alt.split('@').first.gsub(/:\d+$/, '')
+      contact = account.contacts.find_by(phone_number: "+#{phone}")
+      if contact
+        contact_inbox = contact.contact_inboxes.find_by(inbox_id: inbox.id)
+        if contact_inbox
+          @contact_inbox = contact_inbox
+          @contact = contact
+          Rails.logger.info "Evolution Go API: Found contact #{@contact.id} via RecipientAlt #{phone} for outgoing echo"
+          return
+        end
+      end
+    end
+
+    Rails.logger.warn "Evolution Go API: No existing contact found for outgoing echo (Chat: #{chat_lid}). Skipping message."
+    @contact_inbox = nil
+    @contact = nil
   end
 
   def determine_source_id(sender_alt_value, phone_number)
@@ -109,11 +154,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     Rails.logger.info "Evolution Go API: Message is a reply to: #{reply_to_id}" if reply_to_id.present?
     Rails.logger.info 'Evolution Go API: No reply ID found for quoted message' if is_quoted && reply_to_id.blank?
 
-    # Find or create conversation
-    conversation = find_or_create_conversation
-
     # Build message attributes (like Evolution v2)
-    build_message_attributes(conversation, reply_to_id)
+    build_message_attributes(@conversation, reply_to_id)
 
     # Handle media attachment if needed
     handle_attach_media if attach_media
@@ -182,28 +224,6 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     inbox.channel.received_messages([@message], @message.conversation) if incoming?
   end
 
-  def find_or_create_conversation
-    # Try to find existing conversation
-    conversation = @contact_inbox.conversations.last
-
-    if conversation.blank?
-      Rails.logger.info "Evolution Go API: Creating new conversation for contact #{@contact.id}"
-
-      # Create new conversation if none exists
-      conversation = ::Conversation.create!(
-        inbox_id: inbox.id,
-        contact_id: @contact.id,
-        contact_inbox_id: @contact_inbox.id,
-        additional_attributes: {
-          evolution_go_chat_id: conversation_id
-        }
-      )
-    else
-      Rails.logger.info "Evolution Go API: Using existing conversation #{conversation.id}"
-    end
-
-    conversation
-  end
 
   def attach_media_from_url(media_url)
     # Download and attach media file
