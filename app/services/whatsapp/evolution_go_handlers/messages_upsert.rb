@@ -16,6 +16,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     return unless @contact_inbox
 
     set_conversation
+    update_conversation_status_if_needed
     create_message(attach_media: media_attachment?)
   end
 
@@ -140,6 +141,15 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     @contact.update!(updates) if updates.any?
   end
 
+  def update_conversation_status_if_needed
+    return if incoming?
+    return unless @conversation&.status == 'pending'
+    return if @conversation.inbox.active_bot?
+
+    @conversation.update!(status: :open)
+    Rails.logger.info "Evolution Go API: Updated conversation #{@conversation.id} status from pending to open (outgoing from phone)"
+  end
+
   def create_message(attach_media: false)
     Rails.logger.info "Evolution Go API: Creating message with content: #{message_content}"
     Rails.logger.info "Evolution Go API: Attach media flag: #{attach_media}"
@@ -183,8 +193,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       content: message_content || '',
       source_id: raw_message_id,
       created_at: Time.zone.at(message_timestamp),
-      sender: @contact,
-      sender_type: 'Contact',
+      sender: incoming? ? @contact : (User.where(type: 'SuperAdmin').first || User.first),
+      sender_type: incoming? ? 'Contact' : 'User',
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: content_attrs
     }
