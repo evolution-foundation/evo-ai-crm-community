@@ -147,7 +147,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     return if @conversation.inbox.active_bot?
 
     @conversation.update!(status: :open)
-    Rails.logger.info "Evolution Go API: Updated conversation #{@conversation.id} status from pending to open (outgoing from phone)"
+    Rails.logger.info "Evolution Go API: Updated conversation #{@conversation.id} from pending to open (outgoing from phone)"
   end
 
   def create_message(attach_media: false)
