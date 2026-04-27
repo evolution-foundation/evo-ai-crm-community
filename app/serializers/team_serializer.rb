@@ -25,6 +25,7 @@ module TeamSerializer
       name: team.name,
       description: team.description,
       allow_auto_assign: team.allow_auto_assign,
+      members_count: team.team_members.count,
       created_at: team.created_at.to_i,
       updated_at: team.updated_at.to_i
     }
