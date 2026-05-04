@@ -18,7 +18,9 @@ module PipelineItemSerializer
   #
   # @return [Hash] Serialized pipeline item ready for Oj
   #
-  def serialize(pipeline_item, include_entity: false, include_tasks_info: false, include_services_info: false)
+  def serialize(pipeline_item, include_entity: false, include_tasks_info: false,
+                include_services_info: false, include_labels: false,
+                labels_by_title: nil, labels_by_id: nil)
     is_orphaned = if pipeline_item.conversation_id.present?
                     !pipeline_item.conversation.present?
                   elsif pipeline_item.contact_id.present?
@@ -49,7 +51,13 @@ module PipelineItemSerializer
 
     return result if is_orphaned
     if include_entity && pipeline_item.conversation.present? && pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
-      result[:conversation] = ConversationSerializer.serialize(pipeline_item.conversation, include_messages: false)
+      result[:conversation] = ConversationSerializer.serialize(
+        pipeline_item.conversation,
+        include_messages: false,
+        include_labels: include_labels,
+        labels_by_title: labels_by_title,
+        labels_by_id: labels_by_id
+      )
       if pipeline_item.conversation.association(:contact).loaded? && pipeline_item.conversation.contact
         result[:contact] = ContactSerializer.serialize(pipeline_item.conversation.contact)
       end
