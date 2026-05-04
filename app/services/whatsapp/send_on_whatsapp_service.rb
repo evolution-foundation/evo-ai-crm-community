@@ -204,7 +204,8 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
 
   def group_jid_from_conversation
     attrs = message.conversation.additional_attributes || {}
-    candidate = attrs['evolution_go_chat_id'] || attrs['evolution_chat_id']
+    key = channel.provider == 'evolution_go' ? 'evolution_go_chat_id' : 'evolution_chat_id'
+    candidate = attrs[key]
     candidate if candidate.is_a?(String) && candidate.end_with?('@g.us')
   end
 end

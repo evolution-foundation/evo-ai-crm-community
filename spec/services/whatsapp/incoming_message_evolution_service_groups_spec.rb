@@ -1,21 +1,16 @@
 # frozen_string_literal: true
 
-begin
-  require 'rails_helper'
-rescue LoadError
-  RSpec.describe 'Whatsapp::EvolutionHandlers::MessagesUpsert (groups)' do
-    it 'has spec scaffold ready' do
-      skip 'rails_helper is not available in this workspace snapshot'
-    end
-  end
-end
-
-return unless defined?(Rails)
+require 'rails_helper'
 
 RSpec.describe Whatsapp::IncomingMessageEvolutionService do
-  let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution') }
+  let(:provider_service) { instance_double(Whatsapp::Providers::EvolutionService) }
+  let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution', provider_service: provider_service) }
   let(:inbox) { instance_double(Inbox, id: 1, channel: channel) }
-  let(:contact) { instance_double(Contact, id: 99, name: 'WhatsApp Group 9876', identifier: '12345-9876@g.us') }
+  let(:contact) do
+    instance_double(Contact, id: 99, name: 'WhatsApp Group 99876', identifier: '12345-9876@g.us', update!: true).tap do |c|
+      allow(c).to receive(:name).and_return('WhatsApp Group 99876')
+    end
+  end
   let(:contact_inbox) { instance_double(ContactInbox, id: 7, contact: contact, source_id: '12345-9876@g.us') }
   let(:builder) { instance_double(ContactInboxWithContactBuilder, perform: contact_inbox) }
 
@@ -42,6 +37,7 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
   before do
     service.instance_variable_set(:@inbox, inbox)
     allow(ContactInboxWithContactBuilder).to receive(:new).and_return(builder)
+    allow(provider_service).to receive(:fetch_group_subject).and_return(nil)
   end
 
   describe '#message_processable?' do
@@ -127,6 +123,76 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
       service.instance_variable_set(:@raw_message, individual_message_payload)
       attrs = service.send(:message_content_attributes)
       expect(attrs).not_to have_key(:sender_name)
+    end
+
+    it 'tags media_type when the message carries a media attachment' do
+      payload = group_message_payload.deep_dup
+      payload[:message] = { imageMessage: { caption: 'pic', mimetype: 'image/jpeg' } }
+      service.instance_variable_set(:@raw_message, payload)
+      attrs = service.send(:message_content_attributes)
+      expect(attrs[:media_type]).to eq('image')
+      expect(attrs[:sender_name]).to eq('Alice')
+    end
+  end
+
+  describe 'group subject resolution via REST' do
+    before { service.instance_variable_set(:@raw_message, group_message_payload) }
+
+    it 'uses the real subject from provider_service.fetch_group_subject when available' do
+      allow(provider_service).to receive(:fetch_group_subject).with('12345-9876@g.us').and_return('Time Comercial')
+
+      expect(ContactInboxWithContactBuilder).to receive(:new) do |args|
+        expect(args[:contact_attributes][:name]).to eq('Time Comercial')
+        builder
+      end
+      service.send(:set_contact)
+    end
+
+    it 'falls back to the synthetic label when the REST lookup returns nil' do
+      allow(provider_service).to receive(:fetch_group_subject).and_return(nil)
+
+      expect(ContactInboxWithContactBuilder).to receive(:new) do |args|
+        expect(args[:contact_attributes][:name]).to match(/\AWhatsApp Group/)
+        builder
+      end
+      service.send(:set_contact)
+    end
+
+    it 'survives when provider_service does not expose fetch_group_subject' do
+      allow(channel).to receive(:provider_service).and_return(Object.new)
+
+      expect { service.send(:set_contact) }.not_to raise_error
+    end
+  end
+
+  describe '#update_group_name_if_safe (regression: never overwrite operator rename)' do
+    before do
+      service.instance_variable_set(:@raw_message, group_message_payload)
+      service.instance_variable_set(:@contact, contact)
+      service.instance_variable_set(:@contact_inbox, contact_inbox)
+    end
+
+    it 'updates the name when current is the synthetic fallback and the new subject is real' do
+      allow(contact).to receive(:name).and_return('WhatsApp Group 12349876')
+      expect(contact).to receive(:update!).with(name: 'Time Comercial')
+      service.send(:update_group_name_if_safe, 'Time Comercial')
+    end
+
+    it 'does NOT overwrite an operator-renamed group with the synthetic fallback' do
+      allow(contact).to receive(:name).and_return('Renomeado pelo operador')
+      expect(contact).not_to receive(:update!)
+      service.send(:update_group_name_if_safe, 'WhatsApp Group 9876')
+    end
+
+    it 'does NOT overwrite an operator-renamed group with a real subject either' do
+      allow(contact).to receive(:name).and_return('Renomeado pelo operador')
+      expect(contact).not_to receive(:update!)
+      service.send(:update_group_name_if_safe, 'Time Comercial')
+    end
+
+    it 'is a no-op when subject is blank' do
+      expect(contact).not_to receive(:update!)
+      service.send(:update_group_name_if_safe, nil)
     end
   end
 end

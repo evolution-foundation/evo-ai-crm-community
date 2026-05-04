@@ -87,7 +87,9 @@ module Whatsapp::EvolutionGoHandlers::Helpers
 
   def fallback_group_name
     jid = conversation_id.to_s
-    suffix = jid.split('@').first.to_s.split('-').last.to_s.last(4)
+    digits = jid.split('@').first.to_s.delete('-')
+    suffix = digits[0, 4].to_s + digits[-4, 4].to_s if digits.length >= 8
+    suffix = digits.last(4) if suffix.blank?
     suffix.present? ? "WhatsApp Group #{suffix}" : 'WhatsApp Group'
   end
 

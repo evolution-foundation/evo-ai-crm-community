@@ -1,16 +1,6 @@
 # frozen_string_literal: true
 
-begin
-  require 'rails_helper'
-rescue LoadError
-  RSpec.describe 'Whatsapp::EvolutionGoHandlers::MessagesUpsert (groups)' do
-    it 'has spec scaffold ready' do
-      skip 'rails_helper is not available in this workspace snapshot'
-    end
-  end
-end
-
-return unless defined?(Rails)
+require 'rails_helper'
 
 RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
   let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution_go') }
@@ -128,6 +118,40 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
       service.instance_variable_set(:@evolution_go_info, individual_info)
       attrs = service.send(:message_content_attributes)
       expect(attrs).not_to have_key(:sender_name)
+    end
+
+    it 'tags media_type from Info.MediaType for media messages' do
+      service.instance_variable_set(:@evolution_go_info, group_info.merge(MediaType: 'video'))
+      attrs = service.send(:message_content_attributes)
+      expect(attrs[:media_type]).to eq('video')
+    end
+  end
+
+  describe '#update_group_name_if_safe (regression: never overwrite operator rename)' do
+    before do
+      service.instance_variable_set(:@evolution_go_info, group_info)
+      service.instance_variable_set(:@evolution_go_data, group_data)
+      service.instance_variable_set(:@contact, contact)
+      service.instance_variable_set(:@contact_inbox, contact_inbox)
+    end
+
+    it 'updates the name when current is the synthetic fallback and the new subject is real' do
+      allow(contact).to receive(:name).and_return('WhatsApp Group 12349876')
+      expect(contact).to receive(:update!).with(name: 'My Squad')
+      service.send(:update_group_name_if_safe)
+    end
+
+    it 'does NOT overwrite an operator-renamed group with the synthetic fallback' do
+      service.instance_variable_set(:@evolution_go_data, {})
+      allow(contact).to receive(:name).and_return('Renomeado pelo operador')
+      expect(contact).not_to receive(:update!)
+      service.send(:update_group_name_if_safe)
+    end
+
+    it 'does NOT overwrite an operator-renamed group with a real subject either' do
+      allow(contact).to receive(:name).and_return('Renomeado pelo operador')
+      expect(contact).not_to receive(:update!)
+      service.send(:update_group_name_if_safe)
     end
   end
 end

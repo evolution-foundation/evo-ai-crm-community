@@ -193,14 +193,34 @@ module Whatsapp::EvolutionHandlers::Helpers
   end
 
   # Evolution API (v2.3.1) does not include group metadata in the messages.upsert
-  # webhook payload. Use a deterministic fallback so the conversation list has
-  # a stable label; a follow-up card may enrich this via REST.
+  # webhook payload. Resolve via REST (`/group/findGroupInfos`) when possible —
+  # the provider service caches the result in Redis for 1h. Falls back to a
+  # deterministic synthetic label if the lookup fails or returns blank.
   def group_subject
     return nil unless jid_type == 'group'
 
+    real_subject = fetch_group_subject_via_rest
+    return real_subject if real_subject.present?
+
+    fallback_group_name
+  end
+
+  def fallback_group_name
     jid = group_jid.to_s
-    suffix = jid.split('@').first.to_s.split('-').last.to_s.last(4)
+    digits = jid.split('@').first.to_s.delete('-')
+    suffix = digits[0, 4].to_s + digits[-4, 4].to_s if digits.length >= 8
+    suffix = digits.last(4) if suffix.blank?
     suffix.present? ? "WhatsApp Group #{suffix}" : 'WhatsApp Group'
+  end
+
+  def fetch_group_subject_via_rest
+    service = @inbox&.channel&.provider_service
+    return nil unless service.respond_to?(:fetch_group_subject)
+
+    service.fetch_group_subject(group_jid)
+  rescue StandardError => e
+    Rails.logger.warn "Evolution API: group subject lookup error: #{e.message}"
+    nil
   end
 
   def participant_jid

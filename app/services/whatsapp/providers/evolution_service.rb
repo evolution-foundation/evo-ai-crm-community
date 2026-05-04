@@ -145,6 +145,30 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     "#{api_base_path}/media/#{media_id}"
   end
 
+  # Fetches the group subject (real name) for a group JID via Evolution API REST.
+  # Cached in Redis for 1h per (channel, group_jid) so we don't hammer the API on
+  # every webhook. Returns nil on any failure — caller handles the fallback.
+  def fetch_group_subject(group_jid)
+    return nil if group_jid.blank?
+    return nil if api_base_path.blank? || instance_name.blank?
+
+    cache_key = "evolution:group_subject:#{whatsapp_channel.id}:#{group_jid}"
+    cached = Redis::Alfred.get(cache_key)
+    return cached if cached.present?
+
+    url = "#{api_base_path}/group/findGroupInfos/#{instance_name}?groupJid=#{URI.encode_www_form_component(group_jid)}"
+    response = HTTParty.get(url, headers: api_headers, timeout: 5)
+    return nil unless response.success?
+
+    parsed = response.parsed_response
+    subject = parsed.is_a?(Hash) ? (parsed['subject'].presence || parsed.dig('groupMetadata', 'subject').presence) : nil
+    Redis::Alfred.setex(cache_key, subject, 1.hour) if subject.present?
+    subject
+  rescue StandardError => e
+    Rails.logger.warn "Evolution API: fetch_group_subject failed for #{group_jid}: #{e.message}"
+    nil
+  end
+
   def subscribe_to_webhooks
     # Evolution API webhook subscription if needed
     Rails.logger.info 'Evolution API webhook subscription not implemented'

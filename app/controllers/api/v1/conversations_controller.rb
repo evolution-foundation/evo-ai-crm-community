@@ -428,7 +428,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     return {} if rows.empty?
 
     message_ids = rows.map { |row| row['message_id'] }.compact.uniq
-    messages_by_id = Message.unscoped.where(id: message_ids).includes(:sender).index_by(&:id)
+    messages_by_id = Message.unscoped
+                            .where(id: message_ids)
+                            .includes(:sender, :attachments)
+                            .index_by(&:id)
 
     rows.each_with_object({}) do |row, memo|
       message = messages_by_id[row['message_id']]

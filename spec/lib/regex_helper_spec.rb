@@ -1,16 +1,6 @@
 # frozen_string_literal: true
 
-begin
-  require 'rails_helper'
-rescue LoadError
-  RSpec.describe 'RegexHelper' do
-    it 'has spec scaffold ready' do
-      skip 'rails_helper is not available in this workspace snapshot'
-    end
-  end
-end
-
-return unless defined?(Rails)
+require 'rails_helper'
 
 RSpec.describe RegexHelper do
   describe 'WHATSAPP_CHANNEL_REGEX' do

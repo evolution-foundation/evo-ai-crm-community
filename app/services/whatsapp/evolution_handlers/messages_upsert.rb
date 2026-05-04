@@ -59,19 +59,40 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
   end
 
   def set_group_contact
-    Rails.logger.info "Evolution API: Setting group contact - jid: #{group_jid}, subject: #{group_subject}"
+    subject = group_subject
+    Rails.logger.debug { "Evolution API: Setting group contact - jid: #{group_jid}, subject: #{subject}" }
 
     contact_inbox = ::ContactInboxWithContactBuilder.new(
       source_id: group_jid,
       inbox: inbox,
       contact_attributes: {
-        name: group_subject,
+        name: subject,
         identifier: group_jid
       }
     ).perform
 
     @contact_inbox = contact_inbox
     @contact = contact_inbox.contact
+
+    update_group_name_if_safe(subject)
+  end
+
+  # Mirror of the Evolution Go safeguard: only refresh @contact.name when the
+  # incoming subject is a real one and the current name is empty or still the
+  # synthetic fallback. Prevents overwriting an operator-renamed group, and
+  # prevents the fallback from clobbering a real subject that arrived later.
+  def update_group_name_if_safe(subject)
+    return if subject.blank?
+    return if @contact.name == subject
+    return if fallback_group_name?(subject)
+    return unless @contact.name.blank? || fallback_group_name?(@contact.name)
+
+    Rails.logger.debug { "Evolution API: Updating group name #{@contact.name.inspect} -> #{subject.inspect}" }
+    @contact.update!(name: subject)
+  end
+
+  def fallback_group_name?(name)
+    name.to_s.match?(/\AWhatsApp Group(?:\s+\S+)?\z/)
   end
 
   def set_individual_contact
