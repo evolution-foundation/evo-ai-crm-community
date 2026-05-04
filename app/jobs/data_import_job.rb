@@ -20,16 +20,29 @@ class DataImportJob < ApplicationJob
 
   def process_import_file
     @data_import.update!(status: :processing)
-    contacts, rejected_contacts = parse_csv_and_build_contacts
 
-    import_contacts(contacts)
-    update_data_import_status(contacts.length, rejected_contacts.length)
+    # Separar contatos por tipo
+    person_rows, company_rows, rejected_contacts = parse_csv_and_classify_contacts
+
+    # Primeiro importar empresas (necessário para vínculos)
+    import_companies(company_rows)
+
+    # Depois importar pessoas
+    import_persons(person_rows)
+
+    # Processar vínculos entre pessoas e empresas
+    process_company_linkages(person_rows)
+
+    total_imported = company_rows.length + person_rows.length
+    update_data_import_status(total_imported, rejected_contacts.length)
     save_failed_records_csv(rejected_contacts)
   end
 
-  def parse_csv_and_build_contacts
-    contacts = []
+  def parse_csv_and_classify_contacts
+    person_rows = []
+    company_rows = []
     rejected_contacts = []
+
     # Ensuring that importing non utf-8 characters will not throw error
     data = @data_import.import_file.download
     utf8_data = data.force_encoding('UTF-8')
@@ -40,15 +53,27 @@ class DataImportJob < ApplicationJob
     csv = CSV.parse(clean_data, headers: true)
 
     csv.each do |row|
-      current_contact = @contact_manager.build_contact(row.to_h.with_indifferent_access)
-      if current_contact.valid?
-        contacts << current_contact
+      params = row.to_h.with_indifferent_access
+      tipo = params[:tipo] || params[:type] || 'person'
+
+      if tipo == 'company'
+        current_contact = @contact_manager.build_contact(params)
+        if current_contact.valid?
+          company_rows << { row: params, contact: current_contact }
+        else
+          append_rejected_contact(row, current_contact, rejected_contacts)
+        end
       else
-        append_rejected_contact(row, current_contact, rejected_contacts)
+        current_contact = @contact_manager.build_contact(params)
+        if current_contact.valid?
+          person_rows << { row: params, contact: current_contact }
+        else
+          append_rejected_contact(row, current_contact, rejected_contacts)
+        end
       end
     end
 
-    [contacts, rejected_contacts]
+    [person_rows, company_rows, rejected_contacts]
   end
 
   def append_rejected_contact(row, contact, rejected_contacts)
@@ -59,6 +84,46 @@ class DataImportJob < ApplicationJob
   def import_contacts(contacts)
     # <struct ActiveRecord::Import::Result failed_instances=[], num_inserts=1, ids=[444, 445], results=[]>
     Contact.import(contacts, synchronize: contacts, on_duplicate_key_ignore: true, track_validation_failures: true, validate: true, batch_size: 1000)
+  end
+
+  def import_companies(company_rows)
+    return if company_rows.empty?
+
+    companies = company_rows.map { |row_data| row_data[:contact] }
+    Contact.import(companies, synchronize: companies, on_duplicate_key_ignore: true, track_validation_failures: true, validate: true, batch_size: 1000)
+  end
+
+  def import_persons(person_rows)
+    return if person_rows.empty?
+
+    persons = person_rows.map { |row_data| row_data[:contact] }
+    Contact.import(persons, synchronize: persons, on_duplicate_key_ignore: true, track_validation_failures: true, validate: true, batch_size: 1000)
+  end
+
+  def process_company_linkages(person_rows)
+    person_rows.each do |person_data|
+      empresas_vinculadas = person_data[:row][:empresas_vinculadas]
+      next unless empresas_vinculadas.present?
+
+      contact = person_data[:contact]
+      company_names = empresas_vinculadas.split('|').map(&:strip)
+
+      company_names.each do |company_name|
+        company = Contact.companies.find_by("LOWER(name) = ?", company_name.downcase)
+        if company
+          contact.add_company(company)
+        else
+          # Criar nova empresa se não existir
+          new_company = Contact.create!(
+            type: 'company',
+            name: company_name,
+            email: nil,
+            phone_number: nil
+          )
+          contact.add_company(new_company)
+        end
+      end
+    end
   end
 
   def update_data_import_status(processed_records, rejected_records)
