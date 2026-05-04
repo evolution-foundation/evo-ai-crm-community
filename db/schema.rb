@@ -327,6 +327,7 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.string "pubsub_token"
     t.text "bsuid"
     t.text "whatsapp_username"
+    t.index ["contact_id"], name: "idx_contact_inboxes_contact_id", where: "(contact_id IS NOT NULL)"
     t.index ["contact_id"], name: "index_contact_inboxes_on_contact_id"
     t.index ["inbox_id", "bsuid"], name: "index_contact_inboxes_on_inbox_id_and_bsuid", unique: true, where: "(bsuid IS NOT NULL)"
     t.index ["inbox_id", "source_id"], name: "index_contact_inboxes_on_inbox_id_and_source_id", unique: true
@@ -357,9 +358,11 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.string "industry"
     t.index ["blocked"], name: "index_contacts_on_blocked"
     t.index ["email"], name: "uniq_email_per_account_contact", unique: true
+    t.index ["id"], name: "idx_contacts_with_identity", where: "(((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))"
     t.index ["identifier"], name: "uniq_identifier_per_account_contact", unique: true
     t.index ["last_activity_at"], name: "index_contacts_on_last_activity_at", order: "DESC NULLS LAST"
     t.index ["name", "email", "phone_number", "identifier"], name: "index_contacts_on_name_email_phone_number_identifier", opclass: :gin_trgm_ops, using: :gin
+    t.index ["name", "type", "id"], name: "idx_contacts_name_type_resolved", where: "(((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))"
     t.index ["phone_number"], name: "index_contacts_on_phone_number"
     t.index ["tax_id"], name: "index_contacts_on_tax_id", unique: true, where: "(tax_id IS NOT NULL)"
     t.index ["type"], name: "index_contacts_on_type"
@@ -500,31 +503,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.index ["user_id"], name: "index_data_privacy_consents_on_user_id"
   end
 
-  create_table "events", primary_key: ["id", "app_name", "user_id", "session_id"], force: :cascade do |t|
-    t.string "id", limit: 128, null: false
-    t.string "app_name", limit: 128, null: false
-    t.string "user_id", limit: 128, null: false
-    t.string "session_id", limit: 128, null: false
-    t.string "invocation_id", limit: 256, null: false
-    t.string "author", limit: 256, null: false
-    t.binary "actions", null: false
-    t.text "long_running_tool_ids_json"
-    t.string "branch", limit: 256
-    t.datetime "timestamp", precision: nil, null: false
-    t.jsonb "content"
-    t.jsonb "grounding_metadata"
-    t.jsonb "custom_metadata"
-    t.jsonb "usage_metadata"
-    t.jsonb "citation_metadata"
-    t.boolean "partial"
-    t.boolean "turn_complete"
-    t.string "error_code", limit: 256
-    t.string "error_message", limit: 1024
-    t.boolean "interrupted"
-    t.jsonb "input_transcription"
-    t.jsonb "output_transcription"
-  end
-
   create_table "evo_agent_processor_execution_metrics", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "agent_id"
     t.string "session_id", null: false
@@ -619,6 +597,10 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.index ["name"], name: "idx_evo_core_api_keys_name_unique", unique: true
   end
 
+  create_table "evo_core_community_schema_migrations", primary_key: "version", id: :bigint, default: nil, force: :cascade do |t|
+    t.boolean "dirty", null: false
+  end
+
   create_table "evo_core_custom_mcp_servers", id: :uuid, default: -> { "uuid_generate_v4()" }, force: :cascade do |t|
     t.string "name", limit: 255, null: false
     t.text "description"
@@ -692,10 +674,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.index ["name"], name: "idx_evo_core_mcp_servers_name", unique: true
     t.check_constraint "config_type::text = ANY (ARRAY['studio'::text, 'sse'::text])", name: "check_mcp_server_config_type"
     t.check_constraint "type::text = ANY (ARRAY['official'::text, 'community'::text])", name: "check_mcp_server_type"
-  end
-
-  create_table "evo_core_schema_community_migrations", primary_key: "version", id: :bigint, default: nil, force: :cascade do |t|
-    t.boolean "dirty", null: false
   end
 
   create_table "facebook_comment_moderations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1051,7 +1029,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.integer "position", default: 0, null: false
     t.integer "depth", default: 0, null: false
     t.index ["assigned_to_id", "status", "due_date"], name: "index_pipeline_tasks_on_assigned_to_id_and_status_and_due_date"
-    t.index ["assigned_to_id"], name: "index_pipeline_tasks_on_assigned_to_id"
     t.index ["created_by_id"], name: "index_pipeline_tasks_on_created_by_id"
     t.index ["due_date"], name: "index_pipeline_tasks_on_due_date"
     t.index ["parent_task_id", "position"], name: "index_pipeline_tasks_on_parent_task_id_and_position"
@@ -1229,15 +1206,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.index ["status"], name: "index_scheduled_actions_on_status"
   end
 
-  create_table "sessions", primary_key: ["app_name", "user_id", "id"], force: :cascade do |t|
-    t.string "app_name", limit: 128, null: false
-    t.string "user_id", limit: 128, null: false
-    t.string "id", limit: 128, null: false
-    t.jsonb "state", null: false
-    t.datetime "create_time", precision: nil, null: false
-    t.datetime "update_time", precision: nil, null: false
-  end
-
   create_table "stage_movements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "pipeline_item_id", null: false
     t.uuid "from_stage_id"
@@ -1315,13 +1283,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.index ["user_id"], name: "index_user_roles_on_user_id"
   end
 
-  create_table "user_states", primary_key: ["app_name", "user_id"], force: :cascade do |t|
-    t.string "app_name", limit: 128, null: false
-    t.string "user_id", limit: 128, null: false
-    t.jsonb "state", null: false
-    t.datetime "update_time", precision: nil, null: false
-  end
-
   create_table "user_tours", force: :cascade do |t|
     t.uuid "user_id", null: false
     t.string "tour_key", null: false
@@ -1330,7 +1291,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id", "tour_key"], name: "index_user_tours_on_user_id_and_tour_key", unique: true
-    t.index ["user_id"], name: "index_user_tours_on_user_id"
   end
 
   create_table "users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1413,7 +1373,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
   add_foreign_key "contact_companies", "contacts"
   add_foreign_key "contact_companies", "contacts", column: "company_id"
   add_foreign_key "data_privacy_consents", "users"
-  add_foreign_key "events", "sessions", column: ["app_name", "user_id", "session_id"], primary_key: ["app_name", "user_id", "id"], name: "events_app_name_user_id_session_id_fkey", on_delete: :cascade
   add_foreign_key "evo_agent_processor_execution_metrics", "evo_core_agents", column: "agent_id", name: "evo_agent_processor_execution_metrics_agent_id_fkey", on_delete: :cascade
   add_foreign_key "evo_ai_agent_processor_execution_metrics", "evo_core_agents", column: "agent_id", name: "evo_ai_agent_processor_execution_metrics_agent_id_fkey", on_delete: :cascade
   add_foreign_key "evo_core_agent_integrations", "evo_core_agents", column: "agent_id", name: "evo_core_agent_integrations_agent_id_fkey", on_delete: :cascade
@@ -1422,7 +1381,6 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
   add_foreign_key "evo_core_folder_shares", "evo_core_folders", column: "folder_id", name: "evo_core_folder_shares_folder_id_fkey", on_delete: :cascade
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
-  add_foreign_key "facebook_comment_moderations", "users", column: "moderated_by_id"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "pipeline_items", "contacts"
@@ -1432,24 +1390,17 @@ ActiveRecord::Schema[7.1].define(version: 9025_08_19_224901) do
   add_foreign_key "pipeline_service_definitions", "pipelines"
   add_foreign_key "pipeline_tasks", "pipeline_items"
   add_foreign_key "pipeline_tasks", "pipeline_tasks", column: "parent_task_id"
-  add_foreign_key "pipeline_tasks", "users", column: "assigned_to_id"
-  add_foreign_key "pipeline_tasks", "users", column: "created_by_id"
   add_foreign_key "plan_features", "features", name: "plan_features_feature_id_fkey"
   add_foreign_key "plan_features", "plans", name: "plan_features_plan_id_fkey"
   add_foreign_key "role_permissions_actions", "roles"
   add_foreign_key "scheduled_action_execution_logs", "scheduled_actions"
   add_foreign_key "scheduled_action_notifications", "scheduled_actions", on_delete: :cascade
-  add_foreign_key "scheduled_action_notifications", "users", on_delete: :cascade
-  add_foreign_key "scheduled_action_templates", "users", column: "created_by", on_delete: :cascade
   add_foreign_key "scheduled_actions", "contacts", on_delete: :cascade
   add_foreign_key "scheduled_actions", "conversations", on_delete: :cascade
-  add_foreign_key "scheduled_actions", "users", column: "created_by", on_delete: :cascade
-  add_foreign_key "scheduled_actions", "users", column: "notify_user_id", on_delete: :nullify
   add_foreign_key "stage_movements", "pipeline_items"
   add_foreign_key "stage_movements", "pipeline_stages", column: "from_stage_id"
   add_foreign_key "stage_movements", "pipeline_stages", column: "to_stage_id"
   add_foreign_key "user_roles", "roles"
   add_foreign_key "user_roles", "users"
   add_foreign_key "user_roles", "users", column: "granted_by_id"
-  add_foreign_key "user_tours", "users"
 end

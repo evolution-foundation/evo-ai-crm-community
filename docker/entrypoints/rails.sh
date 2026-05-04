@@ -20,15 +20,11 @@ done
 
 echo "Database ready to accept connections."
 
-#install missing gems for local dev as we are using base image compiled for production
-bundle install
+# Ensure gems are installed and up-to-date
+bundle check || bundle install
 
-BUNDLE="bundle check"
-
-until $BUNDLE
-do
-  sleep 2;
-done
+# Prepare the database (create if missing, run migrations)
+bundle exec rails db:prepare
 
 # Execute the main process of the container
 exec "$@"

@@ -63,6 +63,10 @@ class User < ApplicationRecord
   include Avatarable
   include UserAttributeHelpers
 
+  # Role relationships (synced from evo-auth-service)
+  has_many :user_roles, dependent: :destroy_async
+  has_many :roles, through: :user_roles
+
   # Evolution-specific relationships only
   has_many :assigned_conversations, foreign_key: 'assignee_id', class_name: 'Conversation', dependent: :nullify, inverse_of: :assignee
   has_many :csat_survey_responses, foreign_key: 'assigned_agent_id', dependent: :nullify, inverse_of: :assigned_agent

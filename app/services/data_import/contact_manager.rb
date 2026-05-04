@@ -46,7 +46,7 @@ class DataImport::ContactManager
   end
 
   def find_contact_by_tax_id(params)
-    tax_id = params[:cpf_cnpj] || params[:cpf] || params[:cnpj] || params[:tax_id]
+    tax_id = sanitize_tax_id(params[:cpf_cnpj] || params[:cpf] || params[:cnpj] || params[:tax_id])
     return unless tax_id.present?
 
     Contact.find_by(tax_id: tax_id)
@@ -57,6 +57,10 @@ class DataImport::ContactManager
 
     cleaned = phone_number.to_s.gsub(/\D/, '')
     cleaned.start_with?('+') ? cleaned : "+#{cleaned}"
+  end
+
+  def sanitize_tax_id(tax_id)
+    tax_id.to_s.gsub(/\D/, '') if tax_id.present?
   end
 
   def update_contact_with_merged_attributes(params, contact)
@@ -78,7 +82,7 @@ class DataImport::ContactManager
     contact.last_name = params[:sobrenome] if params[:sobrenome].present?
     contact.email = params[:email] if params[:email].present?
     contact.phone_number = format_phone_number(params[:telefone] || params[:phone_number]) if (params[:telefone] || params[:phone_number]).present?
-    contact.tax_id = params[:cpf_cnpj] || params[:cpf] || params[:cnpj] || params[:tax_id]
+    contact.tax_id = sanitize_tax_id(params[:cpf_cnpj] || params[:cpf] || params[:cnpj] || params[:tax_id])
 
     # Campos específicos
     contact.website = params[:website] if params[:website].present?

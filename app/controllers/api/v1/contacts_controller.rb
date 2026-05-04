@@ -35,6 +35,11 @@ class Api::V1::ContactsController < Api::V1::BaseController
   def index
     @contacts = fetch_contacts(listable_contacts)
 
+    # Use cached count to avoid expensive COUNT(*) queries on large datasets
+    @contacts_count = Rails.cache.fetch(cache_key_for_contacts_count, expires_in: 1.minute) do
+      listable_contacts.count
+    end
+
     apply_pagination
 
     paginated_response(
@@ -330,6 +335,18 @@ class Api::V1::ContactsController < Api::V1::BaseController
   end
 
   private
+
+  # Cache key for contacts count, varies by query parameters that affect listable contacts
+  def cache_key_for_contacts_count
+    # Build a deterministic string based on filters that influence the count
+    key_parts = [
+      params[:type],
+      params[:company_id],
+      params[:labels]&.sort&.join(','),
+      params[:q] # search query, if any
+    ].compact.join('/')
+    "contacts_count/#{key_parts.presence || 'all'}"
+  end
 
   # TODO: Move this to a finder class
   def listable_contacts
