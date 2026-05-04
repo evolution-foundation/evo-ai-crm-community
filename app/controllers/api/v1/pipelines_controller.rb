@@ -56,7 +56,8 @@ class Api::V1::PipelinesController < Api::V1::BaseController
         include_stages: true,
         include_items: true,
         include_tasks_info: true,
-        include_services_info: true
+        include_services_info: true,
+        include_labels: true
       ),
       message: 'Pipeline retrieved successfully'
     )
