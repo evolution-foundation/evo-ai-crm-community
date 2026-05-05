@@ -16,6 +16,7 @@ class AsyncDispatcher < BaseDispatcher
       InstallationWebhookListener.instance,
       NotificationListener.instance,
       ParticipationListener.instance,
+      PipelineStageAutomationListener.instance,
       PipelineTaskListener.instance,
       ReportingEventListener.instance,
       WebhookListener.instance,
