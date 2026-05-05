@@ -1,4 +1,6 @@
 class Api::V1::EvolutionGo::PrivacyController < Api::V1::BaseController
+  include EvolutionGoConcern
+
   before_action :set_instance_params, only: [:show, :update]
 
   # GET PRIVACY - GET /user/privacy
@@ -72,15 +74,16 @@ class Api::V1::EvolutionGo::PrivacyController < Api::V1::BaseController
                                         .first
 
     if whatsapp_channel
+      creds = evolution_go_credentials_for(whatsapp_channel)
       @inbox = whatsapp_channel.inbox
-      @api_url = whatsapp_channel.provider_config['api_url']
-      @admin_token = whatsapp_channel.provider_config['admin_token']
-      @instance_token = whatsapp_channel.provider_config['instance_token']
+      @api_url = creds[:api_url]
+      @admin_token = creds[:admin_token]
+      @instance_token = creds[:instance_token]
     else
       # Fallback para parâmetros diretos (para compatibilidade)
       privacy_params = params[:privacy] || params
-      @api_url = privacy_params[:api_url]
-      @admin_token = privacy_params[:admin_token]
+      @api_url = privacy_params[:api_url].presence || GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip
+      @admin_token = privacy_params[:admin_token].presence || GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip
       @instance_token = privacy_params[:instance_token]
     end
   end

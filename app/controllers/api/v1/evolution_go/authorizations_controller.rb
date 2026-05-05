@@ -44,6 +44,8 @@ class Api::V1::EvolutionGo::AuthorizationsController < Api::V1::BaseController
       # Create new instance
       instance_data = create_instance_go(@api_url, @admin_token, @instance_name, auth_params)
 
+      register_webhook_after_create(@api_url, instance_data['instance_token'])
+
       render json: {
         success: true,
         message: 'Instance created successfully',
@@ -482,6 +484,19 @@ class Api::V1::EvolutionGo::AuthorizationsController < Api::V1::BaseController
   def generate_instance_token
     # Gerar token no formato UUID padrão
     SecureRandom.uuid
+  end
+
+  # Registers the CRM webhook on the freshly created Evolution Go instance so
+  # incoming events arrive even before the user opens the QR screen. Failures
+  # (e.g. missing BACKEND_URL, transient network error) are logged and swallowed
+  # to avoid regressing channel creation — connect_instance is also called when
+  # the QR is requested, so the webhook will be retried then.
+  def register_webhook_after_create(api_url, instance_token)
+    return if api_url.blank? || instance_token.blank?
+
+    connect_instance(api_url, instance_token)
+  rescue StandardError => e
+    Rails.logger.error "Evolution Go API: Eager webhook registration failed: #{e.class} - #{e.message}"
   end
 
   def get_setting_value(settings, symbol_key, string_key, default_value)

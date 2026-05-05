@@ -88,11 +88,12 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
 
     Rails.logger.info "Evolution Go API: Found channel with config: #{whatsapp_channel.provider_config.inspect}"
 
+    creds = evolution_go_credentials_for(whatsapp_channel)
     @inbox = whatsapp_channel.inbox
-    @api_url = whatsapp_channel.provider_config['api_url']
-    @instance_token = whatsapp_channel.provider_config['instance_token']
-    @instance_uuid = whatsapp_channel.provider_config['instance_uuid']
-    @instance_name = whatsapp_channel.provider_config['instance_name']
+    @api_url = creds[:api_url]
+    @instance_token = creds[:instance_token]
+    @instance_uuid = creds[:instance_uuid]
+    @instance_name = creds[:instance_name]
   end
 
   def get_qrcode_go(api_url, instance_token)

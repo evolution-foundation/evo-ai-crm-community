@@ -52,4 +52,33 @@ module EvolutionGoConcern
                   GlobalConfigService.load('BACKEND_URL', 'https://api.evoai.app').to_s.strip
     "#{backend_url.chomp('/')}/webhooks/whatsapp/evolution_go"
   end
+
+  # Resolves Evolution Go credentials for an existing channel, falling back to
+  # the global Admin Settings (EVOLUTION_GO_API_URL / EVOLUTION_GO_ADMIN_SECRET)
+  # when provider_config is missing values. Older channels created before the
+  # provider_config persistence fix may have empty api_url/admin_token.
+  #
+  # When a channel is supplied but instance_token / instance_uuid are blank,
+  # logs a warning so corrupt-channel cases are observable in production. The
+  # action-level guards still respond with 400 — this is purely diagnostics.
+  def evolution_go_credentials_for(whatsapp_channel)
+    config = whatsapp_channel&.provider_config || {}
+
+    creds = {
+      api_url: config['api_url'].presence || GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip,
+      admin_token: config['admin_token'].presence || GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip,
+      instance_token: config['instance_token'],
+      instance_uuid: config['instance_uuid'],
+      instance_name: config['instance_name']
+    }
+
+    if whatsapp_channel && (creds[:instance_token].blank? || creds[:instance_uuid].blank?)
+      Rails.logger.warn(
+        "Evolution Go API: channel #{whatsapp_channel.id} resolved with missing instance credentials " \
+        '(instance_token/instance_uuid blank). Channel may need to be recreated.'
+      )
+    end
+
+    creds
+  end
 end
