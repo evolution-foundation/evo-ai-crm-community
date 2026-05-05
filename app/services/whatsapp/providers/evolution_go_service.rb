@@ -310,25 +310,25 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
   def generate_direct_s3_url(attachment)
     return attachment.file_url unless attachment.file.attached?
 
-    # Extract S3 details from existing signed URL
+    # Always return the signed URL, never the bare object URL.
+    #
+    # Why: stripping the AWS signing parameters only works when the S3 bucket
+    # is publicly readable. Real-world deployments (Cloudflare R2, S3 with
+    # restricted ACLs, MinIO with private buckets) return XML error responses
+    # to unauthenticated GETs, and Evolution Go (which downloads the URL on
+    # behalf of WhatsApp) rejects the upload with:
+    #   "Invalid file format: 'text/xml; charset=utf-8'. Only image/jpeg,
+    #   image/png and image/webp are accepted"
+    #
+    # The signed URL has a short TTL (5 minutes by default) which is enough
+    # for Evolution Go to fetch the media before forwarding it to WhatsApp,
+    # and it carries response-content-type so the upstream sees the right
+    # MIME type. Public buckets remain compatible because the signature is
+    # ignored when the object is anonymously readable.
     signed_url = attachment.download_url
 
-    Rails.logger.info "[Evolution Go S3] Original signed URL: #{signed_url}"
-
-    # Try to extract bucket and key from the signed URL (flexible regex for different S3 providers)
-    if signed_url =~ %r{https://([^/]+)/([^?]+)}
-      host = Regexp.last_match(1)
-      key = Regexp.last_match(2)
-
-      # Create direct public URL (without signing parameters)
-      direct_url = "https://#{host}/#{key}"
-
-      Rails.logger.info "[Evolution Go S3] Direct URL: #{direct_url}"
-      direct_url
-    else
-      Rails.logger.warn "[Evolution Go S3] Could not extract S3 info from URL: #{signed_url}"
-      signed_url
-    end
+    Rails.logger.info "[Evolution Go S3] Using signed URL (works for both public and private buckets)"
+    signed_url
   end
 
   def build_quoted_info(message)
