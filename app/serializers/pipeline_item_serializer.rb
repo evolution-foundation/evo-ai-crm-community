@@ -58,6 +58,7 @@ module PipelineItemSerializer
         labels_by_title: labels_by_title,
         labels_by_id: labels_by_id
       )
+      result[:conversation]['uuid'] = pipeline_item.conversation.uuid
       if pipeline_item.conversation.association(:contact).loaded? && pipeline_item.conversation.contact
         result[:contact] = ContactSerializer.serialize(pipeline_item.conversation.contact)
       end
