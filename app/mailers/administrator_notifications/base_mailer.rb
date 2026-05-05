@@ -22,7 +22,7 @@ class AdministratorNotifications::BaseMailer < ApplicationMailer
   private
 
   def admin_emails
-    User.joins(:roles).where(roles: { key: %w[account_owner administrator admin] }).pluck(:email)
+    User.joins(:roles).where(roles: { key: Role::ADMIN_ROLE_KEYS }).pluck(:email)
   end
 
   def liquid_locals

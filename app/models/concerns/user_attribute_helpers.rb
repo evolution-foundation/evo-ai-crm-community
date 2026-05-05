@@ -18,7 +18,13 @@ module UserAttributeHelpers
   end
 
   def administrator?
-    Current.evo_role_key.in?(%w[account_owner administrator admin])
+    # `super_admin` is the installation-owner role introduced alongside the
+    # auth-service split (see EvoAuth migration PromoteFirstUserToSuperAdmin).
+    # It must be treated as an admin in the CRM context too — otherwise the
+    # bootstrap user loses the admin bypass on inbox / conversation visibility
+    # and the conversations list goes empty until they're explicitly added as
+    # an inbox member.
+    Current.evo_role_key.in?(%w[super_admin account_owner administrator admin])
   end
 
   def agent?
