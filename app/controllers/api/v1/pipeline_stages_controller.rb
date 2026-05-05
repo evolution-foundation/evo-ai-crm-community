@@ -158,9 +158,11 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
       :name,
       :color,
       :stage_type,
-      automation_rules: {},
       custom_fields: {}
     )
+
+    raw_ar = params.dig(:pipeline_stage, :automation_rules)
+    permitted[:automation_rules] = normalize_automation_rules(raw_ar) if raw_ar.present?
 
     allowed_display_types = %w[text number currency percent link date list checkbox].freeze
 
@@ -201,6 +203,38 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
     end
 
     permitted
+  end
+
+  def normalize_automation_rules(raw)
+    return {} unless raw.respond_to?(:to_h)
+
+    ar = raw.to_unsafe_h.with_indifferent_access
+    result = {}
+
+    result['description'] = ar['description'].to_s.slice(0, 500) if ar.key?('description')
+
+    if ar['rules'].is_a?(Array)
+      valid_triggers = Pipelines::StageAutomationService::SUPPORTED_TRIGGERS
+      valid_actions  = Pipelines::StageAutomationService::SUPPORTED_ACTIONS
+
+      result['rules'] = ar['rules'].filter_map do |rule|
+        next unless rule.respond_to?(:to_h)
+
+        r       = rule.to_h.with_indifferent_access
+        trigger = r[:trigger].to_s
+        action  = r[:action].to_s
+        next unless valid_triggers.include?(trigger) && valid_actions.include?(action)
+
+        {
+          'trigger'       => trigger,
+          'trigger_value' => r[:trigger_value].to_s.slice(0, 255),
+          'action'        => action,
+          'action_value'  => r[:action_value].to_s.slice(0, 255)
+        }
+      end
+    end
+
+    result
   end
 
   def set_next_position
