@@ -494,9 +494,13 @@ class Api::V1::EvolutionGo::AuthorizationsController < Api::V1::BaseController
   def register_webhook_after_create(api_url, instance_token)
     return if api_url.blank? || instance_token.blank?
 
-    connect_instance(api_url, instance_token)
+    # Timeouts curtos: o create já é síncrono e o caminho de QR retenta o
+    # connect_instance, então não vale segurar o usuário por 30s aqui.
+    connect_instance(api_url, instance_token, nil, open_timeout: 5, read_timeout: 5)
   rescue StandardError => e
-    Rails.logger.error "Evolution Go API: Eager webhook registration failed: #{e.class} - #{e.message}"
+    # warn (não error) — o caminho de QR retenta o connect_instance, então uma
+    # falha aqui não é um problema de produção que deva paginar.
+    Rails.logger.warn "Evolution Go API: Eager webhook registration failed (will retry on QR open): #{e.class} - #{e.message}"
   end
 
   def get_setting_value(settings, symbol_key, string_key, default_value)

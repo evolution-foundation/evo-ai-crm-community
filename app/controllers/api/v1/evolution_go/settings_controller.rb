@@ -82,8 +82,9 @@ class Api::V1::EvolutionGo::SettingsController < Api::V1::BaseController
     else
       # Fallback para parâmetros diretos (para compatibilidade)
       settings_params = params[:settings] || params
-      @api_url = settings_params[:api_url].presence || GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip
-      @admin_token = settings_params[:admin_token].presence || GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip
+      creds = evolution_go_credentials_from_params(settings_params[:api_url], settings_params[:admin_token])
+      @api_url = creds[:api_url]
+      @admin_token = creds[:admin_token]
       @instance_token = settings_params[:instance_token]
     end
   end

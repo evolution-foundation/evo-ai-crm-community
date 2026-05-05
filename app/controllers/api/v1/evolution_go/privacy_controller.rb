@@ -82,8 +82,9 @@ class Api::V1::EvolutionGo::PrivacyController < Api::V1::BaseController
     else
       # Fallback para parâmetros diretos (para compatibilidade)
       privacy_params = params[:privacy] || params
-      @api_url = privacy_params[:api_url].presence || GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip
-      @admin_token = privacy_params[:admin_token].presence || GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip
+      creds = evolution_go_credentials_from_params(privacy_params[:api_url], privacy_params[:admin_token])
+      @api_url = creds[:api_url]
+      @admin_token = creds[:admin_token]
       @instance_token = privacy_params[:instance_token]
     end
   end

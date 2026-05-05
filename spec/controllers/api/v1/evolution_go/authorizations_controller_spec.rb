@@ -14,15 +14,15 @@ RSpec.describe Api::V1::EvolutionGo::AuthorizationsController, type: :controller
     let(:api_url) { 'http://evo.example.com' }
     let(:instance_token) { 'instance-token-123' }
 
-    it 'invokes connect_instance with the freshly created instance credentials' do
-      expect(controller_instance).to receive(:connect_instance).with(api_url, instance_token)
+    it 'invokes connect_instance with the freshly created instance credentials and short timeouts' do
+      expect(controller_instance).to receive(:connect_instance).with(api_url, instance_token, nil, open_timeout: 5, read_timeout: 5)
 
       controller_instance.send(:register_webhook_after_create, api_url, instance_token)
     end
 
-    it 'swallows errors raised by connect_instance and logs them' do
+    it 'swallows errors raised by connect_instance and logs them at warn level' do
       allow(controller_instance).to receive(:connect_instance).and_raise(StandardError.new('BACKEND_URL is not configured'))
-      expect(Rails.logger).to receive(:error).with(/Eager webhook registration failed/)
+      expect(Rails.logger).to receive(:warn).with(/Eager webhook registration failed/)
 
       expect do
         controller_instance.send(:register_webhook_after_create, api_url, instance_token)
@@ -68,6 +68,19 @@ RSpec.describe Api::V1::EvolutionGo::AuthorizationsController, type: :controller
       expect(controller_instance).to receive(:register_webhook_after_create).with('http://evo.example.com', 'tok-from-create')
 
       controller_instance.create
+    end
+
+    # Invariante declarado no PR: "Failures are swallowed so a transient webhook
+    # error does not regress channel creation". Sem este teste, alguém remove o
+    # rescue de register_webhook_after_create e o invariante quebra silencioso.
+    it 'still renders success when the eager webhook registration fails' do
+      allow(controller_instance).to receive(:connect_instance).and_raise(StandardError.new('boom'))
+
+      expect(controller_instance).to receive(:render).with(
+        hash_including(json: hash_including(success: true, instance_token: 'tok-from-create'))
+      )
+
+      expect { controller_instance.create }.not_to raise_error
     end
   end
 end

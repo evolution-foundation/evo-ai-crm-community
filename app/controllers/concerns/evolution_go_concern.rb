@@ -3,7 +3,7 @@ module EvolutionGoConcern
 
   private
 
-  def connect_instance(api_url, instance_token, _instance_name = nil)
+  def connect_instance(api_url, instance_token, _instance_name = nil, open_timeout: 15, read_timeout: 15)
     connect_url = "#{api_url.chomp('/')}/instance/connect"
     Rails.logger.info "Evolution Go API: Connecting instance at #{connect_url}"
 
@@ -22,8 +22,8 @@ module EvolutionGoConcern
 
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = (uri.scheme == 'https')
-    http.open_timeout = 15
-    http.read_timeout = 15
+    http.open_timeout = open_timeout
+    http.read_timeout = read_timeout
 
     request = Net::HTTP::Post.new(uri)
     request['apikey'] = instance_token
@@ -80,5 +80,15 @@ module EvolutionGoConcern
     end
 
     creds
+  end
+
+  # Same fallback strategy as evolution_go_credentials_for, but for the
+  # branch where the request carries api_url/admin_token directly (no channel
+  # row) — used by privacy/profile/settings #set_instance_params else branches.
+  def evolution_go_credentials_from_params(api_url_param, admin_token_param)
+    {
+      api_url: api_url_param.presence || GlobalConfigService.load('EVOLUTION_GO_API_URL', '').to_s.strip,
+      admin_token: admin_token_param.presence || GlobalConfigService.load('EVOLUTION_GO_ADMIN_SECRET', '').to_s.strip
+    }
   end
 end
