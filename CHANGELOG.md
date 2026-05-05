@@ -71,6 +71,7 @@ Quando o `evo-auth-service-community` introduziu o role `super_admin` (ver chang
 - **EVO-1005**: `pipeline_items#update` persiste `pipeline_stage_id`. (#27)
 - **EVO-1006**: `include_labels` agora atravessa toda a cadeia de serialização do pipeline. (#39)
 - **EVO-984**: fallback de credencial + webhook eager para Evolution Go. (#41)
+- **EVO-1055**: novo endpoint `GET /api/v1/evolution/health` que faz proxy para `${api_url}/` do Evolution API e retorna o JSON upstream. O frontend `EvolutionService.healthCheck` dependia dessa rota para validar a URL configurada antes de criar um canal WhatsApp; sem ela, toda criação de canal Evolution API caía em 404 com "Health check falhou" e nenhum caminho adiante. Controller espelha o padrão `Net::HTTP` de `authorizations_controller#check_server_status` (timeout 5s open/read). (#45)
 - **EVO-985**: `BACKEND_URL` apontando para `localhost` é bloqueado em produção. (#30)
 - **EVO-996**: preserva `in_reply_to` quando a mensagem-pai ainda não foi resolvida. (#31)
 - **EVO-1012**: expõe `thumbnail` e fia o avatar fetch via Evolution API. (#28)
