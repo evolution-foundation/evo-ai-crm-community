@@ -358,6 +358,7 @@ Rails.application.routes.draw do
       end
 
       scope path: 'evolution', as: 'evolution' do
+        get :health, to: 'evolution/health#show'
         resource :authorization, only: [:create], controller: 'evolution/authorizations'
         resources :qrcodes, only: [:create, :show], controller: 'evolution/qrcodes'
         resources :proxies, only: [:create, :show], controller: 'evolution/proxies'
