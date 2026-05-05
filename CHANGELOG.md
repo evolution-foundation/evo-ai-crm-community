@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v1.0.0-rc2] - 2026-05-05
 
-Release de estabilização — concentra correções de `500 Internal Server Error` em endpoints REST, fixes do fluxo Evolution Go, automation rules por stage, navegação card → conversation, performance de pipeline e migrations idempotentes para deploys em schemas drifted.
+Release de estabilização — concentra correções de `500 Internal Server Error` em endpoints REST, fixes do fluxo Evolution Go, automation rules por stage, navegação card → conversation, performance de pipeline, migrations idempotentes para deploys em schemas drifted, RBAC de `super_admin` reconhecido como administrator em todos os bypasses, e signed URLs S3 para buckets privados em ambos os providers WhatsApp.
 
 ### Added
 
@@ -46,6 +46,7 @@ Release de estabilização — concentra correções de `500 Internal Server Err
 - **Mídia (imagem / áudio / vídeo) salva sem arquivo**: 3 problemas distintos resolvidos juntos: (1) `ActiveStorage#after_commit` não disparava em Sidekiq → migrado para `ActiveStorage::Blob.create_and_upload!` síncrono; (2) `mediaUrl` aninhado em `imageMessage`/`audioMessage`/etc. agora é extraído via `extract_media_url`; (3) EvoGo sem S3 manda mídia em `base64` inline — adicionado decode para `Tempfile`. (#22)
 - **Áudio sem waveform / duração / PTT**: `configure_audio_metadata` e `audio_voice_note?` estavam **definidos duas vezes** no mesmo módulo (Ruby usava silenciosamente a última definição, que era stub incompleta com keys erradas). Mergidas em definições únicas usando symbol keys. Também removidos `save_message_and_notify` e `attach_media_from_url` que eram dead code. (#22)
 - **ActionCable — broadcast em token vazio**: `account_token` retornava `""` (string vazia) quando account era nil, e `[account_token].compact` deixava passar a string vazia, causando broadcast em canal vazio. Função agora retorna `nil` (verdadeiro nil) e aceita Hash + AR-object como input. `ActionCableBroadcastJob` também passou a tolerar payload com keys string ou symbol. (#22)
+- **Mídia em bucket S3 privado retornava 404 no chat**: `generate_direct_s3_url` montava a URL pública diretamente (`bucket.host/key`), mas instalações que usam Cloudflare R2 ou S3 com ACL privada bloqueiam acesso público. Substituído por `presigned_url` (signed URL com expiração curta) tanto no `whatsapp/providers/evolution_go_service.rb` (commit `316849d`) quanto no `whatsapp/providers/evolution_service.rb` (commit `daa9ee9` — o caminho do Evolution API tradicional foi corrigido em seguida com a mesma lógica).
 
 #### Listeners e dispatchers
 - **`ContactCompanyListener`**: eventos eram publicados via `Wisper::Publisher` com `data: { ... }`, mas todos os listeners do projeto leem como `event.data[:contact]` (esperando o wrapper `Events::Base` do `SyncDispatcher`). Resultado: `undefined method 'data' for an instance of Hash` no log + broadcast `CONTACT_COMPANY_LINKED` nunca disparava. Migrado para `Rails.configuration.dispatcher.dispatch(...)` em `LinkCompanyService`, `UnlinkCompanyService`, `Contact#add_company` e `#remove_company`; listener tolera `account: nil` via `single_tenant_account`. (#37)
@@ -56,6 +57,12 @@ Release de estabilização — concentra correções de `500 Internal Server Err
 
 #### Serializers
 - **EVO-1010** — `TeamSerializer` agora inclui `members_count` (rodando `team.team_members.count` indexado por `team_id`), corrigindo cards / linhas que mostravam `0 members` mesmo com membros associados. (#25)
+
+#### RBAC — `super_admin` reconhecido como administrator
+Quando o `evo-auth-service-community` introduziu o role `super_admin` (ver changelog de auth nesta mesma release), as listas hardcoded do CRM continuavam apontando só para `account_owner`, então o operador da instalação aparecia sem privilégios em vários bypasses sutis (mailers de admin, finders de admin, helpers de permissão).
+- **`User#administrator?`**: passou a aceitar tanto `account_owner` quanto `super_admin` (`app/models/concerns/user_attribute_helpers.rb`). Antes filtros como `Conversation.assignable_by` retornavam vazio para super_admin, e a lista de conversas aparecia sem nada apesar do JWT estar válido.
+- **`Role::ADMIN_ROLE_KEYS`**: nova constante centralizando `%w[account_owner super_admin]`. Adotada por `AdministratorNotifications::BaseMailer#admin_emails` (notificações de instalação) e por todo finder/scope que filtrava por role administrativo.
+- **Effect**: nenhum endpoint precisou ser alterado individualmente — a constante consolidou o que estava espalhado em quatro lugares (commit `5f1eed2`).
 
 #### Pipelines / Templates / Mensageria (do ciclo `develop`)
 - **EVO-974**: aceita payload com filtros aninhados, suporta `pipeline_id` / `contact_id`, e `query_builder` agora pareia `row + clause` para sobreviver a cláusulas vazias.
