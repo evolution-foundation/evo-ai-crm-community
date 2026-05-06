@@ -1,56 +1,68 @@
-Evolution AI is looking forward to working with security researchers worldwide to keep Evolution and our users safe. If you have found an issue in our systems/applications, please reach out to us.
+# Security Policy
+
+Evolution Foundation takes the security of Evo CRM Backend seriously. We
+appreciate your efforts to responsibly disclose any vulnerabilities you find.
 
 ## Reporting a Vulnerability
 
-We use Github to track the security issues that affect our project. If you believe you have found a vulnerability, please disclose it via this [form](https://github.com/EvolutionAPI/evolution/security/advisories/new). This will enable us to review the vulnerability, fix it promptly, and reward you for your efforts.
+**Please do NOT open a public GitHub issue for security vulnerabilities.**
 
-If you have any questions about the process, contact security@evoai.app. 
+Instead, report them privately through one of the following channels:
 
-Please try your best to describe a clear and realistic impact for your report, and please don't open any public issues on GitHub or social media; we're doing our best to respond through Github as quickly as possible.
+### Preferred channels
 
-> Note: Please use the email for questions related to the process. Disclosures should be done via [Github](https://github.com/EvolutionAPI/evolution/security/advisories/new)
-## Supported versions
+1. **GitHub Private Vulnerability Reporting** — use the "Security" tab on this
+   repository to submit a private advisory.
 
-| Version | Supported        |
-| ------- | --------------   |
-| latest   | ️✅               |
-| <latest   | ❌               |
+2. **Email** — send your report to **suporte@evofoundation.com.br** with the
+   subject line `[SECURITY] Evo CRM Backend — <brief description>`.
 
+### What to include
 
-## Vulnerabilities we care about 🫣
-> Note: Please do not perform testing against Evolution production services. Use a `self-hosted instance` to perform tests.
-- Remote command execution
-- SQL Injection
-- Authentication bypass
-- Privilege Escalation
-- Cross-site scripting (XSS)
-- Performing limited admin actions without authorization
-- CSRF
+To help us triage and resolve the issue quickly, please include:
 
-You can learn more about our triaging process in our [documentation](https://evoai.app/docs/security).
+- A clear description of the vulnerability
+- Steps to reproduce (proof of concept, if available)
+- Affected versions
+- Potential impact and severity assessment
+- Any suggested mitigation or fix
+- Your name and contact information (for credit, if desired)
 
-## Non-Qualifying Vulnerabilities
+## Response Timeline
 
-We consider the following out of scope, though there may be exceptions.
+| Stage | Target |
+|---|---|
+| Initial acknowledgment | Within 48 hours |
+| Triage and validation | Within 5 business days |
+| Fix development | Depends on severity (1–30 days) |
+| Public disclosure | Coordinated with reporter after fix is released |
 
-- Missing HTTP security headers
-- Incomplete/Missing SPF/DKIM
-- Reports from automated tools or scanners
-- Theoretical attacks without proof of exploitability
-- Social engineering
-- Reflected file download
-- Physical attacks
-- Weak SSL/TLS/SSH algorithms or protocols
-- Attacks involving physical access to a user's device or a device or network that's already seriously compromised (e.g., man-in-the-middle).
-- The user attacks themselves
-- Incomplete/Missing SPF/DKIM
-- Denial of Service attacks
-- Brute force attacks
-- DNSSEC
+## Disclosure Policy
 
-If you are unsure about the scope, please create a [report](https://github.com/EvolutionAPI/evolution/security/advisories/new).
+We follow a coordinated disclosure model:
 
+1. You report the vulnerability privately
+2. We acknowledge receipt and begin triage
+3. We work with you to understand and validate the issue
+4. We develop, test, and release a fix
+5. We publicly disclose the vulnerability and credit you (unless you prefer
+   to remain anonymous)
 
-## Thanks
+## Supported Versions
 
-Thank you for keeping Evolution and our users safe. 🙇
+Security updates are provided for the latest released version. Older versions
+may receive critical security fixes at our discretion.
+
+## Recognition
+
+We value the security research community. Researchers who responsibly disclose
+vulnerabilities will be:
+
+- Credited in the security advisory (with permission)
+- Listed in our acknowledgments page (when available)
+- Eligible for public recognition via Evolution Foundation channels
+
+---
+
+For general inquiries (non-security): **suporte@evofoundation.com.br**
+For more information: [evolutionfoundation.com.br](https://evolutionfoundation.com.br)
