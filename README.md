@@ -1,83 +1,224 @@
-# Evolution CRM - Rails API
+<p align="center">
+  <a href="https://evolutionfoundation.com.br">
+    <img src="./public/hover-evolution.png" alt="Evolution Foundation" />
+  </a>
+</p>
 
-> Open-source customer support platform backend - Multi-tenant Rails API with real-time messaging
+<h1 align="center">Evo CRM Backend</h1>
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Ruby Version](https://img.shields.io/badge/ruby-3.4.4-red.svg)](https://www.ruby-lang.org/)
-[![Rails Version](https://img.shields.io/badge/rails-7.1-red.svg)](https://rubyonrails.org/)
+<p align="center">
+  Conversations, contacts, inboxes and messaging backend for the Evo CRM Community.
+</p>
 
-Evolution CRM is a modern, open-source customer support platform backend built with Ruby on Rails. It provides a robust API for managing conversations, contacts, messages, and integrations across multiple communication channels.
+<p align="center">
+  <a href="https://github.com/EvolutionAPI/evo-ai-crm-community/releases/latest"><img src="https://img.shields.io/github/v/release/EvolutionAPI/evo-ai-crm-community?include_prereleases&label=version&color=00ffa7" alt="Latest version" /></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
+  <a href="https://docs.evolutionfoundation.com.br"><img src="https://img.shields.io/badge/Docs-evolutionfoundation.com.br-00ffa7" alt="Documentation" /></a>
+  <a href="https://evolutionfoundation.com.br/community"><img src="https://img.shields.io/badge/Community-Join%20us-white" alt="Community" /></a>
+</p>
 
-## 🚀 Tech Stack
+<p align="center">
+  <a href="https://evolutionfoundation.com.br">Website</a> &middot;
+  <a href="https://docs.evolutionfoundation.com.br">Documentation</a> &middot;
+  <a href="https://evolutionfoundation.com.br/community">Community</a> &middot;
+  <a href="mailto:suporte@evofoundation.com.br">Support</a>
+</p>
 
-- **Backend**: Ruby on Rails 7.1 (API Mode)
-- **Ruby**: 3.4.4
-- **Database**: PostgreSQL (para Conversations, Contacts, Users, etc.)
-- **Cache/Jobs**: Redis + Sidekiq
-- **Real-time**: ActionCable (WebSocket)
-- **Authentication**: Devise + JWT
-- **File Storage**: AWS S3, Google Cloud Storage, Azure Blob
+---
 
-## 📦 Setup
+## About
+
+**Evo CRM Backend** is the core API of the Evo CRM Community customer support platform. Built with Ruby on Rails 7.1 (API mode), it manages conversations, contacts, messages, inboxes, and integrations across multiple communication channels (WhatsApp, Email, Web Widget, and more).
+
+It exposes a comprehensive RESTful API and supports real-time messaging via ActionCable WebSockets.
+
+## Part of the Evo CRM Community
+
+Evo CRM Backend is part of the [Evo CRM Community](https://github.com/EvolutionAPI/evo-crm-community) ecosystem maintained by Evolution Foundation. To use the full stack, clone the umbrella repository with submodules:
+
+```bash
+git clone --recurse-submodules git@github.com:EvolutionAPI/evo-crm-community.git
+```
+
+The Community Edition is **single-tenant** by design — one account, no multi-tenancy overhead, no super-admin, no billing or plans. All limits are removed and features are unlocked by default.
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Backend | Ruby on Rails 7.1 (API mode) |
+| Ruby | 3.4.4 |
+| Database | PostgreSQL |
+| Cache & Jobs | Redis + Sidekiq |
+| Real-time | ActionCable (WebSocket) |
+| Authentication | Bearer token via `evo-auth-service-community` |
+| File storage | AWS S3, Google Cloud Storage, Azure Blob |
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-```bash
-# Required
-- Ruby 3.4.4
-- PostgreSQL
-- Redis
-- pnpm (for convenience scripts)
-```
+- **Ruby** 3.4.4
+- **PostgreSQL** 12+
+- **Redis** 6+
+- **pnpm** (optional, for convenience scripts)
 
 ### Installation
 
 ```bash
+git clone git@github.com:EvolutionAPI/evo-ai-crm-community.git
+cd evo-ai-crm-community
+
 # Install dependencies
 bundle install
-pnpm install  # Optional - for convenience scripts
+pnpm install  # Optional — for convenience scripts
 
 # Setup database
 bundle exec rails db:setup
-
-# Run migrations
 bundle exec rails db:migrate
-
 ```
 
-## 🏃 Running
-
-### Using pnpm (Recommended)
+### Running
 
 ```bash
-# Start everything (Rails + Sidekiq)
-pnpm dev
+# Using pnpm (recommended)
+pnpm dev          # Rails + Sidekiq
+pnpm start        # Rails only
+pnpm sidekiq      # Sidekiq only
 
-# Or individual commands
-pnpm start    # Rails server only
-pnpm sidekiq  # Sidekiq worker only
-```
-
-### Using Overmind/Foreman
-
-```bash
-# All processes
+# Using Overmind / Foreman
 overmind start -f Procfile.dev
-# or
-foreman start -f Procfile.dev
-```
 
-### Manual
-
-```bash
-# Rails server
+# Manual
 bundle exec rails server -p 3000
-
-# Sidekiq (separate terminal)
 bundle exec sidekiq -C config/sidekiq.yml
 ```
 
-## 🧪 Testing
+The API will be available at `http://localhost:3000`.
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+# Database
+DATABASE_URL=postgresql://localhost/evolution_crm_development
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Optional: ScyllaDB for high-performance message storage
+SCYLLA_ENABLED=true
+SCYLLA_HOSTS=localhost
+SCYLLA_PORT=9042
+SCYLLA_KEYSPACE=evo_crm
+
+# Frontend URL (CORS)
+FRONTEND_URL=http://localhost:8080
+
+# Storage (S3, GCS, Azure)
+ACTIVE_STORAGE_SERVICE=local
+```
+
+See `.env.example` for the full list.
+
+---
+
+## Available Scripts
+
+| Script | Description |
+|---|---|
+| `pnpm dev` | Start Rails + Sidekiq |
+| `pnpm start` | Start Rails server |
+| `pnpm test` | Run RSpec tests |
+| `pnpm lint` | Run RuboCop |
+| `pnpm lint:fix` | Run RuboCop with auto-fix |
+| `pnpm db:setup` | Setup database |
+| `pnpm db:migrate` | Run migrations |
+| `pnpm db:seed` | Seed database |
+| `pnpm console` | Rails console |
+| `pnpm sidekiq` | Start Sidekiq worker |
+
+---
+
+## Architecture
+
+### API-only mode
+
+The application runs in **Rails API mode** — no frontend views. The frontend is developed separately (`evo-ai-frontend-community`).
+
+### Service objects
+
+Business logic is organized in service objects:
+
+```
+app/services/
+├── base/
+│   └── send_on_channel_service.rb
+├── whatsapp/
+│   └── message_processor_service.rb
+└── crm/
+    └── contact_sync_service.rb
+```
+
+### Event-driven (Wisper)
+
+Domain events are published for cross-cutting concerns:
+- `contact.created`
+- `conversation.resolved`
+- `message.sent`
+
+### Background jobs (Sidekiq)
+
+Heavy operations run asynchronously: external API calls, webhook processing, bulk operations.
+
+---
+
+## API
+
+### Base URL
+
+```
+http://localhost:3000/api/v1
+```
+
+### Authentication
+
+Bearer tokens issued by `evo-auth-service-community`:
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     http://localhost:3000/api/v1/conversations
+```
+
+### Documentation
+
+Swagger UI available at `http://localhost:3000/swagger`.
+
+For full API documentation, see [docs.evolutionfoundation.com.br](https://docs.evolutionfoundation.com.br).
+
+---
+
+## Features
+
+- **Real-time** messaging via ActionCable WebSockets
+- **Multi-channel** support (WhatsApp, Email, Web Widget, and more)
+- **RESTful API** with comprehensive Swagger documentation
+- **High-performance messages** with optional ScyllaDB (<1ms latency)
+- **Background jobs** with Sidekiq
+- **Event-driven** architecture for extensibility
+- **File storage** support for S3, GCS, Azure Blob
+- **Rich message templates** with drag-and-drop editor
+
+---
+
+## Testing
 
 ```bash
 # All tests
@@ -85,14 +226,16 @@ pnpm test
 # or
 bundle exec rspec
 
-# Single file
+# Specific file
 bundle exec rspec spec/models/contact_spec.rb
 
-# Single test
+# Specific test
 bundle exec rspec spec/models/contact_spec.rb:42
 ```
 
-## 🔍 Linting
+---
+
+## Linting
 
 ```bash
 # Check
@@ -106,194 +249,60 @@ pnpm lint:fix
 bundle exec rubocop -a
 ```
 
-## 📚 Available Scripts
+---
 
-All scripts are available through `pnpm`:
-
-| Script            | Description               |
-| ----------------- | ------------------------- |
-| `pnpm dev`        | Start Rails + Sidekiq     |
-| `pnpm start`      | Start Rails server        |
-| `pnpm test`       | Run RSpec tests           |
-| `pnpm lint`       | Run RuboCop               |
-| `pnpm lint:fix`   | Run RuboCop with auto-fix |
-| `pnpm db:setup`   | Setup database            |
-| `pnpm db:migrate` | Run migrations            |
-| `pnpm db:seed`    | Seed database             |
-| `pnpm console`    | Rails console             |
-| `pnpm sidekiq`    | Start Sidekiq             |
-
-## 🏗️ Architecture
-
-### API-Only Mode
-
-This application runs in **Rails API mode** - no frontend views. The frontend is developed separately.
-
-### Service Objects
-
-Business logic is organized in Service Objects:
-
-```
-app/services/
-├── base/
-│   └── send_on_channel_service.rb
-├── whatsapp/
-│   └── message_processor_service.rb
-└── crm/
-    └── contact_sync_service.rb
-```
-
-### Event-Driven (Wisper)
-
-Domain events are published for cross-cutting concerns:
-
-- `contact.created`
-- `conversation.resolved`
-- `message.sent`
-
-### Background Jobs (Sidekiq)
-
-Heavy operations run asynchronously:
-
-- External API calls
-- Webhook processing
-- Bulk operations
-
-## 🔌 API
-
-### Base URL
-
-```
-http://localhost:3000/api/v1
-```
-
-### Authentication
-
-JWT tokens via `X-Auth-Token` header:
+## Docker
 
 ```bash
-curl -H "X-Auth-Token: YOUR_TOKEN" \
-     http://localhost:3000/api/v1/accounts/1/conversations
-```
-
-### Documentation
-
-- **Swagger**: `http://localhost:3000/swagger`
-- **API Docs**: `/swagger/index.html`
-
-## 🔐 Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-# Database
-DATABASE_URL=postgresql://localhost/evolution_crm_development
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# ScyllaDB (optional - for high-performance message storage)
-SCYLLA_ENABLED=true
-SCYLLA_HOSTS=localhost
-SCYLLA_PORT=9042
-SCYLLA_KEYSPACE=evo_crm
-
-# Frontend URL (for CORS)
-FRONTEND_URL=http://localhost:8080
-
-# Storage (S3, GCS, Azure)
-ACTIVE_STORAGE_SERVICE=local
-
-# See .env.example for all options
-```
-
-## 🐳 Docker
-
-```bash
-# Build
 docker-compose build
-
-# Run
 docker-compose up
 
-# Or specific services
+# Specific services
 docker-compose up backend worker
 ```
 
-## 📖 Development Guidelines
+---
 
-For detailed development guidelines:
+## Documentation
 
-- Code style (RuboCop)
-- Testing practices
-- Service Object patterns
-- Multi-tenant architecture
-- Event-driven patterns
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
-
-**Quick start:**
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feat/amazing-feature`)
-5. Open a Pull Request
-
-**Guidelines:**
-
-- Follow RuboCop style guide
-- Write tests for new features
-- Use Service Objects for business logic
-- Ensure multi-tenant scoping
-- Document API changes in Swagger
-- Follow [Conventional Commits](https://www.conventionalcommits.org/)
-
-## 🐛 Reporting Issues
-
-Found a bug? Have a feature request? Please [open an issue](https://github.com/EvolutionAPI/evolution/issues) on GitHub.
-
-## 🔒 Security
-
-Please see our [Security Policy](./SECURITY.md) for information on reporting security vulnerabilities.
-
-## 📚 Documentation
-
-- [API Documentation](./swagger/index.html) - Swagger/OpenAPI docs
-- [Contributing Guide](./CONTRIBUTING.md) - How to contribute
-- [Docker Guide](./docker/README.md) - Docker setup and optimization
-
-## 🌟 Features
-
-- ✅ **Multi-tenant** - Complete data isolation per account
-- ✅ **Real-time** - WebSocket support via ActionCable
-- ✅ **Multi-channel** - WhatsApp, Email, Web Widget, and more
-- ✅ **RESTful API** - Comprehensive API with Swagger documentation
-- ✅ **High-Performance Messages** - Optional ScyllaDB for ultra-fast message storage (<1ms latency)
-- ✅ **Background Jobs** - Async processing with Sidekiq
-- ✅ **Event-driven** - Domain events for extensibility
-- ✅ **File Storage** - Support for S3, GCS, Azure Blob
-- ✅ **Message Templates** - Rich email templates with drag-and-drop editor
-
-## 🏢 Production Use
-
-Evolution CRM is used in production by Evolution AI. For production deployments, see:
-
-- [Docker Deployment](./docker/README.md)
-- [Environment Variables](./.env.example)
-
-## 📝 License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-Evolution CRM is built on top of modern Ruby on Rails best practices and inspired by the open-source community.
+| Resource | Link |
+|---|---|
+| Website | [evolutionfoundation.com.br](https://evolutionfoundation.com.br) |
+| Documentation | [docs.evolutionfoundation.com.br](https://docs.evolutionfoundation.com.br) |
+| Community | [evolutionfoundation.com.br/community](https://evolutionfoundation.com.br/community) |
+| Swagger | `http://localhost:3000/swagger` |
+| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
+| Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| Security | [SECURITY.md](./SECURITY.md) |
 
 ---
 
-**Evolution CRM** - Modern customer support platform backend
+## Contributing
 
-Made with ❤️ by [Evolution AI](https://evoai.app)
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to submit issues, propose features, and open pull requests.
+
+Join our [community](https://evolutionfoundation.com.br/community) to discuss ideas and collaborate.
+
+---
+
+## Security
+
+For security issues, **do not open a public issue**. Email **suporte@evofoundation.com.br** or use GitHub's private vulnerability reporting. See [SECURITY.md](./SECURITY.md) for details.
+
+---
+
+## License
+
+Evo CRM Backend is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) for details.
+
+## Trademarks
+
+"Evolution Foundation", "Evolution" and "Evo CRM Backend" are trademarks of Evolution Foundation. See [TRADEMARKS.md](./TRADEMARKS.md) for the brand assets policy.
+
+Third-party attributions are documented in [NOTICE](./NOTICE).
+
+---
+
+<p align="center">
+  Made by <a href="https://evolutionfoundation.com.br">Evolution Foundation</a> · © 2026
+</p>
