@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/EvolutionAPI/evo-ai-crm-community/releases/latest"><img src="https://img.shields.io/github/v/release/EvolutionAPI/evo-ai-crm-community?include_prereleases&label=version&color=00ffa7" alt="Latest version" /></a>
+  <a href="https://github.com/evolution-foundation/evo-ai-crm-community/releases/latest"><img src="https://img.shields.io/github/v/release/evolution-foundation/evo-ai-crm-community?include_prereleases&label=version&color=00ffa7" alt="Latest version" /></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
   <a href="https://docs.evolutionfoundation.com.br"><img src="https://img.shields.io/badge/Docs-evolutionfoundation.com.br-00ffa7" alt="Documentation" /></a>
   <a href="https://evolutionfoundation.com.br/community"><img src="https://img.shields.io/badge/Community-Join%20us-white" alt="Community" /></a>
@@ -34,10 +34,10 @@ It exposes a comprehensive RESTful API and supports real-time messaging via Acti
 
 ## Part of the Evo CRM Community
 
-Evo CRM Backend is part of the [Evo CRM Community](https://github.com/EvolutionAPI/evo-crm-community) ecosystem maintained by Evolution Foundation. To use the full stack, clone the umbrella repository with submodules:
+Evo CRM Backend is part of the [Evo CRM Community](https://github.com/evolution-foundation/evo-crm-community) ecosystem maintained by Evolution Foundation. To use the full stack, clone the umbrella repository with submodules:
 
 ```bash
-git clone --recurse-submodules git@github.com:EvolutionAPI/evo-crm-community.git
+git clone --recurse-submodules git@github.com:evolution-foundation/evo-crm-community.git
 ```
 
 The Community Edition is **single-tenant** by design — one account, no multi-tenancy overhead, no super-admin, no billing or plans. All limits are removed and features are unlocked by default.
@@ -70,7 +70,7 @@ The Community Edition is **single-tenant** by design — one account, no multi-t
 ### Installation
 
 ```bash
-git clone git@github.com:EvolutionAPI/evo-ai-crm-community.git
+git clone git@github.com:evolution-foundation/evo-ai-crm-community.git
 cd evo-ai-crm-community
 
 # Install dependencies
