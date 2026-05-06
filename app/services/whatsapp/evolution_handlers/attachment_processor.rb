@@ -33,7 +33,10 @@ module Whatsapp::EvolutionHandlers::AttachmentProcessor
       content_type: final_content_type
     )
 
-    attachment = @message.attachments.build(file_type: file_content_type.to_s)
+    attachment = @message.attachments.build(
+      file_type: file_content_type.to_s,
+      fallback_title: generate_filename_with_extension
+    )
     attachment.file.attach(blob)
 
     configure_audio_metadata(attachment) if audio_voice_note?
