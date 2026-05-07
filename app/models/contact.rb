@@ -46,7 +46,7 @@ class Contact < ApplicationRecord
   self.inheritance_column = :_type_disabled
   attr_accessor :skip_default_pipeline_assignment
 
-  TYPES = %w[person company].freeze
+  TYPES = %w[person company group].freeze
 
   validates :type, presence: true, inclusion: { in: TYPES }
   validates :email, allow_blank: true, uniqueness: { case_sensitive: false },
@@ -85,6 +85,8 @@ class Contact < ApplicationRecord
 
   scope :persons, -> { where(type: 'person') }
   scope :companies, -> { where(type: 'company') }
+  scope :groups, -> { where(type: 'group') }
+  scope :non_groups, -> { where.not(type: 'group') }
   scope :for_company, ->(company_id) { joins(:contact_companies).where(contact_companies: { company_id: company_id }) }
 
   scope :order_on_last_activity_at, lambda { |direction|
@@ -220,6 +222,10 @@ class Contact < ApplicationRecord
 
   def person?
     type == 'person'
+  end
+
+  def whatsapp_group?
+    type == 'group'
   end
 
   private
@@ -383,6 +389,7 @@ class Contact < ApplicationRecord
 
   def assign_to_default_pipeline
     return if skip_default_pipeline_assignment
+    return if whatsapp_group?
 
     default_pipeline = Pipeline.default.first
     return unless default_pipeline

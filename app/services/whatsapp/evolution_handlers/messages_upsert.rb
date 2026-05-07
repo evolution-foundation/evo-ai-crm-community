@@ -68,13 +68,15 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       inbox: inbox,
       contact_attributes: {
         name: subject,
-        identifier: group_jid
+        identifier: group_jid,
+        type: 'group'
       }
     ).perform
 
     @contact_inbox = contact_inbox
     @contact = contact_inbox.contact
 
+    @contact.update!(type: 'group') unless @contact.whatsapp_group?
     update_group_name_if_safe(subject)
   end
 

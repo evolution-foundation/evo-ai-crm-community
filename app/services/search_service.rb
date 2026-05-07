@@ -85,7 +85,7 @@ class SearchService
   end
 
   def filter_contacts
-    @contacts = Contact.where(
+    @contacts = Contact.non_groups.where(
       "name ILIKE :search OR email ILIKE :search OR phone_number
       ILIKE :search OR identifier ILIKE :search", search: "%#{search_query}%"
     ).resolved_contacts.order_on_last_activity_at('desc').page(params[:page]).per(15)
