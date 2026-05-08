@@ -317,6 +317,7 @@ Rails.application.routes.draw do
 
       scope path: 'channels', as: 'channels' do
         resource :twilio_channel, only: [:create], controller: 'channels/twilio_channels'
+        post 'notificame/verify', to: 'channels/notificame_channels#verify', as: :notificame_verify
       end
 
       scope path: 'notificame', as: 'notificame' do
