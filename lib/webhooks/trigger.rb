@@ -15,7 +15,15 @@ class Webhooks::Trigger
     perform_request
   rescue StandardError => e
     handle_error(e)
-    Rails.logger.warn "Exception: Invalid webhook URL #{@url} : #{e.message}"
+    Rails.logger.warn(
+      "Webhook delivery failed: type=#{@webhook_type} event=#{@payload[:event]} url=#{@url} error=#{e.class}: #{e.message}"
+    )
+    # Re-raise for non api_inbox webhooks so Sidekiq retries the job and the
+    # failure becomes visible in queue/error tracking instead of being silent.
+    # api_inbox webhook errors are intentionally swallowed because the message
+    # status is already updated by handle_error and we don't want to retry user
+    # message dispatches on every transient hiccup.
+    raise unless @webhook_type == :api_inbox_webhook
   end
 
   private

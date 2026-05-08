@@ -91,9 +91,14 @@ class Macros::ExecutionService < ActionService
   end
 
   def send_webhook_event(webhook_url)
+    clean_url = Array(webhook_url).first.to_s.strip
+    if clean_url.blank?
+      Rails.logger.warn "Macro #{@macro.id}: skipping send_webhook_event — empty URL"
+      return
+    end
+
     payload = @conversation.webhook_data.merge(event: 'macro.executed')
-    # Sanitize the webhook URL to remove any leading/trailing whitespace or tabs
-    clean_url = webhook_url.first.to_s.strip
+    Rails.logger.info "Macro #{@macro.id}: enqueuing webhook event url=#{clean_url}"
     WebhookJob.perform_later(clean_url, payload)
   end
 end
