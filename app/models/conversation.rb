@@ -339,7 +339,11 @@ class Conversation < ApplicationRecord
     previous_labels, current_labels = previous_changes[:label_list]
     return unless (previous_labels.is_a? Array) && (current_labels.is_a? Array)
 
-    dispatcher_dispatch(CONVERSATION_UPDATED, previous_changes)
+    # NOTE: do not dispatch CONVERSATION_UPDATED here. The after_update_commit
+    # chain already calls notify_conversation_updation which dispatches it
+    # once with the same previous_changes payload. Re-dispatching here made
+    # every label-driven listener (AutomationRule, Webhook, Hook, etc.) run
+    # twice per label change.
 
     create_label_added(user_name, current_labels - previous_labels)
     create_label_removed(user_name, previous_labels - current_labels)
