@@ -1,0 +1,105 @@
+# frozen_string_literal: true
+
+require 'rails_helper'
+
+RSpec.describe AutomationRules::ConditionsFilterService do
+  let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
+  let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
+  let(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel) }
+  let(:contact) { Contact.create!(name: 'Contact', email: "c-#{SecureRandom.hex(4)}@test.com") }
+  let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+  let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+
+  def build_rule(conditions:, event_name: 'conversation_updated')
+    rule = AutomationRule.new(
+      name: "rule-#{SecureRandom.hex(4)}",
+      event_name: event_name,
+      active: true,
+      mode: 'simple',
+      conditions: conditions,
+      actions: [{ 'action_name' => 'send_message', 'action_params' => ['hi'] }]
+    )
+    rule.save!(validate: false)
+    rule
+  end
+
+  describe '#perform with attribute_changed on scalar attributes' do
+    let(:conditions) do
+      [{
+        'attribute_key' => 'status',
+        'filter_operator' => 'attribute_changed',
+        'values' => { 'from' => ['open'], 'to' => ['resolved'] },
+        'query_operator' => nil
+      }]
+    end
+    let(:rule) { build_rule(conditions: conditions) }
+
+    it 'matches when previous and current are inside from/to' do
+      service = described_class.new(rule, conversation, changed_attributes: { 'status' => %w[open resolved] })
+      expect(service.perform).to be(true)
+    end
+
+    it 'does not match when previous is not in from' do
+      service = described_class.new(rule, conversation, changed_attributes: { 'status' => %w[snoozed resolved] })
+      expect(service.perform).to be(false)
+    end
+
+    it 'does not match when current is not in to' do
+      service = described_class.new(rule, conversation, changed_attributes: { 'status' => %w[open snoozed] })
+      expect(service.perform).to be(false)
+    end
+
+    it 'does not match (and does not crash) when the watched attribute was not in this update' do
+      service = described_class.new(rule, conversation, changed_attributes: { 'priority' => [nil, 'urgent'] })
+      expect(service.perform).to be(false)
+    end
+  end
+
+  describe '#perform with attribute_changed on labels (Pedro pilot path)' do
+    let!(:label_atleta) { Label.create!(title: 'atleta', color: '#abcdef') }
+
+    context 'when from is empty and to contains a label (= "label was added")' do
+      let(:conditions) do
+        [{
+          'attribute_key' => 'labels',
+          'filter_operator' => 'attribute_changed',
+          'values' => { 'from' => [], 'to' => [label_atleta.id] },
+          'query_operator' => nil
+        }]
+      end
+      let(:rule) { build_rule(conditions: conditions) }
+
+      it 'matches when the requested label appears in the diff (added)' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [[], ['atleta']] })
+        expect(service.perform).to be(true)
+      end
+
+      it 'does not match when a different label was added' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [[], ['other']] })
+        expect(service.perform).to be(false)
+      end
+
+      it 'does not match when the label already existed and a different one was added (no transition for atleta)' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [['atleta'], %w[atleta other]] })
+        expect(service.perform).to be(false)
+      end
+    end
+
+    context 'when from contains a label and to is empty (= "label was removed")' do
+      let(:conditions) do
+        [{
+          'attribute_key' => 'labels',
+          'filter_operator' => 'attribute_changed',
+          'values' => { 'from' => [label_atleta.id], 'to' => [] },
+          'query_operator' => nil
+        }]
+      end
+      let(:rule) { build_rule(conditions: conditions) }
+
+      it 'matches when the requested label disappears from the diff' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [['atleta'], []] })
+        expect(service.perform).to be(true)
+      end
+    end
+  end
+end
