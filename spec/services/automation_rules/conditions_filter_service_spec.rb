@@ -101,5 +101,55 @@ RSpec.describe AutomationRules::ConditionsFilterService do
         expect(service.perform).to be(true)
       end
     end
+
+    context 'with concurrent label changes (multiple labels added in the same update)' do
+      let(:conditions) do
+        [{
+          'attribute_key' => 'labels',
+          'filter_operator' => 'attribute_changed',
+          'values' => { 'from' => [], 'to' => [label_atleta.id] },
+          'query_operator' => nil
+        }]
+      end
+      let(:rule) { build_rule(conditions: conditions) }
+
+      it 'matches when the watched label appears among several newly added labels' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [[], %w[atleta urgent vip]] })
+        expect(service.perform).to be(true)
+      end
+
+      it 'does not match when the watched label is unchanged but other labels are added' do
+        service = described_class.new(rule, conversation, changed_attributes: { 'label_list' => [['atleta'], %w[atleta urgent vip]] })
+        expect(service.perform).to be(false)
+      end
+    end
+  end
+
+  describe '#perform with attribute_changed on scalar attributes other than status' do
+    let!(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
+
+    it 'matches a priority transition' do
+      conditions = [{
+        'attribute_key' => 'priority',
+        'filter_operator' => 'attribute_changed',
+        'values' => { 'from' => [nil], 'to' => ['urgent'] },
+        'query_operator' => nil
+      }]
+      rule = build_rule(conditions: conditions)
+      service = described_class.new(rule, conversation, changed_attributes: { 'priority' => [nil, 'urgent'] })
+      expect(service.perform).to be(true)
+    end
+
+    it 'matches an assignee_id transition' do
+      conditions = [{
+        'attribute_key' => 'assignee_id',
+        'filter_operator' => 'attribute_changed',
+        'values' => { 'from' => [nil], 'to' => [user.id] },
+        'query_operator' => nil
+      }]
+      rule = build_rule(conditions: conditions)
+      service = described_class.new(rule, conversation, changed_attributes: { 'assignee_id' => [nil, user.id] })
+      expect(service.perform).to be(true)
+    end
   end
 end
