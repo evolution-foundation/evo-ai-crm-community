@@ -272,6 +272,37 @@ RSpec.describe 'Api::V1::ContactsController', type: :request do
       end
     end
 
+    context 'when contact has messages with attachments (EVO-973 regression)' do
+      let!(:channel_att) { Channel::Api.create! }
+      let!(:inbox_att) { Inbox.create!(name: 'Attachment Inbox', channel: channel_att) }
+      let!(:contact_inbox_att) { ContactInbox.create!(contact: contact, inbox: inbox_att, source_id: SecureRandom.hex(8)) }
+      let!(:conversation_att) { Conversation.create!(inbox: inbox_att, contact: contact, contact_inbox: contact_inbox_att) }
+      let!(:message_att) do
+        Message.create!(
+          conversation: conversation_att,
+          inbox: inbox_att,
+          content: 'media',
+          message_type: :incoming,
+          sender: contact
+        )
+      end
+      let!(:attachment) do
+        Attachment.create!(
+          attachable: message_att,
+          file_type: :image,
+          external_url: 'https://example.com/test.jpg'
+        )
+      end
+
+      it 'deletes contact and cascades through message attachments without PG::UndefinedColumn' do
+        delete "/api/v1/contacts/#{contact.id}", headers: headers
+
+        expect(response).to have_http_status(:ok)
+        expect(Contact.exists?(contact.id)).to be false
+        expect(Attachment.exists?(attachment.id)).to be false
+      end
+    end
+
     context 'when contact deletion fails due to foreign key constraint' do
       let!(:channel_fk) { Channel::Api.create! }
       let!(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel_fk) }
