@@ -10,7 +10,7 @@ class Messages::NewMessageNotificationService
 
   private
 
-  delegate :conversation, :sender, :account, to: :message
+  delegate :conversation, :sender, to: :message
 
   def notify_conversation_assignee
     return if conversation.assignee.blank?
@@ -20,7 +20,6 @@ class Messages::NewMessageNotificationService
     NotificationBuilder.new(
       notification_type: 'assigned_conversation_new_message',
       user: conversation.assignee,
-      account: account,
       primary_actor: message.conversation,
       secondary_actor: message
     ).perform
@@ -36,7 +35,6 @@ class Messages::NewMessageNotificationService
       NotificationBuilder.new(
         notification_type: 'participating_conversation_new_message',
         user: participant,
-        account: account,
         primary_actor: message.conversation,
         secondary_actor: message
       ).perform
