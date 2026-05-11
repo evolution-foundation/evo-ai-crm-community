@@ -117,6 +117,52 @@ class AutomationRuleListener < BaseListener
     end
   end
 
+  def conversation_resolved(event)
+    return if performed_by_automation?(event)
+
+    conversation = event.data[:conversation]
+    account = nil
+    changed_attributes = event.data[:changed_attributes]
+
+    return unless rule_present?('conversation_resolved', account)
+
+    rules = current_account_rules('conversation_resolved', account)
+
+    rules.each do |rule|
+      conditions_match = ::AutomationRules::ConditionsFilterService.new(rule, conversation, { changed_attributes: changed_attributes }).perform
+      next unless conditions_match.present?
+
+      if rule.mode == 'flow' && rule.flow_data.present?
+        AutomationRules::FlowExecutionService.new(rule, account, conversation).perform
+      else
+        AutomationRules::ActionService.new(rule, account, conversation).perform
+      end
+    end
+  end
+
+  def conversation_status_changed(event)
+    return if performed_by_automation?(event)
+
+    conversation = event.data[:conversation]
+    account = nil
+    changed_attributes = event.data[:changed_attributes]
+
+    return unless rule_present?('conversation_status_changed', account)
+
+    rules = current_account_rules('conversation_status_changed', account)
+
+    rules.each do |rule|
+      conditions_match = ::AutomationRules::ConditionsFilterService.new(rule, conversation, { changed_attributes: changed_attributes }).perform
+      next unless conditions_match.present?
+
+      if rule.mode == 'flow' && rule.flow_data.present?
+        AutomationRules::FlowExecutionService.new(rule, account, conversation).perform
+      else
+        AutomationRules::ActionService.new(rule, account, conversation).perform
+      end
+    end
+  end
+
   def contact_created(event)
     return if performed_by_automation?(event)
 
