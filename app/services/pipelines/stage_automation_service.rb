@@ -225,13 +225,29 @@ class Pipelines::StageAutomationService
     Rails.logger.info "[StageAutomation] conv=#{@conversation.id} assigned to agent=#{agent.name}"
   end
 
-  def apply_label(label_title)
-    return if label_title.blank?
+  def apply_label(label_value)
+    return if label_value.blank?
+
+    title = resolve_label_title(label_value)
+    return if title.blank?
 
     current_labels = @conversation.label_list
-    return if current_labels.include?(label_title)
+    return if current_labels.include?(title)
 
-    @conversation.update!(label_list: current_labels + [label_title])
-    Rails.logger.info "[StageAutomation] conv=#{@conversation.id} label=#{label_title} applied"
+    @conversation.update!(label_list: current_labels + [title])
+    Rails.logger.info "[StageAutomation] conv=#{@conversation.id} label=#{title} applied"
+  end
+
+  # The frontend stores the Label UUID in action_value, but acts_as_taggable_on
+  # compares against tags.name (the Label title). Translate UUIDs to titles
+  # here so the rule lands the right tag instead of creating a garbage tag
+  # named after the UUID.
+  UUID_LABEL_REGEX = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/.freeze
+
+  def resolve_label_title(value)
+    raw = value.to_s
+    return raw unless UUID_LABEL_REGEX.match?(raw)
+
+    Label.where(id: raw).pick(:title) || raw
   end
 end

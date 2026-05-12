@@ -28,7 +28,7 @@ class ActionService
   def add_label(labels)
     return if labels.empty?
 
-    @conversation.reload.add_labels(labels)
+    @conversation.reload.add_labels(resolve_label_titles(labels))
   end
 
   def assign_agent(agent_ids = [])
@@ -44,7 +44,8 @@ class ActionService
   def remove_label(labels)
     return if labels.empty?
 
-    labels = @conversation.label_list - labels
+    targets = resolve_label_titles(labels)
+    labels  = @conversation.label_list - targets
     @conversation.update!(label_list: labels)
   end
 
@@ -92,6 +93,27 @@ class ActionService
 
     @conversation.additional_attributes['type'] == 'tweet'
   end
+
+  # Automation rules persist label_ids (UUIDs) in `action_params`, but
+  # `acts_as_taggable_on :labels` stores tags by their **title** in
+  # `tags.name`. Translate any UUIDs in the incoming array to their Label
+  # title; values that aren't UUIDs (legacy rules that already stored titles)
+  # are kept as-is so we don't break older configurations.
+  UUID_LABEL_REGEX = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/.freeze
+
+  def resolve_label_titles(values)
+    values = Array(values).map(&:to_s).reject(&:empty?)
+    return [] if values.empty?
+
+    uuids, others = values.partition { |v| UUID_LABEL_REGEX.match?(v) }
+    return others if uuids.empty?
+
+    titles_by_id = Label.where(id: uuids).pluck(:id, :title).to_h.transform_keys(&:to_s)
+    resolved     = uuids.filter_map { |id| titles_by_id[id] }
+
+    (others + resolved).uniq
+  end
+  private :resolve_label_titles
 end
 
 ActionService.include_mod_with('ActionService')
