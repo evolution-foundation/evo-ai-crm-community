@@ -74,3 +74,10 @@ gmail_renew_watch_job:
   cron: '0 3 * * *'
   class: 'Gmail::RenewWatchJob'
   queue: low
+
+# executed daily at 0345 UTC
+# removes automation rule runs older than AUTOMATION_RULE_RUNS_RETENTION_DAYS (default 30)
+automation_rule_runs_cleanup_job:
+  cron: '45 3 * * *'
+  class: 'AutomationRuleRunsCleanupJob'
+  queue: low

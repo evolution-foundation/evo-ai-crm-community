@@ -24,6 +24,7 @@ class AutomationRule < ApplicationRecord
   include Reauthorizable
 
   has_many_attached :files
+  has_many :runs, class_name: 'AutomationRuleRun', dependent: :delete_all
 
   validate :json_conditions_format
   validate :json_actions_format

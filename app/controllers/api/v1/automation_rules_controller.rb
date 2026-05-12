@@ -7,10 +7,11 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
     create: 'automation_rules.create',
     update: 'automation_rules.update',
     destroy: 'automation_rules.delete',
-    clone: 'automation_rules.clone'
+    clone: 'automation_rules.clone',
+    runs: 'automation_rules.read'
   })
 
-  before_action :fetch_automation_rule, only: [:show, :update, :destroy, :clone]
+  before_action :fetch_automation_rule, only: [:show, :update, :destroy, :clone, :runs]
   before_action :validate_automation_limit, only: [:create]
 
   private
@@ -111,6 +112,25 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
     )
   end
 
+  def runs
+    runs_scope = @automation_rule.runs.recent.with_status(params[:status])
+    @runs = runs_scope.limit(per_page).offset(page_offset)
+    total = runs_scope.count
+
+    success_response(
+      data: @runs.map { |run| serialize_run(run) },
+      meta: {
+        pagination: {
+          page: current_page,
+          per_page: per_page,
+          total_count: total,
+          total_pages: (total / per_page.to_f).ceil
+        }
+      },
+      message: 'Automation rule runs retrieved successfully'
+    )
+  end
+
   def process_attachments
     actions = @automation_rule.actions.filter_map { |k, _v| k if k['action_name'] == 'send_attachment' }
     return if actions.blank?
@@ -130,6 +150,33 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
     @automation_rule.conditions = params[:conditions] if params[:conditions]
     @automation_rule.flow_data = params[:flow_data] if params[:flow_data]
     @automation_rule.save!
+  end
+
+  def serialize_run(run)
+    {
+      id: run.id,
+      automation_rule_id: run.automation_rule_id,
+      event_name: run.event_name,
+      status: run.status,
+      started_at: run.started_at&.iso8601,
+      finished_at: run.finished_at&.iso8601,
+      duration_ms: run.duration_ms,
+      error_message: run.error_message,
+      payload: run.payload,
+      steps: run.steps
+    }
+  end
+
+  def current_page
+    [params[:page].to_i, 1].max
+  end
+
+  def per_page
+    [(params[:per_page] || 25).to_i, 100].min
+  end
+
+  def page_offset
+    (current_page - 1) * per_page
   end
 
   def automation_rules_permit

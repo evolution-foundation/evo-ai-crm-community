@@ -229,6 +229,7 @@ Rails.application.routes.draw do
 
       resources :automation_rules, only: [:index, :create, :show, :update, :destroy], controller: 'automation_rules' do
         post :clone, on: :member
+        get :runs, on: :member
       end
 
       resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'macros' do
