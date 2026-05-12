@@ -3,6 +3,14 @@ require 'json'
 class AutomationRules::ConditionsFilterService < FilterService
   ATTRIBUTE_MODEL = 'contact_attribute'.freeze
 
+  # Maps frontend attribute_key to the actual key present in changed_attributes.
+  # Conversation/Contact dispatch previous_changes directly, so labels (via
+  # acts-as-taggable) are stored as `label_list`. Without this alias the
+  # attribute_changed filter would never match label transitions.
+  ATTRIBUTE_KEY_ALIASES = {
+    'labels' => 'label_list'
+  }.freeze
+
   def initialize(rule, conversation = nil, options = {})
     super([], nil)
     @rule = rule
@@ -79,13 +87,67 @@ class AutomationRules::ConditionsFilterService < FilterService
   def filter_based_on_attribute_change(records, current_attribute_changed_record)
     @attribute_changed_query_filter.each do |filter|
       @changed_attributes = @changed_attributes.with_indifferent_access
-      changed_attribute = @changed_attributes[filter['attribute_key']].presence
+      backend_key = ATTRIBUTE_KEY_ALIASES.fetch(filter['attribute_key'], filter['attribute_key'])
+      changed_attribute = @changed_attributes[backend_key].presence
 
-      if changed_attribute[0].in?(filter['values']['from']) && changed_attribute[1].in?(filter['values']['to'])
+      # Skip silently when the watched attribute did not change in this update.
+      # Avoids NoMethodError on changed_attribute[0] which was being swallowed
+      # by the rescue in #perform, masking real bugs.
+      next unless changed_attribute.is_a?(Array) && changed_attribute.length >= 2
+
+      if attribute_changed_match?(filter, changed_attribute)
         @attribute_changed_records = attribute_changed_filter_query(filter, records, current_attribute_changed_record)
       end
       current_attribute_changed_record = @attribute_changed_records
     end
+  end
+
+  def attribute_changed_match?(filter, changed_attribute)
+    if filter['attribute_key'] == 'labels'
+      labels_transition_match?(filter, changed_attribute)
+    else
+      scalar_transition_match?(filter, changed_attribute)
+    end
+  end
+
+  # Mirrors the wildcard semantics of labels_transition_match?: an empty
+  # `from` or `to` list means "any value on that side". Without this the
+  # frontend can save `from: [], to: ['resolved']` (intent: any status ->
+  # resolved) and Ruby's `Array.in?([])` is always false, so the rule never
+  # fires.
+  def scalar_transition_match?(filter, changed_attribute)
+    from_values = Array(filter['values']['from'])
+    to_values = Array(filter['values']['to'])
+
+    from_match = from_values.empty? || changed_attribute[0].in?(from_values)
+    to_match = to_values.empty? || changed_attribute[1].in?(to_values)
+
+    from_match && to_match
+  end
+
+  # Labels are array-valued (label_list via acts-as-taggable). Match by diff:
+  # `to` is satisfied when at least one of the requested labels was added in
+  # this update; `from` is satisfied when at least one was removed. An empty
+  # `to`/`from` acts as a wildcard for that direction.
+  def labels_transition_match?(filter, changed_attribute)
+    previous_labels = Array(changed_attribute[0])
+    current_labels = Array(changed_attribute[1])
+    from_titles = label_titles_from_ids(filter['values']['from'])
+    to_titles = label_titles_from_ids(filter['values']['to'])
+
+    added = current_labels - previous_labels
+    removed = previous_labels - current_labels
+
+    return false if to_titles.any? && !added.intersect?(to_titles)
+    return false if from_titles.any? && !removed.intersect?(from_titles)
+
+    true
+  end
+
+  def label_titles_from_ids(ids)
+    return [] if ids.blank?
+
+    Label.where(id: Array(ids)).pluck(:title)
   end
 
   # We intersect with the record if query_operator-AND is present and union if query_operator-OR is present
@@ -144,14 +206,14 @@ class AutomationRules::ConditionsFilterService < FilterService
   def conversation_query_string(table_name, current_filter, query_hash, current_index)
     attribute_key = query_hash['attribute_key']
     query_operator = query_hash['query_operator']
-    
+
     # Para labels, converte IDs para títulos
     if attribute_key == 'labels'
       label_ids = query_hash['values']
       label_titles = Label.where(id: label_ids).pluck(:title)
       query_hash = query_hash.merge('values' => label_titles)
     end
-    
+
     filter_operator_value = filter_operation(query_hash, current_index)
 
     case current_filter['attribute_type']
@@ -216,7 +278,7 @@ class AutomationRules::ConditionsFilterService < FilterService
     ).joins(
       'LEFT OUTER JOIN pipelines on pipelines.id = pipeline_items.pipeline_id'
     )
-    
+
     # Adiciona JOIN com tags se houver condições de labels
     if @rule.conditions.any? { |c| c['attribute_key'] == 'labels' }
       # Para conversas, usa taggings com taggable_type = 'Conversation'
@@ -229,7 +291,7 @@ class AutomationRules::ConditionsFilterService < FilterService
                          .joins('LEFT OUTER JOIN tags ON tags.id = taggings.tag_id')
       end
     end
-    
+
     records = records.where(messages: { id: @options[:message].id }) if @options[:message].present?
     records
   end

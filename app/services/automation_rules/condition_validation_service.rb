@@ -54,8 +54,11 @@ class AutomationRules::ConditionValidationService
   def pipeline_operation_valid?(condition)
     filter_operator = condition['filter_operator']
 
-    # Pipeline filters support these operators
-    %w[equal_to not_equal_to is_present is_not_present].include?(filter_operator)
+    # Pipeline filters support these operators. attribute_changed is included
+    # because pipeline_stage_id transitions are dispatched by PipelineItem
+    # callbacks with changed_attributes; without it the rule is rejected by
+    # rule_valid? and silently dies before matching runs.
+    %w[equal_to not_equal_to is_present is_not_present attribute_changed].include?(filter_operator)
   end
 
   def operation_valid?(condition, filter)
