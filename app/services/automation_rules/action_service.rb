@@ -80,6 +80,49 @@ class AutomationRules::ActionService < ActionService
     Messages::MessageBuilder.new(nil, @conversation, params).perform
   end
 
+  def send_canned_response(params)
+    return if conversation_a_tweet?
+    return if params.blank?
+
+    canned_id = params[0].is_a?(Hash) ? (params[0][:canned_response_id] || params[0]['canned_response_id']) : params[0]
+    canned = CannedResponse.find_by(id: canned_id)
+    return unless canned
+
+    message_params = {
+      content: canned.content,
+      private: false,
+      content_attributes: { automation_rule_id: @rule.id }
+    }
+
+    if canned.attachments.any?
+      blobs = canned.attachments.map(&:file).select(&:attached?).map(&:blob)
+      message_params[:attachments] = blobs if blobs.any?
+    end
+
+    Messages::MessageBuilder.new(nil, @conversation, message_params).perform
+  end
+
+  def send_template(params)
+    return if conversation_a_tweet?
+    return if params.blank?
+
+    template_message = params[0].is_a?(Hash) ? params[0].deep_symbolize_keys : nil
+    return unless template_message
+
+    processed = Whatsapp::TemplateProcessingService.new(template_message).process
+    return if processed.blank?
+
+    message_params = {
+      content: nil,
+      private: false,
+      message_type: :outgoing,
+      content_type: 'template',
+      content_attributes: { automation_rule_id: @rule.id }.merge(processed)
+    }
+
+    Messages::MessageBuilder.new(nil, @conversation, message_params).perform
+  end
+
   def send_email_to_team(params)
     teams = Team.where(id: params[0][:team_ids])
 

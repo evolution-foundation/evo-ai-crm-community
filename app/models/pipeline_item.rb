@@ -50,6 +50,7 @@ class PipelineItem < ApplicationRecord
   before_save :normalize_services_data!
   after_create :create_entry_movement
   after_create :publish_pipeline_item_created
+  after_create :dispatch_initial_stage_event
   after_update :create_stage_change_movement, if: :saved_change_to_pipeline_stage_id?
   after_update :publish_pipeline_item_updated
   after_update :publish_pipeline_item_completed, if: :saved_change_to_completed_at?
@@ -314,6 +315,15 @@ class PipelineItem < ApplicationRecord
       Time.zone.now,
       pipeline_item: self,
       changed_attributes: { 'pipeline_stage_id' => [old_stage_id, pipeline_stage_id] }
+    )
+  end
+
+  def dispatch_initial_stage_event
+    Rails.configuration.dispatcher.dispatch(
+      'pipeline_stage_updated',
+      Time.zone.now,
+      pipeline_item: self,
+      changed_attributes: { 'pipeline_stage_id' => [nil, pipeline_stage_id] }
     )
   end
 

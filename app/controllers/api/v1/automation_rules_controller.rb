@@ -100,11 +100,10 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
   end
 
   def clone
-    automation_rule = AutomationRule.find_by(id: params[:automation_rule_id])
-    new_rule = automation_rule.dup
+    new_rule = @automation_rule.dup
     new_rule.save!
     @automation_rule = new_rule
-    
+
     success_response(
       data: AutomationRuleSerializer.serialize(@automation_rule),
       message: 'Automation rule cloned successfully',
@@ -140,7 +139,7 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
       actions: [:action_name, { action_params: [] }],
       flow_data: {
         nodes: [
-          :id, :type, 
+          :id, :type,
           position: [:x, :y],
           data: {},
           measured: [:width, :height]
@@ -155,9 +154,5 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
         ]
       }
     )
-  end
-
-  def fetch_automation_rule
-    @automation_rule = AutomationRule.find_by(id: params[:id])
   end
 end
