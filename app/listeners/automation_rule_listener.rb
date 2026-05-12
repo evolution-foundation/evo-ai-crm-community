@@ -97,18 +97,27 @@ class AutomationRuleListener < BaseListener
     return if performed_by_automation?(event)
 
     pipeline_item = event.data[:pipeline_item]
-    conversation = pipeline_item.conversation
+    conversation = pipeline_item&.conversation
     account = nil
     changed_attributes = event.data[:changed_attributes] || build_default_changed_attributes(pipeline_item)
+
+    Rails.logger.info "[AutomationRuleListener] pipeline_stage_updated received: pipeline_item=#{pipeline_item&.id} conversation=#{conversation&.id} changed_attributes=#{changed_attributes.inspect}"
+
+    if conversation.nil?
+      Rails.logger.warn "[AutomationRuleListener] pipeline_stage_updated: no conversation linked to pipeline_item #{pipeline_item&.id} — skipping (rules require a conversation)"
+      return
+    end
 
     return unless rule_present?('pipeline_stage_updated', account)
 
     rules = current_account_rules('pipeline_stage_updated', account)
+    Rails.logger.info "[AutomationRuleListener] pipeline_stage_updated: #{rules.length} active rule(s) to evaluate for conversation #{conversation.id}"
 
     rules.each do |rule|
       conditions_match = ::AutomationRules::ConditionsFilterService.new(rule, conversation, { changed_attributes: changed_attributes }).perform
+      Rails.logger.info "[AutomationRuleListener] rule #{rule.id} '#{rule.name}' conditions_match=#{conditions_match.inspect}"
       next unless conditions_match.present?
-      
+
       if rule.mode == 'flow' && rule.flow_data.present?
         AutomationRules::FlowExecutionService.new(rule, account, conversation).perform
       else

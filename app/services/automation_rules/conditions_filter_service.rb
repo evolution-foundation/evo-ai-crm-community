@@ -48,6 +48,7 @@ class AutomationRules::ConditionsFilterService < FilterService
 
     records.any?
   rescue StandardError => e
+    Rails.logger.error "[ConditionsFilterService] rule=#{@rule&.id} event=#{@rule&.event_name} error=#{e.class}: #{e.message} query=#{@query_string.inspect} filter_values=#{@filter_values.inspect}"
     EvolutionExceptionTracker.new(e).capture_exception
     false
   end
