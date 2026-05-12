@@ -196,8 +196,26 @@ class Api::V1::EvolutionGo::AuthorizationsController < Api::V1::BaseController
   def delete_instance
     Rails.logger.info "Evolution Go API: Deleting instance #{@instance_uuid}"
 
+    if @api_url.blank? || @instance_uuid.blank?
+      return render json: {
+        error: 'Missing required parameters: api_url and instanceId'
+      }, status: :bad_request
+    end
+
+    # Evolution Go DELETE /instance/delete/:id is an AuthAdmin route — it requires
+    # the global API key (admin_token), NOT the per-instance token. During rollback
+    # the channel was never persisted so instance_token is unavailable; fall back to
+    # admin_token which is always resolvable via GlobalConfig.
+    auth_token = @instance_token.presence || @admin_token
+
+    if auth_token.blank?
+      return render json: {
+        error: 'Missing credentials: instance_token or admin_token required to delete instance'
+      }, status: :bad_request
+    end
+
     begin
-      delete_instance_go(@api_url, @instance_token, @instance_uuid)
+      delete_instance_go(@api_url, auth_token, @instance_uuid)
 
       render json: {
         success: true,

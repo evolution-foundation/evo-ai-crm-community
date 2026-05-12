@@ -32,6 +32,26 @@ module EvolutionConcern
     token.presence
   end
 
+  # Resolve credentials for create actions where the channel may not exist yet.
+  # Prefers channel-based lookup (with GlobalConfig fallback), falls back to
+  # raw request params for pre-creation flows (QR code refresh, proxy set, etc.).
+  def resolve_evolution_credentials(channel, raw_params)
+    if channel
+      evolution_credentials_for!(channel)
+    else
+      api_url = raw_params[:api_url].presence || GlobalConfigService.load('EVOLUTION_API_URL', '').to_s.strip
+      api_hash = raw_params[:api_hash].presence || GlobalConfigService.load('EVOLUTION_ADMIN_SECRET', '').to_s.strip
+
+      if api_url.blank? || api_hash.blank?
+        raise StandardError,
+              'Evolution API not configured. Provide api_url + api_hash in the request ' \
+              'or configure EVOLUTION_API_URL + EVOLUTION_ADMIN_SECRET globally.'
+      end
+
+      [api_url, api_hash]
+    end
+  end
+
   # Raise if either credential is missing — the message tells the operator
   # exactly what to configure rather than leaking a `nil.chomp` stack trace.
   def evolution_credentials_for!(channel)
