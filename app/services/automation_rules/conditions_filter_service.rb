@@ -280,17 +280,23 @@ class AutomationRules::ConditionsFilterService < FilterService
       'LEFT OUTER JOIN pipelines on pipelines.id = pipeline_items.pipeline_id'
     )
 
-    # Adiciona JOIN com tags se houver condições de labels
+    # Adiciona JOIN com tags se houver condições de labels.
+    # A condição de label casa quando a tag está em qualquer um dos taggables
+    # relacionados ao evento — historicamente o filtro só procurava labels da
+    # Conversation (ou só do Contact em eventos de contato), o que fazia uma
+    # regra falhar silenciosamente quando o usuário colocava a label apenas
+    # no contato. Agora aceitamos tag aplicada à Conversation OU ao Contact da
+    # conversa (mesmo padrão usado pela busca interna do CRM).
     if @rule.conditions.any? { |c| c['attribute_key'] == 'labels' }
-      # Para conversas, usa taggings com taggable_type = 'Conversation'
-      # Para contatos, usa taggings com taggable_type = 'Contact'
-      if @rule.event_name.include?('contact')
-        records = records.joins("LEFT OUTER JOIN taggings ON taggings.taggable_id = contacts.id AND taggings.taggable_type = 'Contact' AND taggings.context = 'labels'")
-                         .joins('LEFT OUTER JOIN tags ON tags.id = taggings.tag_id')
-      else
-        records = records.joins("LEFT OUTER JOIN taggings ON taggings.taggable_id = conversations.id AND taggings.taggable_type = 'Conversation' AND taggings.context = 'labels'")
-                         .joins('LEFT OUTER JOIN tags ON tags.id = taggings.tag_id')
-      end
+      records = records.joins(<<~SQL.squish)
+        LEFT OUTER JOIN taggings
+          ON taggings.context = 'labels'
+         AND (
+              (taggings.taggable_type = 'Conversation' AND taggings.taggable_id = conversations.id)
+           OR (taggings.taggable_type = 'Contact'      AND taggings.taggable_id = contacts.id)
+         )
+      SQL
+      records = records.joins('LEFT OUTER JOIN tags ON tags.id = taggings.tag_id')
     end
 
     records = records.where(messages: { id: @options[:message].id }) if @options[:message].present?
