@@ -183,11 +183,16 @@ class AutomationRules::ConditionsFilterService < FilterService
     attribute_key = query_hash['attribute_key']
     query_operator = query_hash['query_operator']
 
-    # Para labels, converte IDs para títulos
+    # Para labels, converte IDs (UUIDs) para títulos. O frontend salva o id
+    # da Label no `values`, mas o tag (`tags.name`) é comparado pelo título.
+    # Se o item não bater como UUID (ex.: regras antigas que já gravaram o
+    # título) ou se a Label não existir mais, mantemos o valor original como
+    # fallback para não converter silenciosamente um valor válido em vazio.
     if attribute_key == 'labels'
-      label_ids = query_hash['values']
-      label_titles = Label.where(id: label_ids).pluck(:title)
-      query_hash = query_hash.merge('values' => label_titles)
+      raw_values = Array(query_hash['values']).map(&:to_s)
+      titles_by_id = Label.where(id: raw_values).pluck(:id, :title).to_h.transform_keys(&:to_s)
+      resolved = raw_values.map { |v| titles_by_id[v] || v }
+      query_hash = query_hash.merge('values' => resolved)
     end
 
     filter_operator_value = filter_operation(query_hash, current_index)
@@ -208,11 +213,16 @@ class AutomationRules::ConditionsFilterService < FilterService
     attribute_key = query_hash['attribute_key']
     query_operator = query_hash['query_operator']
 
-    # Para labels, converte IDs para títulos
+    # Para labels, converte IDs (UUIDs) para títulos. O frontend salva o id
+    # da Label no `values`, mas o tag (`tags.name`) é comparado pelo título.
+    # Se o item não bater como UUID (ex.: regras antigas que já gravaram o
+    # título) ou se a Label não existir mais, mantemos o valor original como
+    # fallback para não converter silenciosamente um valor válido em vazio.
     if attribute_key == 'labels'
-      label_ids = query_hash['values']
-      label_titles = Label.where(id: label_ids).pluck(:title)
-      query_hash = query_hash.merge('values' => label_titles)
+      raw_values = Array(query_hash['values']).map(&:to_s)
+      titles_by_id = Label.where(id: raw_values).pluck(:id, :title).to_h.transform_keys(&:to_s)
+      resolved = raw_values.map { |v| titles_by_id[v] || v }
+      query_hash = query_hash.merge('values' => resolved)
     end
 
     filter_operator_value = filter_operation(query_hash, current_index)
