@@ -1,4 +1,6 @@
 class AutomationRuleListener < BaseListener
+  PIPELINE_STAGE_DEDUP_WINDOW = (ENV.fetch('AUTOMATION_PIPELINE_STAGE_DEDUP_WINDOW_SECONDS', 5).to_i)
+
   def conversation_updated(event)
     process_conversation_event(event, 'conversation_updated')
   end
@@ -47,8 +49,15 @@ class AutomationRuleListener < BaseListener
     return unless rule_present?('pipeline_stage_updated', account)
 
     rules = current_account_rules('pipeline_stage_updated', account)
+    current_stage_id = pipeline_item&.pipeline_stage_id
 
     rules.each do |rule|
+      if pipeline_item_rule_recently_fired?(rule.id, pipeline_item&.id, current_stage_id)
+        Rails.logger.info "[AutomationRuleListener] rule #{rule.id} skipped (dedup): pipeline_item=#{pipeline_item&.id} stage=#{current_stage_id} already fired in last #{PIPELINE_STAGE_DEDUP_WINDOW}s"
+        record_dedup_skip(rule, pipeline_item, current_stage_id, changed_attributes)
+        next
+      end
+
       evaluate_and_execute_rule(
         rule: rule,
         conversation: conversation,
@@ -56,6 +65,8 @@ class AutomationRuleListener < BaseListener
         changed_attributes: changed_attributes,
         payload: { pipeline_item_id: pipeline_item&.id, conversation_id: conversation&.id, changed_attributes: changed_attributes }
       )
+
+      mark_pipeline_item_rule_fired(rule.id, pipeline_item&.id, current_stage_id)
     end
   end
 
@@ -192,6 +203,37 @@ class AutomationRuleListener < BaseListener
   end
 
   private
+
+  def record_dedup_skip(rule, pipeline_item, stage_id, changed_attributes)
+    recorder = ::AutomationRules::RunRecorder.new(
+      rule: rule,
+      event_name: 'pipeline_stage_updated',
+      payload: { pipeline_item_id: pipeline_item&.id, stage_id: stage_id, changed_attributes: changed_attributes }
+    )
+    recorder.add_step('Event received', data: { event_name: 'pipeline_stage_updated', changed_attributes: changed_attributes })
+    recorder.skipped!("Duplicate event for pipeline_item=#{pipeline_item&.id} stage=#{stage_id} within #{PIPELINE_STAGE_DEDUP_WINDOW}s window")
+    recorder.persist!
+  end
+
+  def pipeline_stage_dedup_key(rule_id, pipeline_item_id, stage_id)
+    "automation:pipeline_stage_updated:#{rule_id}:#{pipeline_item_id}:#{stage_id}"
+  end
+
+  def pipeline_item_rule_recently_fired?(rule_id, pipeline_item_id, stage_id)
+    return false if pipeline_item_id.blank? || stage_id.blank?
+
+    Rails.cache.exist?(pipeline_stage_dedup_key(rule_id, pipeline_item_id, stage_id))
+  end
+
+  def mark_pipeline_item_rule_fired(rule_id, pipeline_item_id, stage_id)
+    return if pipeline_item_id.blank? || stage_id.blank?
+
+    Rails.cache.write(
+      pipeline_stage_dedup_key(rule_id, pipeline_item_id, stage_id),
+      true,
+      expires_in: PIPELINE_STAGE_DEDUP_WINDOW.seconds
+    )
+  end
 
   def process_conversation_event(event, event_name)
     return if performed_by_automation?(event)
