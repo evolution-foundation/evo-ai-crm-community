@@ -106,18 +106,15 @@ class AutomationRules::ActionService < ActionService
     return if conversation_a_tweet?
     return if params.blank?
 
-    template_message = params[0].is_a?(Hash) ? params[0].deep_symbolize_keys : nil
-    return unless template_message
-
-    processed = Whatsapp::TemplateProcessingService.new(template_message).process
-    return if processed.blank?
+    template_params = params[0].is_a?(Hash) ? params[0].deep_stringify_keys : nil
+    return if template_params.blank? || template_params['name'].blank?
 
     message_params = {
-      content: nil,
+      content: '',
       private: false,
-      message_type: :outgoing,
-      content_type: 'template',
-      content_attributes: { automation_rule_id: @rule.id }.merge(processed)
+      message_type: 'outgoing',
+      template_params: template_params.except('template_id'),
+      content_attributes: { automation_rule_id: @rule.id }
     }
 
     Messages::MessageBuilder.new(nil, @conversation, message_params).perform
@@ -300,4 +297,3 @@ class AutomationRules::ActionService < ActionService
     nil
   end
 end
-
