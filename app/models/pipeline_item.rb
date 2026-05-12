@@ -302,12 +302,21 @@ class PipelineItem < ApplicationRecord
     old_stage_id = pipeline_stage_id_previously_was
     old_stage = PipelineStage.find_by(id: old_stage_id)
 
-    stage_movements.create!(
-      from_stage: old_stage,
-      to_stage: pipeline_stage,
-      moved_by: Current.user,
-      movement_type: 'manual'
-    )
+    # Cross-pipeline moves are recorded by the caller (e.g.
+    # Pipelines::StageAutomationService#move_to_pipeline) with a
+    # `cross_pipeline` movement_type that bypasses the same-pipeline
+    # validation. Creating a `manual` movement here would otherwise hit
+    # `stages_belong_to_same_pipeline` and roll the update back.
+    cross_pipeline_change = old_stage && old_stage.pipeline_id != pipeline_stage.pipeline_id
+
+    unless cross_pipeline_change
+      stage_movements.create!(
+        from_stage: old_stage,
+        to_stage: pipeline_stage,
+        moved_by: Current.user,
+        movement_type: 'manual'
+      )
+    end
 
     # Trigger automation event for pipeline stage update
     Rails.configuration.dispatcher.dispatch(

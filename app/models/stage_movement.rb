@@ -29,13 +29,14 @@ class StageMovement < ApplicationRecord
   belongs_to :moved_by, class_name: 'User', optional: true
 
   enum movement_type: {
-    manual: 0,        # Movido manualmente por um usuário
-    automated: 1,     # Movido por automação/regra
-    system: 2         # Movido pelo sistema (entrada no funil, etc)
+    manual: 0,         # Movido manualmente por um usuário
+    automated: 1,      # Movido por automação/regra
+    system: 2,         # Movido pelo sistema (entrada no funil, etc)
+    cross_pipeline: 3  # Conversa foi movida para outro pipeline (from/to em pipelines distintos)
   }
 
   validates :to_stage, presence: true
-  validate :stages_belong_to_same_pipeline
+  validate :stages_belong_to_same_pipeline, unless: :cross_pipeline?
 
   scope :recent, -> { order(created_at: :desc) }
   scope :for_pipeline, lambda { |pipeline|
