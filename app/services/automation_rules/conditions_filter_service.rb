@@ -46,7 +46,14 @@ class AutomationRules::ConditionsFilterService < FilterService
 
     records = perform_attribute_changed_filter(records) if @attribute_changed_query_filter.any?
 
-    records.any?
+    matched = records.any?
+
+    Rails.logger.info(
+      "[ConditionsFilterService] rule=#{@rule&.id} event=#{@rule&.event_name} matched=#{matched} " \
+      "query=#{@query_string.inspect} filter_values=#{@filter_values.inspect} sql=#{records.to_sql rescue 'unavailable'}"
+    )
+
+    matched
   rescue StandardError => e
     Rails.logger.error "[ConditionsFilterService] rule=#{@rule&.id} event=#{@rule&.event_name} error=#{e.class}: #{e.message} query=#{@query_string.inspect} filter_values=#{@filter_values.inspect}"
     EvolutionExceptionTracker.new(e).capture_exception
@@ -202,7 +209,7 @@ class AutomationRules::ConditionsFilterService < FilterService
       " contacts.additional_attributes ->> '#{attribute_key}' #{filter_operator_value} #{query_operator} "
     when 'standard'
       if attribute_key == 'labels'
-        " tags.name #{filter_operator_value} #{query_operator} "
+        labels_query_fragment(query_hash, current_index, query_operator)
       else
         " contacts.#{attribute_key} #{filter_operator_value} #{query_operator} "
       end
@@ -232,7 +239,7 @@ class AutomationRules::ConditionsFilterService < FilterService
       " #{table_name}.additional_attributes ->> '#{attribute_key}' #{filter_operator_value} #{query_operator} "
     when 'standard'
       if attribute_key == 'labels'
-        " tags.name #{filter_operator_value} #{query_operator} "
+        labels_query_fragment(query_hash, current_index, query_operator)
       else
         " #{table_name}.#{attribute_key} #{filter_operator_value} #{query_operator} "
       end
@@ -240,6 +247,39 @@ class AutomationRules::ConditionsFilterService < FilterService
   end
 
   private
+
+  # Builds a self-contained EXISTS / NOT EXISTS fragment for a `labels`
+  # condition. Each label condition is independent of any others (no shared
+  # JOIN row), and it natively handles the "this label is absent" case via
+  # NOT EXISTS — which is what users mean by `labels != X`, including the
+  # case where the conversation has zero labels at all (a NULL row in a LEFT
+  # JOIN would not satisfy NOT IN).
+  #
+  # The subquery looks up taggings on both the Conversation and its Contact,
+  # mirroring the rest of the CRM where a "conversation label" is the union
+  # of conversation- and contact-level tags.
+  def labels_query_fragment(query_hash, current_index, query_operator)
+    filter_operator = query_hash[:filter_operator] || query_hash['filter_operator']
+    negate = filter_operator == 'not_equal_to'
+
+    existence = negate ? 'NOT EXISTS' : 'EXISTS'
+
+    subquery = <<~SQL.squish
+      SELECT 1
+        FROM taggings AS lbl_tg
+        JOIN tags    AS lbl_t ON lbl_t.id = lbl_tg.tag_id
+       WHERE lbl_tg.context = 'labels'
+         AND (
+              (lbl_tg.taggable_type = 'Conversation' AND lbl_tg.taggable_id = conversations.id)
+           OR (lbl_tg.taggable_type = 'Contact'      AND lbl_tg.taggable_id = contacts.id)
+         )
+         AND lbl_t.name IN (:value_#{current_index})
+    SQL
+
+    @filter_values["value_#{current_index}"] = Array(query_hash['values'])
+
+    " #{existence} (#{subquery}) #{query_operator} "
+  end
 
   def extract_filters(query_hash)
     {
@@ -290,24 +330,14 @@ class AutomationRules::ConditionsFilterService < FilterService
       'LEFT OUTER JOIN pipelines on pipelines.id = pipeline_items.pipeline_id'
     )
 
-    # Adiciona JOIN com tags se houver condições de labels.
-    # A condição de label casa quando a tag está em qualquer um dos taggables
-    # relacionados ao evento — historicamente o filtro só procurava labels da
-    # Conversation (ou só do Contact em eventos de contato), o que fazia uma
-    # regra falhar silenciosamente quando o usuário colocava a label apenas
-    # no contato. Agora aceitamos tag aplicada à Conversation OU ao Contact da
-    # conversa (mesmo padrão usado pela busca interna do CRM).
-    if @rule.conditions.any? { |c| c['attribute_key'] == 'labels' }
-      records = records.joins(<<~SQL.squish)
-        LEFT OUTER JOIN taggings
-          ON taggings.context = 'labels'
-         AND (
-              (taggings.taggable_type = 'Conversation' AND taggings.taggable_id = conversations.id)
-           OR (taggings.taggable_type = 'Contact'      AND taggings.taggable_id = contacts.id)
-         )
-      SQL
-      records = records.joins('LEFT OUTER JOIN tags ON tags.id = taggings.tag_id')
-    end
+    # Conditions de `labels` agora viram subqueries EXISTS no próprio
+    # query_string (ver labels_query_fragment). O JOIN antigo de
+    # taggings+tags se mostrou frágil em dois cenários:
+    #   1. múltiplas condições de labels disputavam o mesmo row do JOIN,
+    #      então `labels=A AND labels!=B` nunca casava ao mesmo tempo;
+    #   2. operadores `not_equal_to` com LEFT JOIN ignoravam rows com
+    #      tags.name IS NULL (NULL não satisfaz NOT IN em SQL padrão).
+    # Não precisamos mais do JOIN aqui.
 
     records = records.where(messages: { id: @options[:message].id }) if @options[:message].present?
     records
