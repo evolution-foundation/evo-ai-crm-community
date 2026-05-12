@@ -26,7 +26,6 @@
 # Foreign Keys
 #
 #  fk_rails_...  (scheduled_action_id => scheduled_actions.id) ON DELETE => cascade
-#  fk_rails_...  (user_id => users.id) ON DELETE => cascade
 #
 
 class ScheduledActionNotification < ApplicationRecord

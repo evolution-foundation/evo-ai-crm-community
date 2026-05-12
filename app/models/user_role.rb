@@ -1,5 +1,31 @@
 # frozen_string_literal: true
 
+# == Schema Information
+#
+# Table name: user_roles
+#
+#  id            :uuid             not null, primary key
+#  granted_at    :datetime
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  granted_by_id :uuid
+#  role_id       :uuid             not null
+#  user_id       :uuid             not null
+#
+# Indexes
+#
+#  index_user_roles_on_granted_at     (granted_at)
+#  index_user_roles_on_granted_by_id  (granted_by_id)
+#  index_user_roles_on_role_id        (role_id)
+#  index_user_roles_on_user_id        (user_id)
+#  index_user_roles_unique            (user_id,role_id) UNIQUE
+#
+# Foreign Keys
+#
+#  fk_rails_...  (granted_by_id => users.id)
+#  fk_rails_...  (role_id => roles.id)
+#  fk_rails_...  (user_id => users.id)
+#
 # UserRole model - joins table for users and roles
 # This model provides read-only access to user_roles managed by evo-auth-service
 class UserRole < ApplicationRecord

@@ -22,7 +22,6 @@
 #
 # Indexes
 #
-#  index_pipeline_tasks_on_assigned_to_id                          (assigned_to_id)
 #  index_pipeline_tasks_on_assigned_to_id_and_status_and_due_date  (assigned_to_id,status,due_date)
 #  index_pipeline_tasks_on_created_by_id                           (created_by_id)
 #  index_pipeline_tasks_on_due_date                                (due_date)
@@ -35,8 +34,6 @@
 #
 # Foreign Keys
 #
-#  fk_rails_...  (assigned_to_id => users.id)
-#  fk_rails_...  (created_by_id => users.id)
 #  fk_rails_...  (parent_task_id => pipeline_tasks.id)
 #  fk_rails_...  (pipeline_item_id => pipeline_items.id)
 #

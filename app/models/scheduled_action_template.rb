@@ -22,10 +22,6 @@
 #  idx_templates_public                             (is_public)
 #  index_scheduled_action_templates_on_action_type  (action_type)
 #
-# Foreign Keys
-#
-#  fk_rails_...  (created_by => users.id) ON DELETE => cascade
-#
 
 class ScheduledActionTemplate < ApplicationRecord
   # Associations

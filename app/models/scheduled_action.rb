@@ -42,8 +42,6 @@
 #
 #  fk_rails_...  (contact_id => contacts.id) ON DELETE => cascade
 #  fk_rails_...  (conversation_id => conversations.id) ON DELETE => cascade
-#  fk_rails_...  (created_by => users.id) ON DELETE => cascade
-#  fk_rails_...  (notify_user_id => users.id) ON DELETE => nullify
 #
 
 class ScheduledAction < ApplicationRecord

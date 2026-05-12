@@ -15,6 +15,7 @@
 #
 # Indexes
 #
+#  idx_contact_inboxes_contact_id                   (contact_id) WHERE (contact_id IS NOT NULL)
 #  index_contact_inboxes_on_contact_id              (contact_id)
 #  index_contact_inboxes_on_inbox_id                (inbox_id)
 #  index_contact_inboxes_on_inbox_id_and_bsuid      (inbox_id,bsuid) UNIQUE WHERE (bsuid IS NOT NULL)

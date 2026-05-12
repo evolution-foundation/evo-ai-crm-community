@@ -33,7 +33,6 @@
 #
 #  fk_rails_...  (conversation_id => conversations.id)
 #  fk_rails_...  (message_id => messages.id)
-#  fk_rails_...  (moderated_by_id => users.id)
 #
 class FacebookCommentModeration < ApplicationRecord
   include Wisper::Publisher
