@@ -106,9 +106,23 @@ class AutomationRules::ConditionsFilterService < FilterService
     if filter['attribute_key'] == 'labels'
       labels_transition_match?(filter, changed_attribute)
     else
-      changed_attribute[0].in?(Array(filter['values']['from'])) &&
-        changed_attribute[1].in?(Array(filter['values']['to']))
+      scalar_transition_match?(filter, changed_attribute)
     end
+  end
+
+  # Mirrors the wildcard semantics of labels_transition_match?: an empty
+  # `from` or `to` list means "any value on that side". Without this the
+  # frontend can save `from: [], to: ['resolved']` (intent: any status ->
+  # resolved) and Ruby's `Array.in?([])` is always false, so the rule never
+  # fires.
+  def scalar_transition_match?(filter, changed_attribute)
+    from_values = Array(filter['values']['from'])
+    to_values = Array(filter['values']['to'])
+
+    from_match = from_values.empty? || changed_attribute[0].in?(from_values)
+    to_match = to_values.empty? || changed_attribute[1].in?(to_values)
+
+    from_match && to_match
   end
 
   # Labels are array-valued (label_list via acts-as-taggable). Match by diff:
