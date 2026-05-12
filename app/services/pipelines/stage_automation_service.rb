@@ -96,13 +96,35 @@ class Pipelines::StageAutomationService
   # (conversation_id, pipeline_id) unique index would otherwise reject the
   # update).
   def move_to_pipeline(pipeline_item, action_value)
-    target_pipeline_id, target_stage_id = parse_move_to_pipeline_value(action_value)
-    return if target_pipeline_id.blank?
+    Rails.logger.info(
+      "[StageAutomation] conv=#{@conversation.id} move_to_pipeline called " \
+      "with action_value=#{action_value.inspect} (class=#{action_value.class})"
+    )
 
-    return if pipeline_item.pipeline_id.to_s == target_pipeline_id.to_s
+    target_pipeline_id, target_stage_id = parse_move_to_pipeline_value(action_value)
+    Rails.logger.info(
+      "[StageAutomation] conv=#{@conversation.id} parsed target_pipeline_id=#{target_pipeline_id.inspect} " \
+      "target_stage_id=#{target_stage_id.inspect}"
+    )
+
+    if target_pipeline_id.blank?
+      Rails.logger.warn "[StageAutomation] move_to_pipeline aborted: target_pipeline_id blank"
+      return
+    end
+
+    if pipeline_item.pipeline_id.to_s == target_pipeline_id.to_s
+      Rails.logger.warn(
+        "[StageAutomation] move_to_pipeline aborted: target equals current pipeline " \
+        "(#{target_pipeline_id})"
+      )
+      return
+    end
 
     target_pipeline = Pipeline.find_by(id: target_pipeline_id)
-    return unless target_pipeline
+    unless target_pipeline
+      Rails.logger.warn "[StageAutomation] move_to_pipeline aborted: target pipeline #{target_pipeline_id} not found"
+      return
+    end
 
     target_stage =
       if target_stage_id.present?
@@ -110,7 +132,14 @@ class Pipelines::StageAutomationService
       else
         target_pipeline.pipeline_stages.ordered&.first || target_pipeline.pipeline_stages.first
       end
-    return unless target_stage
+
+    unless target_stage
+      Rails.logger.warn(
+        "[StageAutomation] move_to_pipeline aborted: target stage not found " \
+        "(target_pipeline=#{target_pipeline.id} stage_id=#{target_stage_id.inspect})"
+      )
+      return
+    end
 
     if conversation_already_in_pipeline?(target_pipeline)
       Rails.logger.warn(
@@ -122,18 +151,35 @@ class Pipelines::StageAutomationService
 
     old_stage = pipeline_item.pipeline_stage
 
-    pipeline_item.update!(
-      pipeline_id: target_pipeline.id,
-      pipeline_stage_id: target_stage.id
-    )
+    begin
+      pipeline_item.update!(
+        pipeline_id: target_pipeline.id,
+        pipeline_stage_id: target_stage.id
+      )
+    rescue StandardError => e
+      Rails.logger.error(
+        "[StageAutomation] move_to_pipeline pipeline_item.update! failed: " \
+        "#{e.class}: #{e.message}"
+      )
+      raise
+    end
 
-    pipeline_item.stage_movements.create!(
-      from_stage: old_stage,
-      to_stage: target_stage,
-      moved_by: Current.user,
-      movement_type: 'cross_pipeline',
-      notes: "Moved from pipeline '#{old_stage&.pipeline&.name}' to '#{target_pipeline.name}'"
-    )
+    begin
+      pipeline_item.stage_movements.create!(
+        from_stage: old_stage,
+        to_stage: target_stage,
+        moved_by: Current.user,
+        movement_type: 'cross_pipeline',
+        notes: "Moved from pipeline '#{old_stage&.pipeline&.name}' to '#{target_pipeline.name}'"
+      )
+    rescue StandardError => e
+      # Don't roll back the pipeline_item update if only the audit row fails —
+      # log it so we still know, but the move itself stays.
+      Rails.logger.error(
+        "[StageAutomation] move_to_pipeline stage_movement create! failed: " \
+        "#{e.class}: #{e.message}"
+      )
+    end
 
     Rails.logger.info(
       "[StageAutomation] conv=#{@conversation.id} moved to pipeline=#{target_pipeline.name} " \
