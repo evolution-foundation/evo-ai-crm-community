@@ -857,7 +857,7 @@ module Api
                 buttons: [:type, :text, :url, :phone_number]
               }
             ],
-            variables: [:name, :type, :required, :default_value],
+            variables: [:name, :label, :type, :required, :default_value, :source, :example, :position, :component],
             settings: {},
             metadata: {}
           )
