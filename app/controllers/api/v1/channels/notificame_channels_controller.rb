@@ -1,5 +1,5 @@
 class Api::V1::Channels::NotificameChannelsController < Api::V1::BaseController
-  skip_before_action :authenticate_user!, :authenticate_access_token!, :set_current_user, raise: false
+  before_action :authorize_request
 
   def verify
     missing = missing_params
@@ -8,18 +8,32 @@ class Api::V1::Channels::NotificameChannelsController < Api::V1::BaseController
     channels = Whatsapp::Providers::NotificameService.list_channels(verify_params[:api_token])
     return list_failed_response if channels.blank?
 
-    return channel_not_found_response unless channel_matches?(channels, verify_params[:channel_id])
+    matched_channel = find_channel(channels, verify_params[:channel_id])
+    return channel_not_found_response unless matched_channel
+    return phone_mismatch_response unless phone_number_matches?(matched_channel, verify_params[:phone_number])
 
     success_response(
-      data: { success: true, channels: channels },
+      data: { channels: channels },
       message: 'Notificame connection verified successfully'
     )
   rescue StandardError => e
     Rails.logger.error "Notificame verify error: #{e.class} - #{e.message}"
-    error_response(ApiErrorCodes::EXTERNAL_SERVICE_ERROR, e.message, status: :unprocessable_entity)
+    # Generic message: e.message can carry HTTP body fragments or internal
+    # data we don't want exposed to clients. Keep a friendly 422 for the
+    # common case (invalid token / Notificame unreachable); the global
+    # handle_internal_error filters details in production for true 500s.
+    error_response(
+      ApiErrorCodes::EXTERNAL_SERVICE_ERROR,
+      'Could not verify Notificame connection. Please check the API token and try again.',
+      status: :unprocessable_entity
+    )
   end
 
   private
+
+  def authorize_request
+    authorize ::Inbox, :create?
+  end
 
   def verify_params
     @verify_params ||= {
@@ -57,12 +71,34 @@ class Api::V1::Channels::NotificameChannelsController < Api::V1::BaseController
     )
   end
 
-  def channel_matches?(channels, channel_id)
-    channels.any? do |entry|
+  def phone_mismatch_response
+    error_response(
+      ApiErrorCodes::VALIDATION_ERROR,
+      "Phone number does not match channel '#{verify_params[:channel_id]}'.",
+      status: :unprocessable_entity
+    )
+  end
+
+  def find_channel(channels, channel_id)
+    target = channel_id.to_s.strip.downcase
+    channels.find do |entry|
       next false unless entry.is_a?(Hash)
 
       [entry['id'], entry['channel_id'], entry['channelId'], entry['uuid']]
-        .compact.map(&:to_s).include?(channel_id)
+        .compact
+        .map { |v| v.to_s.strip.downcase }
+        .include?(target)
     end
+  end
+
+  # Compare digits-only to ignore E.164 `+` prefix and any formatting
+  # punctuation the operator may have typed.
+  def phone_number_matches?(channel, expected_phone)
+    candidates = [channel['phone'], channel['phone_number'], channel['phoneNumber'], channel['msisdn']]
+                 .compact.map { |v| v.to_s.gsub(/\D/, '') }
+    expected = expected_phone.to_s.gsub(/\D/, '')
+    return false if expected.blank?
+
+    candidates.include?(expected)
   end
 end
