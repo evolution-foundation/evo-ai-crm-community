@@ -3,22 +3,29 @@
 require 'rails_helper'
 
 RSpec.describe Macros::ExecutionService do
-  let(:macro)        { instance_double(Macro, id: 'macro-123') }
-  let(:webhook_data) { { conversation: { id: 42 } } }
-  let(:conversation) { instance_double(Conversation, webhook_data: webhook_data) }
-  let(:user)         { instance_double(User, id: 'user-1') }
-
-  before do
-    allow(conversation).to receive(:reload).and_return(conversation)
+  let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
+  let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
+  let(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel) }
+  let(:contact) { Contact.create!(name: 'Contact', email: "c-#{SecureRandom.hex(4)}@test.com") }
+  let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+  let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+  let(:macro) do
+    Macro.create!(
+      name: 'Test macro',
+      created_by: user,
+      updated_by: user,
+      actions: [{ 'action_name' => 'send_webhook_event', 'action_params' => ['https://webhook.site/abc'] }]
+    )
   end
 
   describe '#send_webhook_event' do
     let(:service) { described_class.new(macro, conversation, user) }
 
-    it 'enqueues WebhookJob with the stripped URL and macro.executed payload' do
+    it 'enqueues WebhookJob with the stripped URL, macro.executed payload, and :macro_webhook type' do
       expect(WebhookJob).to receive(:perform_later).with(
         'https://webhook.site/abc',
-        hash_including(event: 'macro.executed')
+        hash_including(event: 'macro.executed'),
+        :macro_webhook
       )
 
       service.send(:send_webhook_event, ["  https://webhook.site/abc  \t"])
