@@ -453,7 +453,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   end
 
   def audio_voice_note?
-    @evolution_go_info[:MediaType] == 'ptt'
+    @evolution_go_info&.dig(:MediaType) == 'ptt'
   end
 
   def create_attachment(attachment_file)
