@@ -76,7 +76,7 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
     @contact_inbox = contact_inbox
     @contact = contact_inbox.contact
 
-    @contact.update!(type: 'group') unless @contact.whatsapp_group?
+    @contact.update_columns(type: 'group') unless @contact.group?
     update_group_name_if_safe(subject)
   end
 

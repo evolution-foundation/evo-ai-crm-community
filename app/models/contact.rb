@@ -224,7 +224,7 @@ class Contact < ApplicationRecord
     type == 'person'
   end
 
-  def whatsapp_group?
+  def group?
     type == 'group'
   end
 
@@ -389,7 +389,7 @@ class Contact < ApplicationRecord
 
   def assign_to_default_pipeline
     return if skip_default_pipeline_assignment
-    return if whatsapp_group?
+    return if group?
 
     default_pipeline = Pipeline.default.first
     return unless default_pipeline
