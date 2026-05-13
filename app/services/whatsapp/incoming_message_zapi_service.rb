@@ -399,6 +399,7 @@ class Whatsapp::IncomingMessageZapiService
 
     message.attachments.new(
       file_type: file_content_type(file_type),
+      fallback_title: filename,
       file: {
         io: io,
         filename: filename,

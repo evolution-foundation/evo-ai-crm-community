@@ -305,6 +305,7 @@ class Whatsapp::IncomingMessageNotificameService
 
     message.attachments.new(
       file_type: file_content_type(file_type_key),
+      fallback_title: (File.basename(URI.parse(content[:fileUrl].to_s).path) rescue File.basename(content[:fileUrl].to_s)).presence,
       file: { io: io, filename: File.basename(io.path), content_type: mime_type }
     )
 

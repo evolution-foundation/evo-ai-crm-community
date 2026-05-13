@@ -103,10 +103,13 @@ RSpec.describe Whatsapp::EvolutionHandlers::AttachmentProcessor do
       processor.create_attachment(tempfile)
     end
 
-    it 'builds the attachment with the resolved file_content_type' do
+    it 'builds the attachment with file_type and fallback_title' do
       allow(ActiveStorage::Blob).to receive(:create_and_upload!).and_return(fake_blob)
 
-      expect(attachments_relation).to receive(:build).with(file_type: 'image').and_return(built_attachment)
+      expect(attachments_relation).to receive(:build).with(
+        file_type: 'image',
+        fallback_title: 'msg-1.jpg'
+      ).and_return(built_attachment)
 
       processor.create_attachment(tempfile)
     end

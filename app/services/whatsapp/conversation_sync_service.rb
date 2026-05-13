@@ -322,6 +322,7 @@ class Whatsapp::ConversationSyncService
 
     message.attachments.build(
       file_type: file_type.to_s,
+      fallback_title: filename,
       file: {
         io: attachment_file,
         filename: filename,

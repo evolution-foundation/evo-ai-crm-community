@@ -412,20 +412,20 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   end
 
   def message_type_from_media
-    # Convert Evolution Go MediaType to message_type like Evolution v2
-    media_type = @evolution_go_info[:MediaType]
+    media_type = @evolution_go_info&.dig(:MediaType)
 
-    case media_type
-    when 'image'
-      'image'
-    when 'video'
-      'video'
-    when 'audio', 'ptt'  # PTT (push-to-talk) is audio in Evolution v2
-      'audio'
-    when 'document'
-      'file'
-    else
-      'file'
+    if media_type.blank?
+      struct_type = message_type
+      media_type = struct_type == 'file' ? 'document' : struct_type
+    end
+
+    case media_type&.downcase
+    when 'image'            then 'image'
+    when 'video'            then 'video'
+    when 'audio', 'ptt'     then 'audio'
+    when 'document', 'file' then 'file'
+    when 'sticker'          then 'sticker'
+    else 'file'
     end
   end
 
@@ -455,7 +455,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   end
 
   def audio_voice_note?
-    @evolution_go_info[:MediaType] == 'ptt'
+    @evolution_go_info&.dig(:MediaType) == 'ptt'
   end
 
   def create_attachment(attachment_file)
@@ -470,7 +470,10 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       content_type: final_content_type
     )
 
-    attachment = @message.attachments.build(file_type: file_content_type.to_s)
+    attachment = @message.attachments.build(
+      file_type: file_content_type.to_s,
+      fallback_title: generate_filename_with_extension
+    )
     attachment.file.attach(blob)
 
     configure_audio_metadata(attachment) if audio_voice_note?
