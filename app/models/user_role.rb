@@ -26,8 +26,6 @@
 #  fk_rails_...  (role_id => roles.id)
 #  fk_rails_...  (user_id => users.id)
 #
-# UserRole model - joins table for users and roles
-# This model provides read-only access to user_roles managed by evo-auth-service
 class UserRole < ApplicationRecord
   # Evolution Reference Model - managed by evo-auth-service
   # This model serves only as a reference to sync data from evo-auth-service
