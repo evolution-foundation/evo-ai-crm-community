@@ -3,13 +3,13 @@ class Api::V1::BulkActionsController < Api::V1::BaseController
 
   def create
     if type_matches?
-      ::BulkActionsJob.perform_now(
+      result = ::BulkActionsJob.perform_now(
         user: current_user,
         params: permitted_params
       )
-      
+
       success_response(
-        data: nil,
+        data: result,
         message: 'Bulk action completed successfully',
         status: :created
       )
