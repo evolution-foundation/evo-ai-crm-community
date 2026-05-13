@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Macros::ExecutionService < ActionService
   def initialize(macro, conversation, user)
     super(conversation)
@@ -90,10 +92,19 @@ class Macros::ExecutionService < ActionService
     raise e
   end
 
+  # `webhook_url` comes from the macro JSON `action_params`. Historically the
+  # field is stored as `[url_string]`, but defensive handling for nil / bare
+  # string is kept so a malformed macro entry does not crash the whole
+  # execution loop.
   def send_webhook_event(webhook_url)
+    clean_url = Array(webhook_url).first.to_s.strip
+    if clean_url.blank?
+      Rails.logger.warn "Macro #{@macro.id}: skipping send_webhook_event — empty URL"
+      return
+    end
+
     payload = @conversation.webhook_data.merge(event: 'macro.executed')
-    # Sanitize the webhook URL to remove any leading/trailing whitespace or tabs
-    clean_url = webhook_url.first.to_s.strip
-    WebhookJob.perform_later(clean_url, payload)
+    Rails.logger.info "Macro #{@macro.id}: enqueuing webhook event"
+    WebhookJob.perform_later(clean_url, payload, :macro_webhook)
   end
 end
