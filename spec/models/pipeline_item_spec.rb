@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe PipelineItem, type: :model do
-  let(:pipeline) { Pipeline.create!(name: 'Test Pipeline', pipeline_type: 'lead', created_by: User.create!(email: 'test@example.com', name: 'Test User')) }
+  let(:pipeline) { Pipeline.create!(name: 'Test Pipeline', pipeline_type: 'sales', created_by: User.create!(email: 'test@example.com', name: 'Test User')) }
   let(:pipeline_stage) { PipelineStage.create!(pipeline: pipeline, name: 'Stage 1', position: 1) }
   let(:contact) { Contact.create!(name: 'Test Contact', email: 'contact@example.com') }
 
