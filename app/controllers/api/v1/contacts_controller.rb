@@ -356,7 +356,11 @@ class Api::V1::ContactsController < Api::V1::BaseController
     contacts_with_name = Contact.all.where("contacts.name IS NOT NULL AND BTRIM(contacts.name) <> ''")
     @listable_contacts = contacts_with_identity.or(contacts_with_name)
 
-    @listable_contacts = @listable_contacts.where(type: params[:type]) if params[:type].present?
+    if params[:type].present?
+      @listable_contacts = @listable_contacts.where(type: params[:type])
+    elsif params[:include_groups] != 'true'
+      @listable_contacts = @listable_contacts.non_groups
+    end
 
     @listable_contacts = @listable_contacts.for_company(params[:company_id]) if params[:company_id].present?
 

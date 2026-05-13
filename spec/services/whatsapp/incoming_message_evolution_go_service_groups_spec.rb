@@ -5,7 +5,7 @@ require 'rails_helper'
 RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
   let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution_go') }
   let(:inbox) { instance_double(Inbox, id: 1, channel: channel) }
-  let(:contact) { instance_double(Contact, id: 99, name: 'My Squad', identifier: '12345-9876@g.us', update!: true) }
+  let(:contact) { instance_double(Contact, id: 99, name: 'My Squad', identifier: '12345-9876@g.us', update!: true, group?: true) }
   let(:contact_inbox) { instance_double(ContactInbox, id: 7, contact: contact, source_id: '12345-9876@g.us') }
   let(:builder) { instance_double(ContactInboxWithContactBuilder, perform: contact_inbox) }
 
@@ -152,6 +152,26 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
       allow(contact).to receive(:name).and_return('Renomeado pelo operador')
       expect(contact).not_to receive(:update!)
       service.send(:update_group_name_if_safe)
+    end
+  end
+
+  describe '#set_contact — retrofit pre-existing contact without type=group' do
+    let(:pre_existing_contact) do
+      instance_double(Contact, id: 42, name: 'My Squad', identifier: '12345-9876@g.us',
+                               update!: true, update_columns: true, group?: false)
+    end
+    let(:contact_inbox_for_pre_existing) { instance_double(ContactInbox, id: 8, contact: pre_existing_contact, source_id: '12345-9876@g.us') }
+    let(:builder_for_pre_existing) { instance_double(ContactInboxWithContactBuilder, perform: contact_inbox_for_pre_existing) }
+
+    before do
+      service.instance_variable_set(:@evolution_go_info, group_info)
+      service.instance_variable_set(:@evolution_go_data, group_data)
+      allow(ContactInboxWithContactBuilder).to receive(:new).and_return(builder_for_pre_existing)
+    end
+
+    it 'calls update_columns(type: group) to retrofit a pre-existing contact that lacks the group type' do
+      expect(pre_existing_contact).to receive(:update_columns).with(type: 'group')
+      service.send(:set_contact)
     end
   end
 end

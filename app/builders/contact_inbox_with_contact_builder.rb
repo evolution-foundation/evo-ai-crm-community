@@ -108,7 +108,8 @@ class ContactInboxWithContactBuilder
       additional_attributes: contact_attributes[:additional_attributes],
       custom_attributes: contact_attributes[:custom_attributes],
       location: contact_attributes[:location] || '', # Ensure location is never nil
-      country_code: contact_attributes[:country_code] || '' # Ensure country_code is never nil
+      country_code: contact_attributes[:country_code] || '', # Ensure country_code is never nil
+      type: contact_attributes[:type] || 'person'
     )
 
     # Contacts created via inbox/channel flows are usually followed by conversation creation.

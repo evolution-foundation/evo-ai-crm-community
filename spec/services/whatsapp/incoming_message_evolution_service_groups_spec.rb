@@ -7,7 +7,7 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
   let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution', provider_service: provider_service) }
   let(:inbox) { instance_double(Inbox, id: 1, channel: channel) }
   let(:contact) do
-    instance_double(Contact, id: 99, name: 'WhatsApp Group 99876', identifier: '12345-9876@g.us', update!: true).tap do |c|
+    instance_double(Contact, id: 99, name: 'WhatsApp Group 99876', identifier: '12345-9876@g.us', update!: true, group?: true).tap do |c|
       allow(c).to receive(:name).and_return('WhatsApp Group 99876')
     end
   end
@@ -193,6 +193,28 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
     it 'is a no-op when subject is blank' do
       expect(contact).not_to receive(:update!)
       service.send(:update_group_name_if_safe, nil)
+    end
+  end
+
+  describe '#set_contact — retrofit pre-existing contact without type=group' do
+    let(:pre_existing_contact) do
+      instance_double(Contact, id: 42, name: 'WhatsApp Group 42', identifier: '12345-9876@g.us',
+                               update!: true, update_columns: true, group?: false).tap do |c|
+        allow(c).to receive(:name).and_return('WhatsApp Group 42')
+      end
+    end
+    let(:contact_inbox_for_pre_existing) { instance_double(ContactInbox, id: 8, contact: pre_existing_contact, source_id: '12345-9876@g.us') }
+    let(:builder_for_pre_existing) { instance_double(ContactInboxWithContactBuilder, perform: contact_inbox_for_pre_existing) }
+
+    before do
+      service.instance_variable_set(:@raw_message, group_message_payload)
+      allow(ContactInboxWithContactBuilder).to receive(:new).and_return(builder_for_pre_existing)
+      allow(provider_service).to receive(:fetch_group_subject).and_return(nil)
+    end
+
+    it 'calls update_columns(type: group) to retrofit a pre-existing contact that lacks the group type' do
+      expect(pre_existing_contact).to receive(:update_columns).with(type: 'group')
+      service.send(:set_contact)
     end
   end
 end
