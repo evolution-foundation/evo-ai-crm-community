@@ -155,6 +155,13 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     return false if raw_message_id.blank?
     return false unless message_content.present? || @evolution_go_message.present?
 
+    # Dedup: skip if message already exists in the database (prevents duplicates
+    # when Sidekiq retries or webhooks arrive twice)
+    if inbox.messages.exists?(source_id: raw_message_id)
+      Rails.logger.info "Evolution Go API: Skipping duplicate message #{raw_message_id}"
+      return false
+    end
+
     true
   end
 

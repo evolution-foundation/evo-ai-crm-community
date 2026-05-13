@@ -66,6 +66,19 @@ module Api
           success_response(data: { config_type: config_type, configs: configs }, message: 'Configuration updated successfully')
         end
 
+        def destroy
+          config_type = params[:config_type]
+          allowed_keys = CONFIG_TYPES[config_type]
+          return config_type_not_found unless allowed_keys
+
+          ActiveRecord::Base.transaction do
+            InstallationConfig.where(name: allowed_keys).destroy_all
+            allowed_keys.each { |key| GlobalConfig.clear_cache }
+          end
+
+          success_response(data: { config_type: config_type }, message: 'Configuration cleared successfully')
+        end
+
         def test_connection
           config_type = params[:config_type]
           allowed_keys = CONFIG_TYPES[config_type]
