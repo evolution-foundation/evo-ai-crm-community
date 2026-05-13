@@ -15,15 +15,19 @@ class Webhooks::Trigger
     perform_request
   rescue StandardError => e
     handle_error(e)
+    # Keep the legacy "Exception: Invalid webhook URL" prefix so existing
+    # Loki/Sentry/Grafana alerts grepping for it keep matching; structured
+    # context follows.
     Rails.logger.warn(
-      "Webhook delivery failed: type=#{@webhook_type} event=#{@payload[:event]} url=#{@url} error=#{e.class}: #{e.message}"
+      "Exception: Invalid webhook URL #{loggable_url} : #{e.message} " \
+      "(type=#{@webhook_type} event=#{@payload[:event]} error=#{e.class})"
     )
-    # Re-raise for non api_inbox webhooks so Sidekiq retries the job and the
-    # failure becomes visible in queue/error tracking instead of being silent.
-    # api_inbox webhook errors are intentionally swallowed because the message
-    # status is already updated by handle_error and we don't want to retry user
-    # message dispatches on every transient hiccup.
-    raise unless @webhook_type == :api_inbox_webhook
+    # Re-raise ONLY for macro webhooks so Sidekiq surfaces the failure in
+    # queue/error tracking. Other webhook types (account, inbox, agent_bot,
+    # api_inbox) keep their legacy swallow-and-warn behaviour — re-raising
+    # them would trigger the default ActiveJob retry policy (25 attempts
+    # over ~21 days) across every listener that dispatches webhooks.
+    raise if @webhook_type == :macro_webhook
   end
 
   private
@@ -46,7 +50,23 @@ class Webhooks::Trigger
   end
 
   def should_handle_error?
-    @webhook_type == :api_inbox_webhook && SUPPORTED_ERROR_HANDLE_EVENTS.include?(@payload[:event])
+    api_inbox_webhook? && SUPPORTED_ERROR_HANDLE_EVENTS.include?(@payload[:event])
+  end
+
+  def api_inbox_webhook?
+    @webhook_type == :api_inbox_webhook
+  end
+
+  # Strip query string before logging. Account webhooks frequently carry
+  # auth tokens in the query (`?token=...`); leaking those into Loki/Sentry
+  # is a real risk. Path + host is enough to identify the destination.
+  def loggable_url
+    uri = URI.parse(@url.to_s)
+    return @url.to_s if uri.host.blank?
+
+    [uri.scheme, '://', uri.host, uri.path].join
+  rescue URI::InvalidURIError
+    '<unparseable>'
   end
 
   def update_message_status(error)
