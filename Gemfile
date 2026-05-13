@@ -42,6 +42,8 @@ gem 'gmail_xoauth'
 gem 'net-smtp', '~> 0.3.4'
 # Prevent CSV injection
 gem 'csv-safe'
+# Read/write ZIP bundles for the templates feature
+gem 'rubyzip', '~> 2.3'
 
 ##-- MCP (Model Context Protocol) Integration --##
 # gem 'fast-mcp', '~> 1.5.0'  # Removed - MCP not needed

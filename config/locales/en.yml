@@ -31,6 +31,21 @@
 
 en:
   hello: 'Hello world'
+  template_bundles:
+    export:
+      success: 'Template exported successfully'
+      errors:
+        no_selection: 'Select at least one item to export'
+    import:
+      success: 'Template imported successfully'
+      errors:
+        invalid_bundle: 'The bundle is malformed or corrupted'
+        unsupported_schema: 'Bundle schema version is not supported'
+        file_too_large: 'Bundle exceeds the maximum allowed size (50MB)'
+        missing_file: 'No bundle file was provided'
+      warnings:
+        channel_requires_credentials: 'Channel imported without credentials. Re-connect it in Settings → Inboxes.'
+        agent_requires_api_key: 'Agent imported without API key. Re-configure it in Settings → AI Agents.'
   messages:
     reset_password_success: Woot! Request for password reset is successful. Check your mail for instructions.
     reset_password_failure: Uh ho! We could not find any user with the specified email.

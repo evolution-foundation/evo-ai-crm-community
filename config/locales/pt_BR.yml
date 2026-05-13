@@ -18,6 +18,21 @@
 #available at https://guides.rubyonrails.org/i18n.html.
 pt_BR:
   hello: 'Olá, mundo'
+  template_bundles:
+    export:
+      success: 'Template exportado com sucesso'
+      errors:
+        no_selection: 'Selecione pelo menos um item para exportar'
+    import:
+      success: 'Template importado com sucesso'
+      errors:
+        invalid_bundle: 'O pacote está corrompido ou malformado'
+        unsupported_schema: 'Versão do schema do template não é suportada'
+        file_too_large: 'Arquivo excede o tamanho máximo permitido (50MB)'
+        missing_file: 'Nenhum arquivo de template foi enviado'
+      warnings:
+        channel_requires_credentials: 'Canal importado sem credenciais. Reconecte em Configurações → Canais.'
+        agent_requires_api_key: 'Agente importado sem chave de API. Reconfigure em Configurações → Agentes de IA.'
   messages:
     reset_password_success: Legal! A solicitação de alteração de senha foi bem sucedida. Verifique seu e-mail para obter instruções.
     reset_password_failure: Uh ho! Não conseguimos encontrar nenhum usuário com o e-mail especificado.

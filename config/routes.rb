@@ -232,6 +232,18 @@ Rails.application.routes.draw do
         get :runs, on: :member
       end
 
+      # Product Catalog (EVO-1109)
+      resources :products, only: [:index, :create, :show, :update, :destroy], controller: 'products' do
+        resources :variants, controller: 'products/variants', only: [:index, :create, :update, :destroy]
+      end
+
+      # Attach/detach products to AI agents (agent lives in evo_core; we only
+      # track the join here and propagate to agent.config via
+      # Ai::AgentProductSyncService).
+      resources :ai_agents, only: [], param: :ai_agent_id do
+        resources :products, controller: 'ai_agents/products', only: [:index, :create, :destroy]
+      end
+
       resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'macros' do
         post :execute, on: :member
       end
@@ -494,6 +506,14 @@ Rails.application.routes.draw do
 
       resources :upload, only: [:create], controller: 'uploads'
 
+      resources :templates, controller: 'templates', only: [] do
+        collection do
+          get :exportable_inventory
+          post :export
+          post :import
+        end
+      end
+
       resources :pipelines, controller: 'pipelines' do
         collection do
           get :stats
@@ -528,6 +548,7 @@ Rails.application.routes.draw do
             get :available_contacts
           end
           resources :tasks, controller: 'pipeline_tasks', only: [:index, :create]
+          resources :products, controller: 'pipeline_items/products', only: [:index, :create, :update, :destroy]
         end
         resources :pipeline_tasks, only: [:show, :update, :destroy], controller: 'pipeline_tasks' do
           member do
