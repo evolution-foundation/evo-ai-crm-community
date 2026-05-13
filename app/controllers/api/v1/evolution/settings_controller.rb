@@ -32,10 +32,12 @@ class Api::V1::Evolution::SettingsController < Api::V1::BaseController
     begin
       # Extract parameters
       settings_params = params[:settings] || params
-      api_url = settings_params[:api_url]
-      api_hash = settings_params[:api_hash]
       instance_name = settings_params[:instance_name]
       instance_settings = settings_params[:instance_settings]
+
+      # Resolve credentials with GlobalConfig fallback for legacy channels
+      channel = find_whatsapp_channel_by_instance_name(instance_name)
+      api_url, api_hash = resolve_evolution_credentials(channel, settings_params)
 
       Rails.logger.info "Evolution API: Setting instance settings for #{instance_name}"
 
