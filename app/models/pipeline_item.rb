@@ -41,6 +41,9 @@ class PipelineItem < ApplicationRecord
 
   has_many :stage_movements, dependent: :destroy
   has_many :tasks, class_name: 'PipelineTask', dependent: :destroy
+  has_many :pipeline_item_products, dependent: :destroy
+  has_many :products, through: :pipeline_item_products
+  has_many :product_variants, through: :pipeline_item_products
 
   validates :conversation_id, uniqueness: { scope: :pipeline_id }, allow_nil: true
   validates :contact_id, uniqueness: { scope: :pipeline_id }, allow_nil: true
@@ -387,5 +390,13 @@ class PipelineItem < ApplicationRecord
       Time.zone.now,
       pipeline_item: self
     )
+  end
+
+  public
+
+  # Sum of (quantity * locked_unit_price) across every linked product.
+  # Returns a Decimal so callers can format/round as they prefer.
+  def total_value
+    pipeline_item_products.sum('quantity * locked_unit_price')
   end
 end

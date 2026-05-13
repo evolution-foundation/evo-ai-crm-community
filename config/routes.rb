@@ -240,7 +240,7 @@ Rails.application.routes.draw do
       # Attach/detach products to AI agents (agent lives in evo_core; we only
       # track the join here and propagate to agent.config via
       # Ai::AgentProductSyncService).
-      resources :ai_agents, only: [], param: :ai_agent_id do
+      resources :ai_agents, only: [] do
         resources :products, controller: 'ai_agents/products', only: [:index, :create, :destroy]
       end
 
