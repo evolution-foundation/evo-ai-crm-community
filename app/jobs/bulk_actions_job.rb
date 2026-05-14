@@ -91,7 +91,20 @@ class BulkActionsJob < ApplicationJob
     if current_model == 'Contact'
       current_model.constantize&.where(id: ids)
     else
-      current_model.constantize&.where(display_id: ids)
+      # Scope conversations to inboxes the user has access to,
+      # preventing IDOR where an agent bulk-acts on conversations
+      # from inboxes they are not a member of.
+      scope = current_model.constantize&.where(display_id: ids)
+      user = Current.user
+      if user && !administrator?(user)
+        accessible_inbox_ids = InboxMember.where(user_id: user.id).pluck(:inbox_id)
+        scope = scope.where(inbox_id: accessible_inbox_ids)
+      end
+      scope
     end
+  end
+
+  def administrator?(user)
+    user.roles.exists?(key: %w[super_admin account_owner administrator])
   end
 end
