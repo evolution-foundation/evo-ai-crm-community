@@ -97,7 +97,8 @@ class ApplicationMailer < ActionMailer::Base
       options = options.merge(api_key: @dynamic_resend_api_key)
     end
 
-    message.delivery_method(@dynamic_delivery_method, options)
+    delivery_class = self.class.delivery_methods[@dynamic_delivery_method] || @dynamic_delivery_method
+    message.delivery_method(delivery_class, options)
   end
 
   def handle_smtp_exceptions(message)
