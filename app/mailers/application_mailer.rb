@@ -97,7 +97,11 @@ class ApplicationMailer < ActionMailer::Base
       options = options.merge(api_key: @dynamic_resend_api_key)
     end
 
-    delivery_class = self.class.delivery_methods[@dynamic_delivery_method] || @dynamic_delivery_method
+    delivery_class = self.class.delivery_methods[@dynamic_delivery_method]
+    if delivery_class.nil?
+      Rails.logger.warn "ApplicationMailer: unregistered delivery method '#{@dynamic_delivery_method}' — passing symbol directly, mail gem may reject it"
+      delivery_class = @dynamic_delivery_method
+    end
     message.delivery_method(delivery_class, options)
   end
 
