@@ -1,0 +1,5 @@
+# Shell scripts must always use LF line endings (Docker entrypoints break with CRLF)
+docker/entrypoints/**     text eol=lf
+docker/entrypoints/*.sh   text eol=lf
+*.sh                      text eol=lf
+*.rb                      text eol=lf

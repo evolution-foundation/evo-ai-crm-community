@@ -314,7 +314,11 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
 
   def send_attachment_message(phone_number, message)
     attachment = message.attachments.first
-    return unless attachment
+
+    unless attachment
+      Rails.logger.error "[Evolution Go] No attachment found for message #{message.id}"
+      return false
+    end
 
     Rails.logger.info "[Evolution Go] Sending #{attachment.file_type} message to #{phone_number}"
 
@@ -360,12 +364,12 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
         return message_id
       else
         Rails.logger.warn "[Evolution Go] Message sent but no ID returned: #{parsed_response}"
-        return true
+        return nil
       end
     end
 
     Rails.logger.error "[Evolution Go] Send failed: #{response.code} - #{response.body}"
-    false
+    raise "[Evolution Go] HTTP #{response.code}: #{response.body.to_s.truncate(300)}"
   end
 
   def map_file_type_to_evolution_go(file_type)
@@ -386,24 +390,31 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
   def generate_direct_s3_url(attachment)
     return attachment.file_url unless attachment.file.attached?
 
-    # Always return the signed URL, never the bare object URL.
+    # Always use a signed URL — never the bare object URL.
     #
-    # Why: stripping the AWS signing parameters only works when the S3 bucket
-    # is publicly readable. Real-world deployments (Cloudflare R2, S3 with
-    # restricted ACLs, MinIO with private buckets) return XML error responses
-    # to unauthenticated GETs, and Evolution Go (which downloads the URL on
-    # behalf of WhatsApp) rejects the upload with:
-    #   "Invalid file format: 'text/xml; charset=utf-8'. Only image/jpeg,
-    #   image/png and image/webp are accepted"
+    # Private buckets (Cloudflare R2, S3 restricted ACLs, MinIO) return an XML
+    # error to unauthenticated GETs; Evolution Go then rejects the upload with
+    # "Invalid file format: 'text/xml; charset=utf-8'".
     #
-    # The signed URL has a short TTL (5 minutes by default) which is enough
-    # for Evolution Go to fetch the media before forwarding it to WhatsApp,
-    # and it carries response-content-type so the upstream sees the right
-    # MIME type. Public buckets remain compatible because the signature is
-    # ignored when the object is anonymously readable.
-    signed_url = attachment.download_url
+    # TTL is set to 15 minutes instead of the Rails default of 5 minutes because
+    # Evolution Go may take several minutes to fetch large video/PDF files under
+    # provider load. A 5-minute window is too tight and causes silent delivery
+    # failures when the provider is slow.
+    #
+    # ACTIVE_STORAGE_URL overrides the host used in DiskService signed URLs so
+    # that external containers (Evolution Go) can actually reach the file.
+    # Without it, localhost:3000 resolves to the caller's container, not the CRM.
+    url_options = Rails.application.routes.default_url_options.dup
+    if ENV['ACTIVE_STORAGE_URL'].present?
+      storage_uri = URI.parse(ENV['ACTIVE_STORAGE_URL'])
+      url_options[:host] = storage_uri.host
+      url_options[:port] = storage_uri.port
+      url_options[:protocol] = storage_uri.scheme
+    end
+    ActiveStorage::Current.url_options = url_options if ActiveStorage::Current.url_options.blank?
+    signed_url = attachment.file.blob.url(expires_in: 15.minutes)
 
-    Rails.logger.info "[Evolution Go S3] Using signed URL (works for both public and private buckets)"
+    Rails.logger.info "[Evolution Go S3] Using signed URL with 15-minute TTL (host: #{url_options[:host]})"
     signed_url
   end
 

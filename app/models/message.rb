@@ -369,9 +369,9 @@ class Message < ApplicationRecord
   end
 
   def send_reply
-    # FIXME: Giving it few seconds for the attachment to be uploaded to the service
-    # active storage attaches the file only after commit
-    attachments.blank? ? ::SendReplyJob.perform_later(id) : ::SendReplyJob.set(wait: 2.seconds).perform_later(id)
+    # Active Storage attaches the file only after commit; wait gives storage provider time to make it available.
+    # 5 s is safer than 2 s for large files (video/PDF) on slower storage backends.
+    attachments.blank? ? ::SendReplyJob.perform_later(id) : ::SendReplyJob.set(wait: 5.seconds).perform_later(id)
   end
 
   def reopen_conversation
