@@ -22,6 +22,9 @@ class SendReplyJob < ApplicationJob
     else
       services[channel_name].new(message: message).perform if services[channel_name].present?
     end
+  rescue StandardError => e
+    Rails.logger.error "[SendReplyJob] Delivery failed for message #{message_id}: #{e.message}"
+    message&.update(status: :failed, external_error: e.message.to_s.truncate(1000))
   end
 
   private

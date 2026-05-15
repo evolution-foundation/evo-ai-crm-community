@@ -34,7 +34,13 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
                                          lang_code: lang_code,
                                          parameters: processed_parameters
                                        })
-    message.update!(source_id: message_id) if message_id.present?
+
+    if message_id == false
+      Rails.logger.error "[WhatsApp] Template delivery failed for message #{message.id} — provider returned error"
+      message.update!(status: :failed, external_error: 'Template delivery failed: provider returned an error response')
+    elsif message_id.is_a?(String) && message_id.present?
+      message.update!(source_id: message_id)
+    end
   end
 
   def processable_channel_message_template
@@ -128,7 +134,13 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     Rails.logger.info "WhatsApp Send: Using number #{target_number} for contact #{message.conversation.contact.id} (identifier: #{message.conversation.contact.identifier}, source_id: #{message.conversation.contact_inbox.source_id})"
 
     message_id = channel.send_message(target_number, message)
-    message.update!(source_id: message_id) if message_id.present?
+
+    if message_id == false
+      Rails.logger.error "[WhatsApp] Delivery failed for message #{message.id} — provider returned error"
+      message.update!(status: :failed, external_error: 'Delivery failed: provider returned an error response')
+    elsif message_id.is_a?(String) && message_id.present?
+      message.update!(source_id: message_id)
+    end
   end
 
   def determine_target_number_for_sending
@@ -164,7 +176,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
         Rails.logger.info "WhatsApp Send: Using identifier #{contact.identifier}"
         contact.identifier
       # If contact_inbox source_id is an identifier (e.g., 96426461769841@lid), use it
-      elsif contact_inbox.source_id.include?('@lid')
+      elsif contact_inbox.source_id&.include?('@lid')
         Rails.logger.info "WhatsApp Send: Using source_id identifier #{contact_inbox.source_id}"
         contact_inbox.source_id
       # Fallback to contact's phone number if available
