@@ -9,6 +9,8 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
       send_attachment_message(phone_number, message)
     elsif message.content_type == 'input_select'
       send_interactive_message(phone_number, message)
+    elsif message.content_type == 'cards'
+      send_carousel_message(phone_number, message)
     elsif message.content.present?
       send_text_message(phone_number, message)
     else
@@ -282,6 +284,70 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
 
     response = HTTParty.post(
       "#{api_base_path}/send/list",
+      headers: instance_headers,
+      body: body.to_json
+    )
+
+    process_evolution_go_response(response)
+  end
+
+  def send_carousel_message(phone_number, message)
+    clean_number = phone_number.delete('+')
+
+    # CRM armazena cards em content_attributes.items (validado por ContentAttributeValidator)
+    # Cada item segue o schema: { title, description, media_url, actions: [{ text, type, payload, uri }] }
+    items = message.content_attributes&.dig('items') || message.items || []
+
+    if items.empty?
+      Rails.logger.warn "[Evolution Go] Carousel message has no items, falling back to text"
+      return send_text_message(phone_number, message)
+    end
+
+    # Transforma formato CRM (items) para formato Evolution Go /send/carousel
+    cards = items.map do |item|
+      item = item.with_indifferent_access
+      actions = item[:actions] || []
+
+      {
+        header: {
+          title: (item[:title] || '').to_s.truncate(60),
+          imageUrl: item[:media_url].to_s
+        },
+        body: {
+          text: (item[:description] || '').to_s.truncate(1024)
+        },
+        footer: 'Evo CRM',
+        buttons: actions.map do |action|
+          action = action.with_indifferent_access
+          btn_type = (action[:type] || 'reply').to_s.upcase
+          btn = {
+            type: btn_type,
+            displayText: (action[:text] || '').to_s.truncate(20),
+            id: (action[:payload] || action[:uri] || '').to_s
+          }
+          btn[:copyCode] = action[:payload].to_s if btn_type == 'COPY'
+          btn.compact
+        end
+      }
+    end
+
+    content = html_to_whatsapp(message.content.to_s)
+
+    body = {
+      number: clean_number,
+      body: content.presence || '',
+      footer: 'Evo CRM',
+      cards: cards,
+      delay: 0
+    }
+
+    quoted_info = build_quoted_info(message)
+    body[:quoted] = quoted_info if quoted_info.present?
+
+    Rails.logger.info "[Evolution Go] Sending carousel with #{cards.length} cards to #{clean_number}"
+
+    response = HTTParty.post(
+      "#{api_base_path}/send/carousel",
       headers: instance_headers,
       body: body.to_json
     )
