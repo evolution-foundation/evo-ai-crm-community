@@ -225,14 +225,19 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
   end
 
   def send_button_message(clean_number, message, items)
+    # Formato Evolution Go /send/button: { type, displayText, id }
+    # WhatsApp reply button displayText limit: 20 caracteres
     buttons = items.map do |item|
-      { type: 'reply', reply: { id: item['value'].to_s, title: item['title'].to_s.truncate(20) } }
+      { type: 'reply', displayText: item['title'].to_s.truncate(20), id: item['value'].to_s }
     end
+
+    content = html_to_whatsapp(message.content.to_s)
 
     body = {
       number: clean_number,
-      title: '',
-      description: html_to_whatsapp(message.content.to_s),
+      title: content.truncate(60),
+      description: content,
+      footer: 'Evo CRM',
       buttons: buttons,
       delay: 0
     }
@@ -252,17 +257,21 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
   end
 
   def send_list_message(clean_number, message, items)
+    # Formato Evolution Go /send/list: { rowId, title, description }
+    # WhatsApp list row title limit: 24 caracteres
     rows = items.map do |item|
-      { id: item['value'].to_s, title: item['title'].to_s.truncate(24), description: '' }
+      { rowId: item['value'].to_s, title: item['title'].to_s.truncate(24), description: '' }
     end
+
+    content = html_to_whatsapp(message.content.to_s)
 
     body = {
       number: clean_number,
-      title: '',
-      description: html_to_whatsapp(message.content.to_s),
-      buttonText: 'Menu',
-      footerText: '',
-      sections: [{ title: 'Options', rows: rows }],
+      title: content.truncate(60),
+      description: content,
+      buttonText: I18n.t('whatsapp.interactive.list_button', default: 'Menu'),
+      footerText: 'Evo CRM',
+      sections: [{ title: I18n.t('whatsapp.interactive.list_section', default: 'Options'), rows: rows }],
       delay: 0
     }
 
