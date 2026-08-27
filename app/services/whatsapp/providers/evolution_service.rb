@@ -55,11 +55,11 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     # Evolution doesn't have external template API
     # Store template internally in message_templates JSONB field
     Rails.logger.info "Evolution: Creating template internally - #{template_data['name']}"
-    
+
     current_templates = whatsapp_channel.message_templates || []
     # Ensure current_templates is always an array (fix for existing data)
     current_templates = [] unless current_templates.is_a?(Array)
-    
+
     # Create internal template structure
     internal_template = {
       'id' => SecureRandom.uuid,
@@ -71,27 +71,27 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
       'created_at' => Time.current.iso8601,
       'updated_at' => Time.current.iso8601
     }
-    
+
     # Add to existing templates
     current_templates << internal_template
-    
+
     # Templates are now stored in message_templates table, not in JSONB column
     # No need to update channel columns
-    
+
     Rails.logger.info "Evolution: Template created internally with ID #{internal_template['id']}"
     internal_template
   end
 
   def update_template(template_id, template_data)
     Rails.logger.info "Evolution: Updating template internally - #{template_id}"
-    
+
     current_templates = whatsapp_channel.message_templates || []
     # Ensure current_templates is always an array
     current_templates = [] unless current_templates.is_a?(Array)
     template_index = current_templates.find_index { |t| t['id'] == template_id }
-    
+
     return nil unless template_index
-    
+
     # Update existing template
     current_templates[template_index].merge!(
       'name' => template_data['name'],
@@ -100,30 +100,30 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
       'components' => template_data['components'],
       'updated_at' => Time.current.iso8601
     )
-    
+
     # Templates are now stored in message_templates table, not in JSONB column
     # No need to update channel columns
-    
+
     Rails.logger.info "Evolution: Template updated internally"
     current_templates[template_index]
   end
 
   def delete_template(template_name)
     Rails.logger.info "Evolution: Deleting template internally - #{template_name}"
-    
+
     current_templates = whatsapp_channel.message_templates || []
     # Ensure current_templates is always an array
     current_templates = [] unless current_templates.is_a?(Array)
     template_index = current_templates.find_index { |t| t['name'] == template_name }
-    
+
     return false unless template_index
-    
+
     # Remove template from array
     deleted_template = current_templates.delete_at(template_index)
-    
+
     # Templates are now stored in message_templates table, not in JSONB column
     # No need to update channel columns
-    
+
     Rails.logger.info "Evolution: Template deleted internally"
     true
   end
@@ -131,9 +131,9 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   def validate_provider_config?
     api_url = whatsapp_channel.provider_config['api_url'].presence || GlobalConfigService.load('EVOLUTION_API_URL', '').to_s.strip
     admin_token = whatsapp_channel.provider_config['admin_token'].presence || GlobalConfigService.load('EVOLUTION_ADMIN_SECRET', '').to_s.strip
-    
+
     # Try multiple keys for instance name
-    instance_name = whatsapp_channel.provider_config['instance_name'].presence || 
+    instance_name = whatsapp_channel.provider_config['instance_name'].presence ||
                     whatsapp_channel.provider_config['instanceName'].presence ||
                     whatsapp_channel.provider_config['name'].presence
 
@@ -356,7 +356,7 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
       number: clean_number,
       title: content.truncate(60),
       description: content,
-      footer: 'Evo CRM',
+      footer: 'AutomaLead',
       buttons: buttons
     }
 
@@ -387,7 +387,7 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
       title: content.truncate(60),
       description: content,
       buttonText: I18n.t('whatsapp.interactive.list_button', default: 'Menu'),
-      footerText: 'Evo CRM',
+      footerText: 'AutomaLead',
       sections: [{ title: I18n.t('whatsapp.interactive.list_section', default: 'Options'), rows: rows }]
     }
 

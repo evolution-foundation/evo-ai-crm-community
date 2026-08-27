@@ -68,10 +68,13 @@ RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make
 RUN bundle config set --local force_ruby_platform true
 
 # Do not install development or test gems in production
+# -j 1: parallel bundle install races nokogiri's mini_portile2 build of its
+# vendored libxml2/libxslt (compiled .a not yet visible to the linker step
+# in overlayfs), causing a nondeterministic "cannot find libxml2.a" failure.
 RUN if [ "$RAILS_ENV" = "production" ]; then \
-  bundle config set without 'development test extension_consumer_stub'; bundle install -j 4 -r 3; \
-  else bundle install -j 4 -r 3; \
-  fi
+  bundle config set without 'development test extension_consumer_stub'; \
+  fi && \
+  bundle install -j 1 -r 3
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm i

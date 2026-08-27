@@ -19,7 +19,7 @@ json.type resource.type
 json.accounts do
   json.array! [resource] do |user|
     json.id 1
-    json.name GlobalConfig.get('BRAND_NAME')['BRAND_NAME'] || 'Evo CRM'
+    json.name GlobalConfig.get('BRAND_NAME')['BRAND_NAME'] || 'AutomaLead'
     json.status 'active'
     json.active_at user.current_sign_in_at
     json.role user.role

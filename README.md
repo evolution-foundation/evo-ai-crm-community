@@ -4,10 +4,10 @@
   </a>
 </p>
 
-<h1 align="center">Evo CRM Backend</h1>
+<h1 align="center">AutomaLead Backend</h1>
 
 <p align="center">
-  Conversations, contacts, inboxes and messaging backend for the Evo CRM Community.
+  Conversations, contacts, inboxes and messaging backend for the AutomaLead Community.
 </p>
 
 <p align="center">
@@ -28,13 +28,13 @@
 
 ## About
 
-**Evo CRM Backend** is the core API of the Evo CRM Community customer support platform. Built with Ruby on Rails 7.1 (API mode), it manages conversations, contacts, messages, inboxes, and integrations across multiple communication channels (WhatsApp, Email, Web Widget, and more).
+**AutomaLead Backend** is the core API of the AutomaLead Community customer support platform. Built with Ruby on Rails 7.1 (API mode), it manages conversations, contacts, messages, inboxes, and integrations across multiple communication channels (WhatsApp, Email, Web Widget, and more).
 
 It exposes a comprehensive RESTful API and supports real-time messaging via ActionCable WebSockets.
 
-## Part of the Evo CRM Community
+## Part of the AutomaLead Community
 
-Evo CRM Backend is part of the [Evo CRM Community](https://github.com/evolution-foundation/evo-crm-community) ecosystem maintained by Evolution Foundation. To use the full stack, clone the umbrella repository with submodules:
+AutomaLead Backend is part of the [AutomaLead Community](https://github.com/evolution-foundation/evo-crm-community) ecosystem maintained by AutomaLead To use the full stack, clone the umbrella repository with submodules:
 
 ```bash
 git clone --recurse-submodules git@github.com:evolution-foundation/evo-crm-community.git
@@ -400,11 +400,11 @@ For security issues, **do not open a public issue**. Email **suporte@evofoundati
 
 ## License
 
-Evo CRM Backend is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) for details.
+AutomaLead Backend is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) for details.
 
 ## Trademarks
 
-"Evolution Foundation", "Evolution" and "Evo CRM Backend" are trademarks of Evolution Foundation. See [TRADEMARKS.md](./TRADEMARKS.md) for the brand assets policy.
+"Evolution Foundation", "Evolution" and "AutomaLead Backend" are trademarks of AutomaLead See [TRADEMARKS.md](./TRADEMARKS.md) for the brand assets policy.
 
 Third-party attributions are documented in [NOTICE](./NOTICE).
 

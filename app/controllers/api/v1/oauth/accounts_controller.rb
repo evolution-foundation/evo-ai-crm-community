@@ -6,7 +6,7 @@ class Api::V1::Oauth::AccountsController < Api::BaseController
   def index
     accounts = if current_user.administrator?
                  [{
-                   account_name: GlobalConfigService.load('BRAND_NAME', 'Evo CRM'),
+                   account_name: GlobalConfigService.load('BRAND_NAME', 'AutomaLead'),
                    dynamic_client_id: DynamicOauthService.generate_dynamic_client_id('default')
                  }]
                else

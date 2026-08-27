@@ -17,7 +17,7 @@ class MessageTemplates::Template::EmailCollect
   delegate :inbox, to: :message
 
   def ways_to_reach_you_message_params
-    brand_name = GlobalConfig.get('BRAND_NAME')['BRAND_NAME'].presence || 'Evo CRM'
+    brand_name = GlobalConfig.get('BRAND_NAME')['BRAND_NAME'].presence || 'AutomaLead'
     content = I18n.t('conversations.templates.ways_to_reach_you_message_body',
                      account_name: brand_name)
 
@@ -29,7 +29,7 @@ class MessageTemplates::Template::EmailCollect
   end
 
   def email_input_box_template_message_params
-    brand_name = GlobalConfig.get('BRAND_NAME')['BRAND_NAME'].presence || 'Evo CRM'
+    brand_name = GlobalConfig.get('BRAND_NAME')['BRAND_NAME'].presence || 'AutomaLead'
     content = I18n.t('conversations.templates.email_input_box_message_body',
                      account_name: brand_name)
 

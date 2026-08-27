@@ -1,6 +1,6 @@
-# Contributing to Evo CRM Backend
+# Contributing to AutomaLead Backend
 
-Thanks for your interest in contributing to Evo CRM Backend! This document
+Thanks for your interest in contributing to AutomaLead Backend! This document
 outlines how to contribute effectively.
 
 ## Code of Conduct
@@ -81,7 +81,7 @@ governed separately by [TRADEMARKS.md](./TRADEMARKS.md).
 - **Documentation**: [docs.evolutionfoundation.com.br](https://docs.evolutionfoundation.com.br)
 - **Email**: suporte@evofoundation.com.br
 
-Thanks for helping make Evo CRM Backend better!
+Thanks for helping make AutomaLead Backend better!
 
 ---
 
