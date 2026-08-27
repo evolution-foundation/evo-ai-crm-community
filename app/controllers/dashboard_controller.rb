@@ -40,14 +40,14 @@ class DashboardController < ActionController::Base
 
   def custom_config
     {
-      'INSTALLATION_NAME' => 'Evolution',
+      'INSTALLATION_NAME' => 'AutomaLead',
       'BRAND_NAME' => 'Evolution',
       'LOGO' => 'https://evolution-api.com/files/evo/logo-evo-ai.svg',
       'LOGO_DARK' => 'https://evolution-api.com/files/evo/logo-evo-ai-dark.svg',
       'LOGO_THUMBNAIL' => 'https://evolution-api.com/files/evo/favicon.svg',
-      'WIDGET_BRAND_URL' => 'https://evo-ai.co',
-      'PRIVACY_URL' => 'https://evoapicloud.com/privacy-policy.html',
-      'TERMS_URL' => 'https://evoapicloud.com/terms-of-use.html',
+      'WIDGET_BRAND_URL' => 'https://bellosoft.com',
+      'PRIVACY_URL' => 'https://bellosoft.com/en/privacy',
+      'TERMS_URL' => 'https://bellosoft.com/en/terms',
       'DISPLAY_MANIFEST' => false
     }
   end
