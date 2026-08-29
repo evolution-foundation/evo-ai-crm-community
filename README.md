@@ -1,6 +1,6 @@
 <p align="center">
-  <a href="https://evolutionfoundation.com.br">
-    <img src="./public/hover-evolution.png" alt="Evolution Foundation" />
+  <a href="https://automalead.ai">
+    <img src="./public/hover-evolution.png" alt="AutomaLead" />
   </a>
 </p>
 
@@ -13,14 +13,14 @@
 <p align="center">
   <a href="https://github.com/evolution-foundation/evo-ai-crm-community/releases/latest"><img src="https://img.shields.io/github/v/release/evolution-foundation/evo-ai-crm-community?include_prereleases&label=version&color=00ffa7" alt="Latest version" /></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <a href="https://docs.evolutionfoundation.com.br"><img src="https://img.shields.io/badge/Docs-evolutionfoundation.com.br-00ffa7" alt="Documentation" /></a>
-  <a href="https://evolutionfoundation.com.br/community"><img src="https://img.shields.io/badge/Community-Join%20us-white" alt="Community" /></a>
+  <a href="https://docs.automalead.ai"><img src="https://img.shields.io/badge/Docs-automalead.ai-00ffa7" alt="Documentation" /></a>
+  <a href="https://automalead.ai/community"><img src="https://img.shields.io/badge/Community-Join%20us-white" alt="Community" /></a>
 </p>
 
 <p align="center">
-  <a href="https://evolutionfoundation.com.br">Website</a> &middot;
-  <a href="https://docs.evolutionfoundation.com.br">Documentation</a> &middot;
-  <a href="https://evolutionfoundation.com.br/community">Community</a> &middot;
+  <a href="https://automalead.ai">Website</a> &middot;
+  <a href="https://docs.automalead.ai">Documentation</a> &middot;
+  <a href="https://automalead.ai/community">Community</a> &middot;
   <a href="mailto:suporte@evofoundation.com.br">Support</a>
 </p>
 
@@ -201,7 +201,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 Swagger UI available at `http://localhost:3000/swagger`.
 
-For full API documentation, see [docs.evolutionfoundation.com.br](https://docs.evolutionfoundation.com.br).
+For full API documentation, see [docs.automalead.ai](https://docs.automalead.ai).
 
 ---
 
@@ -306,9 +306,9 @@ Notes:
 
 | Resource | Link |
 |---|---|
-| Website | [evolutionfoundation.com.br](https://evolutionfoundation.com.br) |
-| Documentation | [docs.evolutionfoundation.com.br](https://docs.evolutionfoundation.com.br) |
-| Community | [evolutionfoundation.com.br/community](https://evolutionfoundation.com.br/community) |
+| Website | [automalead.ai](https://automalead.ai) |
+| Documentation | [docs.automalead.ai](https://docs.automalead.ai) |
+| Community | [automalead.ai/community](https://automalead.ai/community) |
 | Swagger | `http://localhost:3000/swagger` |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
@@ -388,7 +388,7 @@ WHERE message_id LIKE 'backfill|%'
 
 Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to submit issues, propose features, and open pull requests.
 
-Join our [community](https://evolutionfoundation.com.br/community) to discuss ideas and collaborate.
+Join our [community](https://automalead.ai/community) to discuss ideas and collaborate.
 
 ---
 
@@ -404,12 +404,12 @@ AutomaLead Backend is licensed under the Apache License 2.0. See [LICENSE](./LIC
 
 ## Trademarks
 
-"Evolution Foundation", "Evolution" and "AutomaLead Backend" are trademarks of AutomaLead See [TRADEMARKS.md](./TRADEMARKS.md) for the brand assets policy.
+"AutomaLead", "Evolution" and "AutomaLead Backend" are trademarks of AutomaLead See [TRADEMARKS.md](./TRADEMARKS.md) for the brand assets policy.
 
 Third-party attributions are documented in [NOTICE](./NOTICE).
 
 ---
 
 <p align="center">
-  Made by <a href="https://evolutionfoundation.com.br">Evolution Foundation</a> · © 2026
+  Made by <a href="https://automalead.ai">AutomaLead</a> · © 2026
 </p>

@@ -217,7 +217,7 @@ Stabilization release — focuses on bug fixes for payload parity with Evolution
 ### Changed
 
 - **EVO-1113 — Credential resolution consolidated into `EvolutionConcern`** — previously the logic was spread across providers; now a single concern centralizes the per-field fallback for `api_url`, `admin_token`, and other Evolution credentials. Reduces bug surface and makes switching between Evolution API and Evolution Go easier.
-- **Docs** standardized for Evolution Foundation 2026 (README, LICENSE, NOTICE, TRADEMARKS).
+- **Docs** standardized for AutomaLead 2026 (README, LICENSE, NOTICE, TRADEMARKS).
 - **Docs (org)** — GitHub URLs updated from `EvolutionAPI` to `evolution-foundation`.
 - **Schema** — comments updated on `automation_rule_run`, `role`, and `user_role`.
 - **Schema** — removed unused tables and foreign keys.
