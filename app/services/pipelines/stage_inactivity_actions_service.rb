@@ -9,6 +9,7 @@ class Pipelines::StageInactivityActionsService
   include Pipelines::StageMessageActions
 
   INACTIVITY_TRIGGER = 'inactivity'.freeze
+  MESSAGE_ACTIONS = %w[send_ai_message send_direct_message send_template finalize].freeze
 
   def initialize(pipeline_item)
     @pipeline_item = pipeline_item
@@ -150,6 +151,14 @@ class Pipelines::StageInactivityActionsService
       send_template(conversation, template_params_for(rule))
     when 'finalize'
       finalize(conversation, rule[:action_value])
+    when 'move_to_stage'
+      move_to_stage(@pipeline_item, rule[:action_value])
+    when 'move_to_pipeline'
+      move_to_pipeline(@pipeline_item, rule[:action_value])
+    when 'assign_agent'
+      assign_agent(conversation, rule[:action_value])
+    when 'apply_label'
+      apply_label(conversation, rule[:action_value])
     else
       Rails.logger.warn "[StageInactivity] unsupported inactivity action: #{rule[:action]}"
     end
@@ -159,7 +168,12 @@ class Pipelines::StageInactivityActionsService
     { id: rule[:action_value] }
   end
 
+  # Only message-sending actions have meaningful "message_sent" text; the
+  # pipeline-movement/assignment/label actions already have their target
+  # recorded in action_config (the rule JSON) and have no message body.
   def message_text(rule, _dispatch_result)
+    return nil unless MESSAGE_ACTIONS.include?(rule[:action])
+
     rule[:ai_message].presence || rule[:action_value].presence
   end
 end
