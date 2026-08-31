@@ -53,6 +53,6 @@ class PipelineTaskMailer < ApplicationMailer
   private
 
   def brand_name
-    GlobalConfig.get('BRAND_NAME')['BRAND_NAME'] || 'AutomaLead'
+    GlobalConfig.get('BRAND_NAME')['BRAND_NAME'].presence || 'AutomaLead'
   end
 end

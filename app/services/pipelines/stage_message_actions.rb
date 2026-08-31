@@ -22,8 +22,8 @@ module Pipelines::StageMessageActions
     end
 
     agent_bot_inbox = conversation.inbox.agent_bot_inbox
-    if agent_bot_inbox.present? && !agent_bot_inbox.should_process_conversation?(conversation)
-      Rails.logger.warn "[StageMessageActions] send_ai_message skipped: conv #{conversation.id} does not match bot criteria"
+    if agent_bot_inbox.present? && (skip_reason = agent_bot_inbox.processing_block_reason(conversation))
+      Rails.logger.warn "[StageMessageActions] send_ai_message skipped: conv #{conversation.id}: #{skip_reason}"
       return false
     end
 
@@ -92,6 +92,10 @@ module Pipelines::StageMessageActions
     target_pipeline = Pipeline.find_by(id: target_pipeline_id)
     return unless target_pipeline
 
+    # Refusing the move leaves the conversation where it is, visible. Allowing it would
+    # push the conversation into a board the operator archived and can no longer see.
+    return unless target_pipeline.is_active
+
     target_stage =
       if target_stage_id.present?
         target_pipeline.pipeline_stages.find_by(id: target_stage_id)
@@ -146,8 +150,6 @@ module Pipelines::StageMessageActions
 
   private
 
-  UUID_LABEL_REGEX = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/.freeze
-
   def parse_move_to_pipeline_value(value)
     return [nil, nil] if value.blank?
 
@@ -181,10 +183,7 @@ module Pipelines::StageMessageActions
   # here so the rule lands the right tag instead of creating a garbage tag
   # named after the UUID.
   def resolve_label_title(value)
-    raw = value.to_s
-    return raw unless UUID_LABEL_REGEX.match?(raw)
-
-    Label.where(id: raw).pick(:title) || raw
+    Labels::TokenResolver.titles_for([value]).first || value.to_s
   end
 
   def build_outgoing_message(conversation, text, source)

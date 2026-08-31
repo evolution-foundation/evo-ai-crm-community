@@ -42,6 +42,7 @@ Rails.application.routes.draw do
       end
 
       resource :global_config, controller: 'global_config', only: [:show]
+      get 'ai_credentials/migration_state', to: 'ai_credentials#migration_state'
       namespace :integrations do
         # Session-authed availability probe: booleans only (is each provider's OAuth
         # credential configured?), never the secret itself. See AvailabilityController.
@@ -101,6 +102,9 @@ Rails.application.routes.draw do
         post :setup_channel_provider, on: :member
         post :disconnect_channel_provider, on: :member
         post :sync_whatsapp_subscription, on: :member
+        # Discards a Hub connection that never completed. A separate door from
+        # destroy because only this one refuses an already-connected channel.
+        delete 'hub_connection', action: :abort_hub_connection, on: :member
         delete :avatar, on: :member
         # Template CRUD moved to the dedicated flat /api/v1/message_templates
         # endpoint (EVO-1716). Only the per-channel Meta sync stays inbox-scoped.
@@ -116,7 +120,7 @@ Rails.application.routes.draw do
           get :search
           post :filter
           get :available_for_pipeline
-          get :unread_count
+          get :unanswered_count
           post :import
         end
         resources :messages, only: [:index, :create, :destroy, :update], controller: 'conversations/messages' do
@@ -275,6 +279,8 @@ Rails.application.routes.draw do
         # Bulk import endpoint (EVO-1555 S1)
         collection do
           post :bulk
+          # Fetch products from a remote store (Shopify/WooCommerce)
+          post :import_fetch
         end
         resources :variants, controller: 'products/variants', only: [:index, :create, :update, :destroy]
       end
@@ -292,6 +298,9 @@ Rails.application.routes.draw do
       # when a customer pilot is contracted.
       namespace :webhooks do
         post 'erp/:provider', to: 'erp#receive', as: :erp_webhook
+        # Purchase webhook ingress (lead capture): an approved purchase from a
+        # registered payment platform becomes contact + pipeline card.
+        post 'purchases/:provider', to: 'purchases#receive', as: :purchase_webhook
       end
 
       # Attach/detach products to AI agents (agent lives in evo_core; we only
@@ -579,6 +588,7 @@ Rails.application.routes.draw do
           patch :archive
           patch :set_as_default
           get :stats
+          get :dependents
         end
         resources :pipeline_stages, except: [:new, :edit], controller: 'pipeline_stages' do
           member do
@@ -635,6 +645,8 @@ Rails.application.routes.draw do
             get :plan
             get :channels
             get :available_channels
+            get :connect_info
+            post :whatsapp_connect
           end
         end
       end

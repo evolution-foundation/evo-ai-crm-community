@@ -4,10 +4,13 @@ Copyright 2026 AutomaLead
 This product includes software developed by AutomaLead
 (https://automalead.ai).
 
+Third-party software
+This product includes software from Chatwoot (https://github.com/chatwoot/chatwoot),
+Copyright (c) 2017-2026 Chatwoot Inc., licensed under the MIT Expat license.
+The full text of that license is included in this repository as LICENSE-chatwoot.
+
 Trademark notice
 "AutomaLead", "Evolution" and "AutomaLead Backend" are trademarks of
 AutomaLead The AutomaLead Backend logo, wordmark, and visual identity
 are governed by the Trademark and Brand Assets Policy included in this
 repository (TRADEMARKS.md).
-
-
