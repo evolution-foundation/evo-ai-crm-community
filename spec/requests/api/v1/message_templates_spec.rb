@@ -172,6 +172,28 @@ RSpec.describe 'Api::V1::MessageTemplates', type: :request do
       expect(names).to include(bound.name)
       expect(names).not_to include(global.name)
     end
+
+    # Regression: Channel::Whatsapp unconditionally delegates create_template to
+    # provider_service for EVERY provider, but only whatsapp_cloud_service actually
+    # persists an AR record. evolution/evolution_go/notificame/zapi never wrote a
+    # MessageTemplate row and returned a plain Hash, which crashed `.serialized`
+    # with a 500 and left campaigns/inboxes with zero usable templates.
+    %w[evolution evolution_go notificame zapi].each do |provider|
+      it "persists an AR MessageTemplate when bound to a '#{provider}' WhatsApp channel" do
+        wa_channel = whatsapp_channel(provider)
+        wa_inbox = Inbox.create!(channel: wa_channel, name: "WA Inbox #{SecureRandom.hex(3)}")
+
+        post '/api/v1/message_templates',
+             params: { inbox_id: wa_inbox.id,
+                       message_template: { name: "t-#{SecureRandom.hex(4)}", content: 'Hello there' } },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        created = MessageTemplate.find(json_response['data']['id'])
+        expect(created.channel_id).to eq(wa_channel.id)
+        expect(created.content).to eq('Hello there')
+      end
+    end
   end
 
   # Real-user path: unlike the service-token specs above (which bypass BOTH the

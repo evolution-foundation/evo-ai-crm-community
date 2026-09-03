@@ -141,11 +141,19 @@ module Api
 
       # Create dispatch: channel-bound (delegate to the channel, preserving the
       # provider's upstream writeback) vs global (channel-less local record).
+      #
+      # Only whatsapp_cloud's create_template has a real upstream (Meta) to push
+      # to; Channel::Whatsapp#create_template unconditionally delegates to
+      # provider_service for every provider, but evolution/evolution_go/
+      # notificame/zapi never persist an AR record there and would crash
+      # `.serialized` on the Hash (or raise NoMethodError for zapi, which has no
+      # create_template at all). Route everything else through the generic,
+      # AR-backed create_message_template.
       def build_template(template_params)
         return create_global_template(template_params) unless channel_bound?
 
         channel = resolve_channel
-        if channel.respond_to?(:create_template)
+        if channel.is_a?(Channel::Whatsapp) && channel.provider == 'whatsapp_cloud'
           channel.create_template(template_params.to_h.stringify_keys)
         else
           channel.create_message_template(template_params)
