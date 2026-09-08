@@ -48,7 +48,7 @@ RSpec.describe ActionCableListener do
       expect(listener.send(:audience, conversation)).to contain_exactly(member)
     end
 
-    # Mirrors the auth's effective-role rule: a newer grant replaces the older one.
+    # A demotion leaves the old grant behind, so the newest one has to win here.
     context 'when a user changed role' do
       let(:demoted) { User.create!(name: 'Demoted', email: "demoted-#{SecureRandom.hex(4)}@test.com") }
       let(:promoted) { User.create!(name: 'Promoted', email: "promoted-#{SecureRandom.hex(4)}@test.com") }
@@ -68,8 +68,9 @@ RSpec.describe ActionCableListener do
       end
 
       it 'ignores derived roles even when they are the newest row' do
+        UserRole.find_by!(user: admin, role: admin_role).update!(created_at: 2.days.ago)
         derived = Role.create!(key: "evo_derived_#{admin.id}_global", name: "Derived #{admin.id}")
-        UserRole.create!(user: admin, role: derived, created_at: 1.second.ago)
+        UserRole.create!(user: admin, role: derived, created_at: 1.minute.ago)
 
         expect(listener.send(:audience, conversation)).to include(admin)
       end
@@ -121,6 +122,22 @@ RSpec.describe ActionCableListener do
     end
   end
 
+  describe '#realtime_readers' do
+    it 'loads the audience columns and leaves the credential ones behind' do
+      reader = listener.send(:realtime_readers, conversation).first
+
+      expect(reader.pubsub_token).to eq(admin.pubsub_token)
+      expect { reader.encrypted_password }.to raise_error(ActiveModel::MissingAttributeError)
+    end
+
+    # The enterprise overlay narrows the readers per agency; the audience must shrink with it.
+    it 'is the seam a consumer narrows the audience through' do
+      allow(listener).to receive(:realtime_readers).and_return([])
+
+      expect(listener.send(:audience, conversation)).to contain_exactly(member)
+    end
+  end
+
   describe 'message.created' do
     it 'is enqueued for the members and the administrators, not for other agents' do
       message = Message.create!(inbox: inbox, conversation: conversation, message_type: :incoming, content: 'hi')
@@ -130,6 +147,20 @@ RSpec.describe ActionCableListener do
 
       expect(ActionCableBroadcastJob).to have_received(:perform_later) do |tokens, event_name, _payload|
         expect(event_name).to eq(Events::Types::MESSAGE_CREATED)
+        expect(tokens).to include(member.pubsub_token, admin.pubsub_token)
+        expect(tokens).not_to include(agent.pubsub_token)
+      end
+    end
+  end
+
+  describe 'message.created on an outbound message' do
+    it 'reaches the same audience as an inbound one' do
+      message = Message.create!(inbox: inbox, conversation: conversation, message_type: :outgoing, content: 'hi')
+      allow(ActionCableBroadcastJob).to receive(:perform_later)
+
+      listener.message_created(Struct.new(:data).new({ message: message }))
+
+      expect(ActionCableBroadcastJob).to have_received(:perform_later) do |tokens, _event_name, _payload|
         expect(tokens).to include(member.pubsub_token, admin.pubsub_token)
         expect(tokens).not_to include(agent.pubsub_token)
       end

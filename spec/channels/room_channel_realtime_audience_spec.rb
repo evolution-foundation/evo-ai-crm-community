@@ -2,13 +2,9 @@
 
 require 'rails_helper'
 
-# CRM-546 — realtime audience must match HTTP visibility.
-#
-# `User#assigned_inboxes` lets an administrator read every conversation over HTTP, but
-# `ActionCableListener#user_tokens` (CRM-185) targets inbox members only. An admin who
-# never joined the inbox saw the message only after a refresh. These examples pin the
-# invariant "whoever can read it gets the frame" without prescribing the delivery
-# mechanism: any stream the subscription listens to counts.
+# CRM-546 — the realtime audience has to match HTTP visibility. Pins the invariant
+# "whoever can read it gets the frame" without prescribing the delivery mechanism:
+# any stream the subscription listens to counts.
 RSpec.describe RoomChannel, type: :channel do
   include ActiveJob::TestHelper
 
@@ -29,8 +25,8 @@ RSpec.describe RoomChannel, type: :channel do
     stub_connection(warden_user: nil)
   end
 
-  def grant_administrator(reader)
-    role = Role.find_by(key: 'administrator') || Role.create!(key: 'administrator', name: 'Administrator')
+  def grant_role(reader, key, name)
+    role = Role.find_by(key: key) || Role.create!(key: key, name: name)
     UserRole.create!(user: reader, role: role)
   end
 
@@ -68,7 +64,7 @@ RSpec.describe RoomChannel, type: :channel do
     end
 
     it 'reaches an administrator who is not an inbox member' do
-      grant_administrator(user)
+      grant_role(user, 'administrator', 'Administrator')
       subscribe_as(user)
 
       message = deliver_incoming_message
@@ -77,7 +73,7 @@ RSpec.describe RoomChannel, type: :channel do
     end
 
     it 'never reaches an agent who is neither member nor administrator' do
-      UserRole.create!(user: user, role: Role.create!(key: 'agent', name: 'Agent'))
+      grant_role(user, 'agent', 'Agent')
       subscribe_as(user)
 
       message = deliver_incoming_message
