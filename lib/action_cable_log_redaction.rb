@@ -4,19 +4,21 @@ require 'delegate'
 
 # ActionCable logs the raw subscription identifier on several framework paths it
 # owns (unsubscribe, command failures, messages after close). Since CRM-537 that
-# identifier carries the auth access_token, so the cable logger redacts it before
-# the line reaches the log. Covers the JSON shape, the JSON escaped any number of
-# times (`inspect` of a frame that itself embeds the identifier), Ruby hash inspect
-# and query strings.
+# identifier carries the auth access_token, and for widget visitors the
+# contact_inbox pubsub_token is still the credential, so the cable logger redacts
+# both before the line reaches the log. Covers the JSON shape, the JSON escaped any
+# number of times (`inspect` of a frame that itself embeds the identifier), Ruby
+# hash inspect and query strings.
 module ActionCableLogRedaction
   REDACTED = '[REDACTED]'
+  KEYS = /(?:access_token|pubsub_token)/
   PATTERNS = [
-    /(\\*["']access_token\\*["']\s*(?:=>|:)\s*\\*["'])([^"'\\]+)/,
-    /(\baccess_token=)([^&\s"']+)/
+    /(\\*["']#{KEYS}\\*["']\s*(?:=>|:)\s*\\*["'])([^"'\\]+)/,
+    /(\b#{KEYS}=)([^&\s"']+)/
   ].freeze
 
   def self.redact(message)
-    return message unless message.is_a?(String) && message.include?('access_token')
+    return message unless message.is_a?(String) && message.match?(KEYS)
 
     PATTERNS.reduce(message) { |text, pattern| text.gsub(pattern) { "#{Regexp.last_match(1)}#{REDACTED}" } }
   end

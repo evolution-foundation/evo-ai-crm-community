@@ -10,7 +10,7 @@ RSpec.describe ActionCableLogRedaction do
       line = %(Unsubscribing from channel: {"channel":"RoomChannel","pubsub_token":"p1","user_id":"u1","access_token":"#{jwt}"})
 
       expect(described_class.redact(line)).to eq(
-        %(Unsubscribing from channel: {"channel":"RoomChannel","pubsub_token":"p1","user_id":"u1","access_token":"[REDACTED]"})
+        %(Unsubscribing from channel: {"channel":"RoomChannel","pubsub_token":"[REDACTED]","user_id":"u1","access_token":"[REDACTED]"})
       )
     end
 
@@ -39,8 +39,13 @@ RSpec.describe ActionCableLogRedaction do
       expect(described_class.redact("GET /cable?access_token=#{jwt}&x=1")).to eq('GET /cable?access_token=[REDACTED]&x=1')
     end
 
+    it 'redacts the widget contact credential too' do
+      expect(described_class.redact(%({"channel":"RoomChannel","pubsub_token":"ZvDAduw9"})))
+        .to eq(%({"channel":"RoomChannel","pubsub_token":"[REDACTED]"}))
+    end
+
     it 'leaves other fields and non-string messages untouched' do
-      expect(described_class.redact(%({"pubsub_token":"p1","user_id":"u1"}))).to eq(%({"pubsub_token":"p1","user_id":"u1"}))
+      expect(described_class.redact(%({"channel":"RoomChannel","user_id":"u1"}))).to eq(%({"channel":"RoomChannel","user_id":"u1"}))
       expect(described_class.redact(nil)).to be_nil
       expect(described_class.redact(42)).to eq(42)
     end
