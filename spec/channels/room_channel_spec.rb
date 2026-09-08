@@ -101,6 +101,15 @@ RSpec.describe RoomChannel, type: :channel do
       end
     end
 
+    context 'when update_presence fails after subscribing' do
+      it 'swallows the error so ActionCable never logs the identifier' do
+        subscribe(user_id: user.id.to_s, pubsub_token: user.pubsub_token, access_token: issue_token_for(user))
+        allow(OnlineStatusTracker).to receive(:update_presence).and_raise(Redis::CannotConnectError, 'redis down')
+
+        expect { perform :update_presence }.not_to raise_error
+      end
+    end
+
     context 'when a widget contact subscribes without user_id' do
       it 'subscribes with the contact_inbox pubsub_token' do
         subscribe(pubsub_token: contact_inbox.pubsub_token)

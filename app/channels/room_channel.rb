@@ -12,9 +12,13 @@ class RoomChannel < ApplicationCable::Channel
     reject_with(e)
   end
 
+  # Rescued locally: an exception escaping a channel action makes ActionCable log the
+  # whole identifier, access_token included.
   def update_presence
     update_subscription
     broadcast_presence
+  rescue StandardError => e
+    Rails.logger.warn "RoomChannel update_presence failed for #{current_user&.class&.name} #{current_user&.id}: #{e.class} #{e.message}"
   end
 
   private
