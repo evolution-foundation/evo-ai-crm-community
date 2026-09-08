@@ -80,6 +80,8 @@ jobs:
             spec/channels/room_channel_spec.rb \
             spec/services/evo_auth/identity_resolver_spec.rb \
             spec/lib/action_cable_log_redaction_spec.rb \
+            spec/channels/room_channel_realtime_audience_spec.rb \
+            spec/listeners/action_cable_listener_audience_spec.rb \
             spec/rbac \
             spec/requests/api/v1/*_rbac_spec.rb \
             --format progress
