@@ -4,11 +4,11 @@ require 'rails_helper'
 
 # CRM-546 — realtime audience must match HTTP visibility.
 #
-# `User#assigned_inboxes` lets an admin / `conversations.read_all` holder read every
-# conversation over HTTP, but `ActionCableListener#user_tokens` (CRM-185) targets inbox
-# members only. A reader who never joined the inbox sees the message only after a
-# refresh. These examples pin the invariant "whoever can read it gets the frame" without
-# prescribing the delivery mechanism: any stream the subscription listens to counts.
+# `User#assigned_inboxes` lets an administrator read every conversation over HTTP, but
+# `ActionCableListener#user_tokens` (CRM-185) targets inbox members only. An admin who
+# never joined the inbox saw the message only after a refresh. These examples pin the
+# invariant "whoever can read it gets the frame" without prescribing the delivery
+# mechanism: any stream the subscription listens to counts.
 RSpec.describe RoomChannel, type: :channel do
   include ActiveJob::TestHelper
 
@@ -18,23 +18,28 @@ RSpec.describe RoomChannel, type: :channel do
   let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: "aud-#{SecureRandom.hex(4)}") }
   let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
   let(:user) { User.create!(name: 'Reader', email: "reader-#{SecureRandom.hex(4)}@test.com") }
+  let(:auth_service) { instance_double(EvoAuthService) }
 
   before do
     allow(OnlineStatusTracker).to receive(:update_presence)
     allow(OnlineStatusTracker).to receive(:get_available_users).and_return([])
     allow(OnlineStatusTracker).to receive(:get_available_contacts).and_return([])
-    allow(EvoExtensionPoints::PermissionResolver).to receive(:allowed?).and_return(false)
+    # Agent subscriptions authenticate with the auth-service token (CRM-537).
+    allow(EvoAuthService).to receive(:new).and_return(auth_service)
     stub_connection(warden_user: nil)
   end
 
-  def grant_read_all(reader)
-    allow(EvoExtensionPoints::PermissionResolver).to receive(:allowed?)
-      .with(hash_including(user_id: reader.id, permission_key: 'conversations.read_all'))
-      .and_return(true)
+  def grant_administrator(reader)
+    role = Role.find_by(key: 'administrator') || Role.create!(key: 'administrator', name: 'Administrator')
+    UserRole.create!(user: reader, role: role)
   end
 
   def subscribe_as(reader)
-    subscribe(user_id: reader.id.to_s, pubsub_token: reader.pubsub_token)
+    token = "jwt-#{SecureRandom.hex(8)}"
+    allow(auth_service).to receive(:validate_token)
+      .with(token: token, token_type: 'bearer')
+      .and_return({ 'user' => { 'id' => reader.id, 'email' => reader.email } })
+    subscribe(user_id: reader.id.to_s, pubsub_token: reader.pubsub_token, access_token: token)
     expect(subscription).to be_confirmed
   end
 
@@ -62,8 +67,8 @@ RSpec.describe RoomChannel, type: :channel do
       expect(frames_received_for(message)).not_to be_empty
     end
 
-    it 'reaches a conversations.read_all holder who is not an inbox member' do
-      grant_read_all(user)
+    it 'reaches an administrator who is not an inbox member' do
+      grant_administrator(user)
       subscribe_as(user)
 
       message = deliver_incoming_message
@@ -71,7 +76,8 @@ RSpec.describe RoomChannel, type: :channel do
       expect(frames_received_for(message)).not_to be_empty
     end
 
-    it 'never reaches a user who is neither member nor reader' do
+    it 'never reaches an agent who is neither member nor administrator' do
+      UserRole.create!(user: user, role: Role.create!(key: 'agent', name: 'Agent'))
       subscribe_as(user)
 
       message = deliver_incoming_message
