@@ -1,30 +1,14 @@
-require 'digest'
-require 'base64'
-require 'json'
-
 module EvoAuthConcern
   extend ActiveSupport::Concern
 
-  AUTH_VALIDATE_CACHE_TTL = 20.seconds
-
   private
 
+  # Per-request memo on top of EvoAuth::IdentityResolver (shared with the cable).
   def authenticate_user_with_evo_auth(token, token_type)
     Current.evo_auth_validation_cache ||= {}
-    cache_key = evo_auth_validation_cache_key(token, token_type)
+    cache_key = EvoAuth::IdentityResolver.cache_key(token, token_type)
     user_data = Current.evo_auth_validation_cache[cache_key]
-
-    auth_service = EvoAuthService.new
-    unless user_data
-      store_key = evo_auth_validation_store_key(cache_key)
-      user_data = Rails.cache.read(store_key)
-
-      unless user_data
-        user_data = auth_service.validate_token(token: token, token_type: token_type)
-        ttl = auth_validation_cache_ttl(token, token_type)
-        Rails.cache.write(store_key, user_data, expires_in: ttl) if ttl.positive?
-      end
-    end
+    user_data ||= EvoAuth::IdentityResolver.new(token: token, token_type: token_type, auth_service: EvoAuthService.new).user_data
 
     Current.evo_auth_validation_cache[cache_key] = user_data
 
@@ -82,48 +66,11 @@ module EvoAuthConcern
   end
 
   def find_local_user(user_data)
-    return nil unless user_data
-
-    User.find_by(email: user_data['email']) || User.find_by(id: user_data['id'])
+    EvoAuth::IdentityResolver.find_local_user(user_data)
   end
 
   # Override current_user method to return our authenticated user
   def current_user
     @current_user || Current.user
-  end
-
-  def evo_auth_validation_cache_key(token, token_type)
-    "#{token_type}:#{Digest::SHA256.hexdigest(token.to_s)}"
-  end
-
-  def evo_auth_validation_store_key(cache_key)
-    "evo_auth:validate:#{cache_key}"
-  end
-
-  def auth_validation_cache_ttl(token, token_type)
-    ttl = AUTH_VALIDATE_CACHE_TTL
-    return ttl unless token_type.to_s == 'bearer'
-
-    payload = decode_jwt_payload(token)
-    return ttl unless payload.is_a?(Hash) && payload['exp'].present?
-
-    remaining = payload['exp'].to_i - Time.now.to_i
-    return 0.seconds if remaining <= 0
-
-    [ttl, remaining.seconds].min
-  rescue StandardError
-    ttl
-  end
-
-  def decode_jwt_payload(token)
-    segments = token.to_s.split('.')
-    return {} if segments.length < 2
-
-    payload_segment = segments[1]
-    padding = '=' * ((4 - payload_segment.length % 4) % 4)
-    decoded = Base64.urlsafe_decode64("#{payload_segment}#{padding}")
-    JSON.parse(decoded)
-  rescue StandardError
-    {}
   end
 end

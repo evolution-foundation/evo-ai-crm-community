@@ -1,4 +1,6 @@
 class RoomChannel < ApplicationCable::Channel
+  class SubscriptionRejected < StandardError; end
+
   def subscribed
     Rails.logger.info "RoomChannel subscription requested user_id=#{params[:user_id]}"
     @current_user = resolve_current_user
@@ -6,13 +8,8 @@ class RoomChannel < ApplicationCable::Channel
     update_subscription
     broadcast_presence
     Rails.logger.info "RoomChannel subscription successful user_id=#{@current_user.id}"
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.warn "RoomChannel subscription rejected: #{e.class} #{e.message}"
-    reject
   rescue StandardError => e
-    Rails.logger.error "RoomChannel subscription failed: #{e.class} #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-    reject
+    reject_with(e)
   end
 
   def update_presence
@@ -21,6 +18,21 @@ class RoomChannel < ApplicationCable::Channel
   end
 
   private
+
+  attr_reader :current_user
+
+  def reject_with(error)
+    case error
+    when ActiveRecord::RecordNotFound, SubscriptionRejected
+      Rails.logger.warn "RoomChannel subscription rejected: #{error.class} #{error.message}"
+    when EvoAuthService::AuthenticationError
+      Rails.logger.error "RoomChannel subscription rejected, auth service unavailable: #{error.message}"
+    else
+      Rails.logger.error "RoomChannel subscription failed: #{error.class} #{error.message}"
+      Rails.logger.error error.backtrace.join("\n")
+    end
+    reject
+  end
 
   def broadcast_presence
     data = { users: ::OnlineStatusTracker.get_available_users }
@@ -36,30 +48,36 @@ class RoomChannel < ApplicationCable::Channel
     ::OnlineStatusTracker.update_presence(@current_user.class.name, @current_user.id)
   end
 
-  def current_user
-    @current_user
+  def resolve_current_user
+    params[:user_id].blank? ? resolve_contact : resolve_agent
   end
 
-  def resolve_current_user
-    if params[:user_id].blank?
-      contact_inbox = ContactInbox.find_by!(pubsub_token: params[:pubsub_token].to_s)
-      @stream_pubsub_token = contact_inbox.pubsub_token
-      return contact_inbox.contact
-    end
+  # Widget visitors have no session: the contact_inbox pubsub_token is their credential.
+  def resolve_contact
+    contact_inbox = ContactInbox.find_by!(pubsub_token: params[:pubsub_token].to_s)
+    @stream_pubsub_token = contact_inbox.pubsub_token
+    contact_inbox.contact
+  end
 
-    user = User.find_by(pubsub_token: params[:pubsub_token].to_s, id: params[:user_id])
-    if user.present?
-      @stream_pubsub_token = user.pubsub_token
-      return user
-    end
+  # Agents prove identity with the auth-service token, the same credential HTTP
+  # accepts (CRM-537). pubsub_token only names the stream: a stale one (rotation)
+  # is replaced by the user's current token, never trusted on its own.
+  def resolve_agent
+    requested_id = params[:user_id].to_s
+    token = params[:access_token].to_s
+    raise SubscriptionRejected, "missing access_token for user_id=#{requested_id}" if token.blank?
 
-    verified_connection_user = connection.warden_user
-    if verified_connection_user.is_a?(User) && verified_connection_user.id.to_s == params[:user_id].to_s
-      Rails.logger.warn "RoomChannel token mismatch for user_id=#{verified_connection_user.id}; using current token"
-      @stream_pubsub_token = verified_connection_user.pubsub_token
-      return verified_connection_user
-    end
+    user = resolve_agent_identity(token, requested_id)
+    raise SubscriptionRejected, "user_id mismatch requested=#{requested_id} authenticated=#{user.id}" unless user.id.to_s == requested_id
 
-    raise ActiveRecord::RecordNotFound, 'User not found for RoomChannel subscription'
+    Rails.logger.warn "RoomChannel token mismatch for user_id=#{user.id}; using current token" if params[:pubsub_token].to_s != user.pubsub_token.to_s
+    @stream_pubsub_token = user.pubsub_token
+    user
+  end
+
+  def resolve_agent_identity(token, requested_id)
+    EvoAuth::IdentityResolver.call(token: token, token_type: params[:token_type].presence || 'bearer').user
+  rescue EvoAuthService::ValidationError => e
+    raise SubscriptionRejected, "invalid access_token for user_id=#{requested_id}: #{e.message}"
   end
 end
