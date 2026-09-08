@@ -5,12 +5,13 @@ require 'delegate'
 # ActionCable logs the raw subscription identifier on several framework paths it
 # owns (unsubscribe, command failures, messages after close). Since CRM-537 that
 # identifier carries the auth access_token, so the cable logger redacts it before
-# the line reaches the log. Covers the JSON shape, the escaped JSON inside
-# `inspect`, Ruby hash inspect and query strings.
+# the line reaches the log. Covers the JSON shape, the JSON escaped any number of
+# times (`inspect` of a frame that itself embeds the identifier), Ruby hash inspect
+# and query strings.
 module ActionCableLogRedaction
   REDACTED = '[REDACTED]'
   PATTERNS = [
-    /(\\?["']access_token\\?["']\s*(?:=>|:)\s*\\?["'])([^"'\\]+)/,
+    /(\\*["']access_token\\*["']\s*(?:=>|:)\s*\\*["'])([^"'\\]+)/,
     /(\baccess_token=)([^&\s"']+)/
   ].freeze
 

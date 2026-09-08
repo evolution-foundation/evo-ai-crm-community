@@ -22,6 +22,14 @@ RSpec.describe ActionCableLogRedaction do
       expect(described_class.redact(line)).to include('\\"access_token\\":\\"[REDACTED]\\"')
     end
 
+    it 'redacts the doubly escaped identifier of a frame logged after the socket closed' do
+      frame = %("{\\"command\\":\\"message\\",\\"identifier\\":\\"{\\\\\\"access_token\\\\\\":\\\\\\"#{jwt}\\\\\\"}\\"}")
+      line = %(Ignoring message processed after the WebSocket was closed: #{frame})
+
+      expect(described_class.redact(line)).not_to include(jwt)
+      expect(described_class.redact(line)).to include('[REDACTED]')
+    end
+
     it 'redacts a Ruby hash inspect' do
       expect(described_class.redact(%({"access_token"=>"#{jwt}", "user_id"=>"u1"}))).to eq(%({"access_token"=>"[REDACTED]", "user_id"=>"u1"}))
       expect(described_class.redact(%({"access_token" => "#{jwt}"}))).to eq(%({"access_token" => "[REDACTED]"}))
