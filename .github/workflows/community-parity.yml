@@ -77,6 +77,9 @@ jobs:
             spec/lib/concurrent_index_migration_spec.rb \
             spec/concurrent_index_guard_spec.rb \
             spec/models/concerns/user_attribute_helpers_permission_spec.rb \
+            spec/channels/room_channel_spec.rb \
+            spec/services/evo_auth/identity_resolver_spec.rb \
+            spec/lib/action_cable_log_redaction_spec.rb \
             spec/rbac \
             spec/requests/api/v1/*_rbac_spec.rb \
             --format progress
