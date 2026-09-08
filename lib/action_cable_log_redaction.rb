@@ -2,13 +2,10 @@
 
 require 'delegate'
 
-# ActionCable logs the raw subscription identifier on several framework paths it
-# owns (unsubscribe, command failures, messages after close). Since CRM-537 that
-# identifier carries the auth access_token, and for widget visitors the
-# contact_inbox pubsub_token is still the credential, so the cable logger redacts
-# both before the line reaches the log. Covers the JSON shape, the JSON escaped any
-# number of times (`inspect` of a frame that itself embeds the identifier), Ruby
-# hash inspect and query strings.
+# ActionCable logs the raw subscription identifier on framework paths the channel does
+# not own (unsubscribe, command failures, messages after close), and since CRM-537 that
+# identifier carries the agent access_token — the widget contact's pubsub_token too.
+# Redacts both in the JSON, escaped-JSON (any depth), hash-inspect and query forms.
 module ActionCableLogRedaction
   REDACTED = '[REDACTED]'
   KEYS = /(?:access_token|pubsub_token)/
@@ -24,15 +21,23 @@ module ActionCableLogRedaction
   end
 
   class Logger < SimpleDelegator
+    # The block is FORWARDED, never resolved here: Logger skips it below the level, and
+    # ActionCable builds one per broadcast (`Broadcasting#broadcast` inspects the payload).
     %i[debug info warn error fatal unknown].each do |severity|
       define_method(severity) do |message = nil, &block|
-        __getobj__.public_send(severity, ActionCableLogRedaction.redact(message || block&.call))
+        next __getobj__.public_send(severity) { ActionCableLogRedaction.redact(block.call) } if block
+
+        __getobj__.public_send(severity, ActionCableLogRedaction.redact(message))
       end
     end
 
-    # Logger#add falls back to progname as the message when message is nil.
-    def add(severity, message = nil, progname = nil, &block)
-      __getobj__.add(severity, ActionCableLogRedaction.redact(message || block&.call), ActionCableLogRedaction.redact(progname))
+    # Logger#add falls back to progname as the message when message and block are nil.
+    def add(severity, message = nil, progname = nil)
+      if block_given? && message.nil?
+        return __getobj__.add(severity, nil, ActionCableLogRedaction.redact(progname)) { ActionCableLogRedaction.redact(yield) }
+      end
+
+      __getobj__.add(severity, ActionCableLogRedaction.redact(message), ActionCableLogRedaction.redact(progname))
     end
   end
 

@@ -68,10 +68,7 @@ class RoomChannel < ApplicationCable::Channel
   # is replaced by the user's current token, never trusted on its own.
   def resolve_agent
     requested_id = params[:user_id].to_s
-    token = params[:access_token].to_s
-    raise SubscriptionRejected, "missing access_token for user_id=#{requested_id}" if token.blank?
-
-    user = resolve_agent_identity(token, requested_id)
+    user = resolve_agent_identity(params[:access_token].to_s, requested_id)
     raise SubscriptionRejected, "user_id mismatch requested=#{requested_id} authenticated=#{user.id}" unless user.id.to_s == requested_id
 
     Rails.logger.warn "RoomChannel token mismatch for user_id=#{user.id}; using current token" if params[:pubsub_token].to_s != user.pubsub_token.to_s

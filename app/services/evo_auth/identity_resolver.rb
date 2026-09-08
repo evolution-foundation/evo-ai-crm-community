@@ -5,17 +5,17 @@ require 'base64'
 require 'json'
 
 module EvoAuth
-  # Resolves an auth-service token into the local User.
-  #
-  # Shared by the HTTP layer (EvoAuthConcern) and by ActionCable (RoomChannel), so a
-  # WebSocket subscription proves identity with exactly the credential HTTP accepts.
-  # The remote validation is cached under a hash of the token for a short TTL, never
-  # beyond the JWT `exp`. Raises EvoAuthService::ValidationError (bad token, unknown
-  # user) or EvoAuthService::AuthenticationError (auth unreachable); callers decide
-  # how to fail (401/503 on HTTP, reject on the cable).
+  # Resolves an auth-service token into the local User, for the HTTP layer
+  # (EvoAuthConcern) and for ActionCable (RoomChannel) alike, so a subscription proves
+  # identity with exactly the credential HTTP accepts. Raises ValidationError (bad
+  # token) or AuthenticationError (auth unreachable); callers decide how to fail.
   class IdentityResolver
     VALIDATE_CACHE_TTL = 20.seconds
     TOKEN_TYPES = %w[bearer api_access_token].freeze
+    # Breaker for an unreachable auth service. Not per token: "auth is down" is global,
+    # and without it every cable retry blocks an ActionCable worker for the HTTP timeout.
+    AUTH_DOWN_KEY = 'evo_auth:validate:unavailable'
+    AUTH_DOWN_TTL = 5.seconds
 
     Identity = Struct.new(:user, :user_data, keyword_init: true)
 
@@ -62,13 +62,22 @@ module EvoAuth
       cached = Rails.cache.read(key)
       return cached if cached
 
-      data = auth_service.validate_token(token: @token, token_type: @token_type)
+      raise EvoAuthService::AuthenticationError, 'Authentication service unavailable' if Rails.cache.read(AUTH_DOWN_KEY)
+
+      data = validate_remotely
       ttl = cache_ttl
       Rails.cache.write(key, data, expires_in: ttl) if ttl.positive?
       data
     end
 
     private
+
+    def validate_remotely
+      auth_service.validate_token(token: @token, token_type: @token_type)
+    rescue EvoAuthService::AuthenticationError
+      Rails.cache.write(AUTH_DOWN_KEY, true, expires_in: AUTH_DOWN_TTL)
+      raise
+    end
 
     def auth_service
       @auth_service ||= EvoAuthService.new

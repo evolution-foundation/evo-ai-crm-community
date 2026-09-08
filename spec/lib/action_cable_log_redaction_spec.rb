@@ -65,6 +65,15 @@ RSpec.describe ActionCableLogRedaction do
       expect(io.string.scan('[REDACTED]').size).to eq(3)
     end
 
+    it 'does not evaluate a block below the log level' do
+      base.level = ::Logger::INFO
+      called = false
+
+      logger.debug { called = true; 'x' }
+
+      expect(called).to be(false)
+    end
+
     it 'redacts the progname Logger#add uses as the message when message is nil' do
       logger.add(Logger::INFO, nil, %({"access_token":"#{jwt}"}))
 
