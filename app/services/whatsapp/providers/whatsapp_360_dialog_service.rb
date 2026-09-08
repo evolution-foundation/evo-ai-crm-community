@@ -41,6 +41,18 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
     Rails.logger.error "360Dialog sync_templates error: #{e.message}"
   end
 
+  # Outcome of the credential check: :ok, :rejected (the provider says the
+  # credential is bad) or :inconclusive (we could not ask). Reads the webhook
+  # config instead of re-registering it, so the scheduler can repeat it.
+  def probe_credential
+    response = HTTParty.get("#{api_base_path}/configs/webhook", headers: api_headers)
+    return :ok if response.success?
+
+    [401, 403].include?(response.code) ? :rejected : :inconclusive
+  end
+
+  # Registering the webhook is the point of this call, which is why the probe
+  # above had to be a separate read.
   def validate_provider_config?
     response = HTTParty.post(
       "#{api_base_path}/configs/webhook",

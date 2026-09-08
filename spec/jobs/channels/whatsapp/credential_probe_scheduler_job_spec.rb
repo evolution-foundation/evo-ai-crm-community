@@ -107,14 +107,14 @@ RSpec.describe Channels::Whatsapp::CredentialProbeSchedulerJob, type: :job do
       expect(probed).to be_empty
     end
 
-    # 360dialog's probe is a POST that re-registers the webhook. Repeating it on
-    # a schedule would be a write against the provider every hour.
-    it 'skips 360dialog, whose probe is not a read-only request' do
-      channel(provider: 'default', phone_number: '+5511900000008')
+    # 360dialog probes through a GET on the webhook config, apart from the POST
+    # save-time validation still uses, so the schedule may repeat it.
+    it 'enqueues 360dialog, whose probe is a read-only request' do
+      dialog = channel(provider: 'default', phone_number: '+5511900000008')
 
       described_class.perform_now
 
-      expect(probed).to be_empty
+      expect(probed).to eq([dialog.id])
     end
 
     # A channel with no inbox has nobody to notify: the reauthorization mailer

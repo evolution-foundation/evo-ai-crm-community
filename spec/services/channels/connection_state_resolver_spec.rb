@@ -135,9 +135,9 @@ RSpec.describe Channels::ConnectionStateResolver do
       expect(resolve(channel)[:state]).to eq('unknown')
     end
 
-    # The evidence expires only where the re-probe job renews it. On 360dialog,
-    # which nobody re-probes, an expiry would degrade every healthy channel at
-    # the end of the window — the reason the first TTL was pulled.
+    # The evidence expires only where the re-probe job renews it. On a provider
+    # nobody re-probes, an expiry would degrade every healthy channel at the end
+    # of the window — the reason the first TTL was pulled.
     it 'stops trusting a probe older than the TTL on a re-probed provider' do
       channel = Channel::Whatsapp.new(
         provider: 'whatsapp_cloud',
@@ -162,7 +162,11 @@ RSpec.describe Channels::ConnectionStateResolver do
       expect(resolve(channel)[:state]).to eq('connected')
     end
 
+    # Every provider that reaches this branch is re-probed today, so the guard
+    # is here for the next token provider added without one: stub the list back
+    # to what it protects against.
     it 'never expires the stamp on a provider no job re-probes' do
+      stub_const('Channel::Whatsapp::CREDENTIAL_PROBE_PROVIDERS', %w[whatsapp_cloud])
       channel = Channel::Whatsapp.new(
         provider: 'default',
         provider_connection: {
