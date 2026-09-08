@@ -60,6 +60,13 @@ RSpec.describe ActionCableLogRedaction do
       expect(io.string.scan('[REDACTED]').size).to eq(3)
     end
 
+    it 'redacts the progname Logger#add uses as the message when message is nil' do
+      logger.add(Logger::INFO, nil, %({"access_token":"#{jwt}"}))
+
+      expect(io.string).not_to include(jwt)
+      expect(io.string).to include('[REDACTED]')
+    end
+
     it 'keeps tagging working for the ActionCable TaggedLoggerProxy' do
       proxy = ActionCable::Connection::TaggedLoggerProxy.new(logger, tags: ['ws'])
 

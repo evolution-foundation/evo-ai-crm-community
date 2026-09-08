@@ -28,8 +28,9 @@ module ActionCableLogRedaction
       end
     end
 
+    # Logger#add falls back to progname as the message when message is nil.
     def add(severity, message = nil, progname = nil, &block)
-      __getobj__.add(severity, ActionCableLogRedaction.redact(message || block&.call), progname)
+      __getobj__.add(severity, ActionCableLogRedaction.redact(message || block&.call), ActionCableLogRedaction.redact(progname))
     end
   end
 
