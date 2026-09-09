@@ -2,18 +2,8 @@
 
 require 'rails_helper'
 
-# CRM-566 (SUPORTEEVO-23): `assign_to_pipeline` opened with
-# `@conversation.pipeline_items.destroy_all`, and Pipelines::ConversationService#add_conversation
-# destroyed every item in the OTHER pipelines right after. On an account with two funnels,
-# sending a conversation to funnel B hard-deleted its card in funnel A — cascading into
-# stage_movements, PipelineTasks and pipeline_item_products. Nothing recovers that from the app.
-#
-# The schema always said otherwise: idx_pipeline_items_active_conversation_per_pipeline is unique
-# on (conversation_id, pipeline_id) WHERE completed_at IS NULL. Several funnels at once is the
-# supported shape; twice in ONE funnel is what is forbidden, and the index already forbids it.
-#
-# The guard lives in the shared PipelineActionHandlers module, so it covers both executor
-# surfaces (modal-style ActionService and flow-canvas FlowExecutionService).
+# The handlers are shared, so these examples drive both executor surfaces: the modal-style
+# ActionService and the flow-canvas FlowExecutionService.
 RSpec.describe 'Automation rule pipeline assignment across several pipelines' do
   let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
   let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
@@ -129,6 +119,19 @@ RSpec.describe 'Automation rule pipeline assignment across several pipelines' do
       expect(Rails.logger).to have_received(:info).with(/already active in pipeline Funnel B.*no-op/)
       expect(Rails.logger).not_to have_received(:error).with(/Failed to assign/)
     end
+
+    it 'records the no-op on the run timeline without degrading the run' do
+      rule = rule_with('assign_to_pipeline', [funnel_b.id])
+      recorder = AutomationRules::RunRecorder.new(rule: rule, event_name: 'conversation_created')
+
+      AutomationRules::ActionService.new(rule, nil, conversation, recorder: recorder).perform
+      recorder.matched!
+
+      run_record = recorder.persist!
+      expect(run_record.status).to eq(AutomationRules::RunRecorder::STATUS_MATCHED)
+      expect(run_record.steps.map { |step| step['label'] })
+        .to include('assign_to_pipeline: already in the pipeline')
+    end
   end
 
   # The unique index is partial on `completed_at IS NULL`, so a closed journey is history, not
@@ -149,8 +152,6 @@ RSpec.describe 'Automation rule pipeline assignment across several pipelines' do
     end
   end
 
-  # update_pipeline_stage auto-assigns through the same Pipelines::ConversationService, so the
-  # other half of the fix (prepare_conversation_for_pipeline) needs its own proof.
   describe 'update_pipeline_stage auto-assigning into a second funnel' do
     let!(:card_a) do
       PipelineItem.create!(pipeline: funnel_a, pipeline_stage: stage_a1, conversation: conversation)
@@ -162,6 +163,46 @@ RSpec.describe 'Automation rule pipeline assignment across several pipelines' do
       expect(PipelineItem.find_by(id: card_a.id)).to be_present
       expect(conversation.reload.pipeline_items.active.map(&:pipeline_id))
         .to contain_exactly(funnel_a.id, funnel_b.id)
+    end
+  end
+
+  describe 'update_pipeline_stage on a funnel that also holds a completed card' do
+    let!(:closed_card_b) do
+      PipelineItem.create!(pipeline: funnel_b, pipeline_stage: stage_b1, conversation: conversation,
+                           completed_at: 1.day.ago)
+    end
+    let!(:stage_b2) { PipelineStage.create!(pipeline: funnel_b, name: 'B2', position: 2) }
+
+    context 'when an active card sits beside it' do
+      let!(:active_card_b) do
+        PipelineItem.create!(pipeline: funnel_b, pipeline_stage: stage_b1, conversation: conversation)
+      end
+
+      it 'moves the active card and leaves the completed one where it closed' do
+        run(rule_with('update_pipeline_stage', [stage_b2.id]))
+
+        expect(active_card_b.reload.pipeline_stage_id).to eq(stage_b2.id)
+        expect(closed_card_b.reload.pipeline_stage_id).to eq(stage_b1.id)
+      end
+
+      it 'does not report a failure' do
+        allow(Rails.logger).to receive(:error)
+
+        run(rule_with('update_pipeline_stage', [stage_b2.id]))
+
+        expect(Rails.logger).not_to have_received(:error).with(/Failed to move conversation/)
+      end
+    end
+
+    # The auto-assign branch resolves the freshly created card the same way.
+    context 'when the completed card is the only one in the funnel' do
+      it 'auto-assigns a new card and lands it on the requested stage' do
+        run(rule_with('update_pipeline_stage', [stage_b2.id]))
+
+        new_card = conversation.reload.pipeline_items.active.find_by(pipeline: funnel_b)
+        expect(new_card.pipeline_stage_id).to eq(stage_b2.id)
+        expect(closed_card_b.reload.pipeline_stage_id).to eq(stage_b1.id)
+      end
     end
   end
 

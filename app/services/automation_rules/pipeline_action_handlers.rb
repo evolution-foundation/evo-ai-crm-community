@@ -27,10 +27,6 @@ module AutomationRules
         return
       end
 
-      # An archived pipeline is hidden from every picker, so a rule written months ago must not
-      # keep pushing conversations into it. (Until CRM-566 this guard carried a second job:
-      # execute_pipeline_assignment opened with a destroy_all, so reaching it also wiped every
-      # OTHER pipeline membership of the conversation. That wipe is gone — see the comment there.)
       return if skip_archived_pipeline(pipeline, action: 'assign_to_pipeline')
 
       log_pipeline_assignment(pipeline)
@@ -47,7 +43,7 @@ module AutomationRules
       log_stage_update_attempt(stage)
       @conversation.reload
 
-      pipeline_item = @conversation.pipeline_items.find_by(pipeline: stage.pipeline)
+      pipeline_item = @conversation.pipeline_items.active.find_by(pipeline: stage.pipeline)
 
       if pipeline_item
         move_to_existing_stage(pipeline_item, stage)
@@ -118,19 +114,6 @@ module AutomationRules
       Rails.logger.warn "Automation Rule #{@rule.id}: Pipeline #{pipeline_id.inspect} not found; skipping assign_to_pipeline for conversation #{@conversation.id}"
     end
 
-    # CRM-566: this used to open with `@conversation.pipeline_items.destroy_all`, so assigning
-    # a conversation to funnel B hard-deleted its card in funnel A — taking stage_movements,
-    # PipelineTasks and pipeline_item_products with it (all `dependent: :destroy`). The wipe
-    # contradicted the very schema it leaned on: `idx_pipeline_items_active_conversation_per_pipeline`
-    # is unique on (conversation_id, pipeline_id), not on conversation_id, precisely BECAUSE a
-    # conversation may live in several funnels at once. Only "twice in the SAME funnel" is
-    # forbidden, and the unique index plus PipelineItem's uniqueness validation already forbid it.
-    #
-    # So the only thing this action has to avoid is a second ACTIVE item in the target pipeline,
-    # which is now a no-op instead of a delete-and-recreate. A COMPLETED item in the target
-    # pipeline is deliberately not treated as "already there": the index is partial on
-    # `completed_at IS NULL`, so a closed journey is history and a fresh assignment is a new
-    # active card next to it.
     def execute_pipeline_assignment(pipeline)
       @conversation.reload
 
@@ -149,6 +132,11 @@ module AutomationRules
     def log_assignment_noop(pipeline)
       Rails.logger.info "Automation Rule #{@rule.id}: Conversation #{@conversation.id} is already active in " \
                         "pipeline #{pipeline.name}; assign_to_pipeline is a no-op"
+      # info, not action_skipped!: the conversation IS in the pipeline, so the run is not degraded.
+      @recorder&.add_step(
+        'assign_to_pipeline: already in the pipeline',
+        data: { pipeline_id: pipeline.id, pipeline_name: pipeline.name }
+      )
     end
 
     def log_assignment_success(pipeline)
@@ -207,7 +195,7 @@ module AutomationRules
 
     def move_to_target_stage_after_assignment(stage, service)
       @conversation.reload
-      pipeline_item = @conversation.pipeline_items.find_by(pipeline: stage.pipeline)
+      pipeline_item = @conversation.pipeline_items.active.find_by(pipeline: stage.pipeline)
 
       return unless pipeline_item && stage != stage.pipeline.pipeline_stages.first
 
