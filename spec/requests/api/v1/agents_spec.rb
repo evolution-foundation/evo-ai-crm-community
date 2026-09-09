@@ -122,4 +122,195 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(response).to have_http_status(:forbidden)
     end
   end
+
+  # The real service runs here (and_call_original); WebMock cuts the wire at
+  # the HTTP boundary so the whole proxy path is exercised.
+  context 'when evo-core fails' do
+    let(:core_agents_url) { %r{\A#{Regexp.escape(EvoAiCoreService.base_uri)}/api/v1/agents} }
+
+    before do
+      stub_auth(role_key: 'custom_ai_manager',
+                granted: %w[ai_agents.read ai_agents.create ai_agents.update ai_agents.delete])
+
+      allow(EvoAiCoreService).to receive(:list_agents).and_call_original
+      allow(EvoAiCoreService).to receive(:create_agent).and_call_original
+      allow(EvoAiCoreService).to receive(:update_agent).and_call_original
+      allow(EvoAiCoreService).to receive(:delete_agent).and_call_original
+    end
+
+    def core_json(status, body)
+      { status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' } }
+    end
+
+    context 'when the core is unreachable' do
+      it 'answers 503 on index, never 500' do
+        stub_request(:get, core_agents_url).to_raise(Errno::ECONNREFUSED)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:service_unavailable)
+        expect(json_response['error']['code']).to eq('SERVICE_UNAVAILABLE')
+      end
+
+      it 'answers 503 on create, never 500' do
+        stub_request(:post, core_agents_url).to_raise(Errno::ECONNREFUSED)
+
+        post '/api/v1/agents', params: { name: 'Bot' }, headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'answers 503 on update, never 500' do
+        stub_request(:put, core_agents_url).to_timeout
+
+        patch '/api/v1/agents/agent-1', params: { name: 'Bot 2' }, headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'answers 503 on destroy, never 500' do
+        stub_request(:delete, core_agents_url).to_raise(SocketError)
+
+        delete '/api/v1/agents/agent-1', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'answers 503 on a TCP-level timeout' do
+        stub_request(:get, core_agents_url).to_raise(Errno::ETIMEDOUT)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'answers 503 when the port does not speak HTTP' do
+        stub_request(:get, core_agents_url).to_raise(Net::HTTPBadResponse)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'keeps the failure detail in the log and out of the body' do
+        stub_request(:get, core_agents_url).to_raise(Errno::ECONNREFUSED)
+        allow(Rails.logger).to receive(:error)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(Rails.logger).to have_received(:error).with(/did not reach evo-core/)
+        expect(response.body).not_to include('ECONNREFUSED')
+      end
+    end
+
+    context 'when the core answers 4xx' do
+      it 'relays 422 instead of 500' do
+        stub_request(:post, core_agents_url).to_return(core_json(422, { error: 'model is required' }))
+
+        post '/api/v1/agents', params: { name: 'Bot' }, headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(json_response['error']['details']['upstream_status']).to eq(422)
+      end
+
+      it 'relays 404 instead of 500' do
+        stub_request(:delete, core_agents_url).to_return(core_json(404, { error: 'agent not found' }))
+
+        delete '/api/v1/agents/agent-1', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:not_found)
+      end
+
+      it 'does not echo the core wording back to the client' do
+        stub_request(:get, core_agents_url)
+          .to_return(core_json(400, { error: 'pq: relation "evo_core_agents" does not exist' }))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:bad_request)
+        expect(response.body).not_to include('evo_core_agents')
+      end
+
+      it 'turns a 401 into 502: the token was already accepted by the CRM' do
+        stub_request(:get, core_agents_url).to_return(core_json(401, { error: 'invalid token' }))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:bad_gateway)
+        expect(json_response['error']['details']['upstream_status']).to eq(401)
+      end
+
+      it 'relays a 400 whose body is not valid JSON, without echoing it' do
+        stub_request(:get, core_agents_url)
+          .to_return(status: 400, body: '{bad', headers: { 'Content-Type' => 'application/json' })
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:bad_request)
+        expect(response.body).not_to include('{bad')
+      end
+    end
+
+    context 'when the core answers 5xx' do
+      it 'answers 502, so the CRM is not blamed for the core breaking' do
+        stub_request(:get, core_agents_url).to_return(core_json(500, { error: 'boom' }))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:bad_gateway)
+        expect(json_response['error']['details']['upstream_status']).to eq(500)
+      end
+    end
+
+    context 'when the core answers 2xx' do
+      it 'still returns 200 with the data payload unwrapped' do
+        stub_request(:get, core_agents_url)
+          .to_return(core_json(200, { data: [{ id: 'agent-1', name: 'Bot' }] }))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(json_response.first['id']).to eq('agent-1')
+      end
+
+      it 'returns 200 for a bare JSON array (the payload shape that used to raise)' do
+        stub_request(:get, core_agents_url).to_return(core_json(200, [{ id: 'agent-1' }]))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:ok)
+        expect(json_response.first['id']).to eq('agent-1')
+      end
+
+      it 'answers 502 when a 200 carries an unparsable JSON body' do
+        stub_request(:get, core_agents_url)
+          .to_return(status: 200, body: '{bad', headers: { 'Content-Type' => 'application/json' })
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:bad_gateway)
+        expect(json_response['error']['details']['upstream_status']).to eq(200)
+      end
+
+      it 'returns 200 when the body is not JSON at all' do
+        stub_request(:get, core_agents_url)
+          .to_return(status: 200, body: '', headers: { 'Content-Type' => 'text/plain' })
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:ok)
+      end
+    end
+  end
 end

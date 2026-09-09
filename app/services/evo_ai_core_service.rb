@@ -6,6 +6,46 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
+  # Failures talking to evo-core surface as these two, never as a bare
+  # StandardError (which Api::BaseController turns into a 500).
+
+  # evo-core answered with a non-2xx; `status` is the code it returned.
+  class UpstreamError < StandardError
+    attr_reader :status
+
+    def initialize(message = 'evo-core returned an error', status: nil)
+      @status = status
+      super(message)
+    end
+  end
+
+  # evo-core was never reached (refused, DNS/TLS, timeout, unusable base_uri).
+  class UnavailableError < StandardError
+    def initialize(message = 'AI core service is unavailable')
+      super
+    end
+  end
+
+  # Listed one by one so an unrelated SystemCallError is not reported as
+  # "core down". Net::OpenTimeout/ReadTimeout are Timeout::Error.
+  NETWORK_ERRORS = [
+    Errno::ECONNREFUSED,
+    Errno::ECONNRESET,
+    Errno::ETIMEDOUT,
+    Errno::EHOSTUNREACH,
+    Errno::ENETUNREACH,
+    Errno::EPIPE,
+    EOFError,
+    SocketError,
+    Timeout::Error,
+    OpenSSL::SSL::SSLError,
+    URI::Error,
+    Net::ProtocolError,
+    Net::HTTPBadResponse,
+    Net::HTTPHeaderSyntaxError,
+    HTTParty::Error
+  ].freeze
+
   class << self
     def build_headers(request_headers = nil)
       # Get current user from thread context or MCP thread storage
@@ -63,29 +103,47 @@ class EvoAiCoreService
       build_headers
     end
 
+    # Not named `perform_request`: HTTParty already defines a private one that
+    # every verb funnels through, and overriding it breaks all requests.
+    def call_core(http_method, url, options = {})
+      response = public_send(http_method, url, options)
+      handle_response(response)
+    rescue *NETWORK_ERRORS => e
+      Rails.logger.error(
+        "EvoAiCoreService: #{http_method.to_s.upcase} #{base_uri}#{url} did not reach evo-core — " \
+        "#{e.class}: #{e.message}"
+      )
+      raise UnavailableError
+    end
+
     def handle_response(response)
-      # Return the complete response from evo-ai-core-service
-      # The service already returns standardized format: { success, data, message, meta }
-      parsed = response.parsed_response
+      parsed = parse_body(response)
 
       case response.code
       when 200, 201
-        parsed = response.parsed_response
-        # Extract payload if it exists (Evolution API format)
-        parsed.dig('data') || parsed
+        # Unwrap the `{ data: ... }` envelope; a bare array or a non-JSON body
+        # is only a Hash-less `parsed`, not an error.
+        parsed.is_a?(Hash) ? (parsed['data'] || parsed) : parsed
       when 204
         nil
-      when 400
-        raise StandardError, response.parsed_response['error'] || 'Bad Request'
-      when 401
-        raise StandardError, 'Unauthorized'
-      when 404
-        raise ActiveRecord::RecordNotFound
-      when 422
-        raise StandardError, response.parsed_response['error'] || 'Unprocessable Entity'
       else
-        raise StandardError, "Unexpected response: #{response.code}"
+        raise UpstreamError.new(upstream_message(parsed, response.code), status: response.code)
       end
+    end
+
+    # HTTParty parses lazily and raises on an invalid body under a JSON
+    # content-type, on any status.
+    def parse_body(response)
+      response.parsed_response
+    rescue JSON::ParserError => e
+      Rails.logger.error("EvoAiCoreService: evo-core responded #{response.code} with an unparsable body — #{e.message[0, 200]}")
+      raise UpstreamError.new("evo-core responded #{response.code} with an unparsable body", status: response.code)
+    end
+
+    # Logged by the caller; controllers decide what reaches the client.
+    def upstream_message(parsed, code)
+      message = parsed.is_a?(Hash) ? (parsed['error'] || parsed['message']) : nil
+      message.presence || "evo-core responded #{code}"
     end
 
     # Agents endpoints (Core AI Service)
@@ -93,56 +151,48 @@ class EvoAiCoreService
       url = "/api/v1/agents"
       Rails.logger.info "EvoAiCoreService.list_agents - Params: #{params}"
 
-      response = get(url, {
+      call_core(:get, url, {
         query: params,
         headers: build_headers(request_headers)
       })
-
-      Rails.logger.info "EvoAiCoreService.list_agents - Response code: #{response.code}, Body: #{response.body[0..500]}"
-      handle_response(response)
     end
 
     def get_agent(agent_id, request_headers = nil)
       url = "/api/v1/agents/#{agent_id}"
-      response = get(url, {
+      call_core(:get, url, {
         headers: build_headers(request_headers)
       })
-      handle_response(response)
     end
 
     def create_agent(agent_data, request_headers = nil)
       url = "/api/v1/agents"
-      response = post(url, {
+      call_core(:post, url, {
         body: agent_data.to_json,
         headers: build_headers(request_headers)
       })
-      handle_response(response)
     end
 
     def update_agent(agent_id, agent_data, request_headers = nil)
       url = "/api/v1/agents/#{agent_id}"
-      response = put(url, {
+      call_core(:put, url, {
         body: agent_data.to_json,
         headers: build_headers(request_headers)
       })
-      handle_response(response)
     end
 
     def delete_agent(agent_id, request_headers = nil)
       url = "/api/v1/agents/#{agent_id}"
-      response = delete(url, {
+      call_core(:delete, url, {
         headers: build_headers(request_headers)
       })
-      handle_response(response)
     end
 
     def sync_evolution_bot(agent_id, request_headers = nil)
       url = "/api/v1/agents/#{agent_id}/sync_evolution"
-      response = post(url, {
+      call_core(:post, url, {
         body: {}.to_json,
         headers: build_headers(request_headers)
       })
-      handle_response(response)
     end
 
     def assign_folder(agent_id, folder_id)
