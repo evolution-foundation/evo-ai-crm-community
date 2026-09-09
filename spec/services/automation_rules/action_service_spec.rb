@@ -44,7 +44,7 @@ RSpec.describe AutomationRules::ActionService do
 
   describe '#update_pipeline_stage (auto-assign-and-move path)' do
     context 'when the conversation belongs to a different pipeline and the target stage is NOT the first of the new pipeline' do
-      before do
+      let!(:card_a) do
         PipelineItem.create!(pipeline: pipeline_a, pipeline_stage: stage_a1, conversation: conversation)
       end
 
@@ -53,19 +53,19 @@ RSpec.describe AutomationRules::ActionService do
         described_class.new(rule, nil, conversation).perform
 
         conversation.reload
-        items = conversation.pipeline_items
-        expect(items.count).to eq(1)
-        expect(items.first.pipeline).to eq(pipeline_b)
-        expect(items.first.pipeline_stage).to eq(stage_b3)
+        item = conversation.pipeline_items.find_by(pipeline: pipeline_b)
+        expect(item).to be_present
+        expect(item.pipeline_stage).to eq(stage_b3)
       end
 
-      it 'destroys the previous pipeline assignment (assign_to_pipeline-style behaviour)' do
+      it 'leaves the previous pipeline assignment untouched' do
         rule = build_rule_with_stage_action(stage_b2)
         described_class.new(rule, nil, conversation).perform
 
         conversation.reload
-        expect(conversation.pipeline_items.where(pipeline: pipeline_a)).to be_empty
         expect(conversation.pipeline_items.where(pipeline: pipeline_b)).to exist
+        expect(PipelineItem.find_by(id: card_a.id)).to be_present
+        expect(card_a.reload.pipeline_stage).to eq(stage_a1)
       end
     end
 
