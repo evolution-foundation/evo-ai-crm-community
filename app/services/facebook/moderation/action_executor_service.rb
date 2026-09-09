@@ -276,9 +276,7 @@ class Facebook::Moderation::ActionExecutorService
     agent_bot = find_agent_bot_for_moderation
 
     # Use AgentBot as sender if available, otherwise fall back to a user.
-    # CRM-578: the SuperAdmin term between the two is gone. The STI class does not exist
-    # here, so it never resolved — and against a legacy row of that type .first raises
-    # SubclassNotFound before the `||` runs. User.first is what always chose the sender.
+    # No SuperAdmin STI class in this fork; a lookup on it raises on a legacy row.
     sender = agent_bot || User.first
 
     # Build message attributes that will be used to create the message

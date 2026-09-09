@@ -24,8 +24,7 @@ class Messages::MentionService
 
   def filter_mentioned_ids_by_inbox
     inbox = message.inbox
-    # CRM-578: same fossil as the assignable-agents list — the SuperAdmin ids prepended here
-    # were always an empty list, so a super admin was never mentionable in practice.
+    # No SuperAdmin STI class in this fork: super_admin is an auth role, not a user type.
     valid_mentionable_ids = inbox.members.map(&:id)
     # Intersection of ids
     mentioned_ids & valid_mentionable_ids.uniq.map(&:to_s)

@@ -161,8 +161,7 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       content: message_content || '',
       inbox_id: @inbox.id,
       source_id: raw_message_id,
-      # CRM-578: same fossil as the go handler — the SuperAdmin lookup never resolved, and
-      # raises SubclassNotFound against a legacy row instead of falling through.
+      # No SuperAdmin STI class in this fork; a lookup on it raises on a legacy row.
       sender: incoming? ? @contact : User.first,
       sender_type: incoming? ? 'Contact' : 'User',
       message_type: incoming? ? :incoming : :outgoing,
