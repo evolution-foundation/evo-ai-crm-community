@@ -162,9 +162,7 @@ RSpec.describe Channels::ConnectionStateResolver do
       expect(resolve(channel)[:state]).to eq('connected')
     end
 
-    # Every provider that reaches this branch is re-probed today, so the guard
-    # is here for the next token provider added without one: stub the list back
-    # to what it protects against.
+    # Every live token provider is re-probed now; stub the list to reach the guard.
     it 'never expires the stamp on a provider no job re-probes' do
       stub_const('Channel::Whatsapp::CREDENTIAL_PROBE_PROVIDERS', %w[whatsapp_cloud])
       channel = Channel::Whatsapp.new(

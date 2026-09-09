@@ -107,8 +107,6 @@ RSpec.describe Channels::Whatsapp::CredentialProbeSchedulerJob, type: :job do
       expect(probed).to be_empty
     end
 
-    # 360dialog probes through a GET on the webhook config, apart from the POST
-    # save-time validation still uses, so the schedule may repeat it.
     it 'enqueues 360dialog, whose probe is a read-only request' do
       dialog = channel(provider: 'default', phone_number: '+5511900000008')
 

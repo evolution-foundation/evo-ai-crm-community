@@ -36,8 +36,6 @@ RSpec.describe Whatsapp::Providers::Whatsapp360DialogService do
       expect(service.probe_credential).to eq(:rejected)
     end
 
-    # A provider that is down told us nothing about the credential; answering
-    # :rejected here would revoke a healthy channel over a 360dialog outage.
     it 'reports :inconclusive when the provider is unavailable' do
       stub_request(:get, webhook_config_url).to_return(status: 503, body: 'upstream down')
 
@@ -50,9 +48,6 @@ RSpec.describe Whatsapp::Providers::Whatsapp360DialogService do
       expect(service.probe_credential).to eq(:inconclusive)
     end
 
-    # The whole reason this method exists apart from validate_provider_config?:
-    # the scheduler repeats it every few hours, so it may not change anything
-    # on the provider. One request, and it is a read.
     it 'writes nothing on the provider' do
       stub_request(:any, /360dialog\.io/).to_return(status: 200, body: '{}')
 
@@ -63,8 +58,6 @@ RSpec.describe Whatsapp::Providers::Whatsapp360DialogService do
     end
   end
 
-  # Save-time validation keeps registering the webhook: that write is the point
-  # of the call, and it is what the read-only probe had to be split away from.
   describe '#validate_provider_config?' do
     it 'still registers the webhook' do
       stub = stub_request(:post, webhook_config_url).to_return(status: 200, body: '{}')

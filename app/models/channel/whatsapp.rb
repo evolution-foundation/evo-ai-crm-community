@@ -32,10 +32,8 @@ class Channel::Whatsapp < ApplicationRecord
   # half of Channels::ConnectionStateResolver::CONNECTION_MAP.
   DISCONNECTED_CONNECTIONS = %w[close closed disconnected].freeze
 
-  # Token providers whose credential probe is a read-only request, so it can be
-  # repeated on a schedule. Membership is also what makes the probe evidence
-  # expire (Channels::ConnectionStateResolver::CREDENTIALS_TTL), so a provider
-  # only belongs here once something re-probes it.
+  # Token providers whose credential probe is read-only, so the scheduler can
+  # repeat it; membership also turns on the resolver's evidence TTL.
   CREDENTIAL_PROBE_PROVIDERS = %w[default whatsapp_cloud notificame].freeze
 
   # provider_connection keys the credential probe owns, kept across an
