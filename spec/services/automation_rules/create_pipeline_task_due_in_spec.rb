@@ -2,11 +2,8 @@
 
 require 'rails_helper'
 
-# CRM-563: the automation screen advertises "2d, 1w" for the create_pipeline_task due
-# date (automation.json:create_pipeline_task_due_in, all 7 locales), and the parser
-# understood neither — the task was created with due_date nil, no error, no log. The
-# parser lives in the shared PipelineActionHandlers module, so it covers both executor
-# surfaces (modal-style ActionService and flow-canvas FlowExecutionService) at once.
+# The screen advertises "2d, 1w" for the create_pipeline_task due date. The parser is
+# shared by ActionService and FlowExecutionService, so both surfaces are covered here.
 RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
   let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
   let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
@@ -19,21 +16,10 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
   let!(:stage) { PipelineStage.create!(pipeline: pipeline, name: 'S1', position: 1) }
   let!(:pipeline_item) { PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, conversation: conversation) }
 
-  # PipelineTask has `created_by_id NOT NULL`; production reads it via
-  # `User.where(type: 'SuperAdmin').first&.id` and the Community fork removed the
-  # SuperAdmin class (EVO-659), so the STI lookup throws unless it is stubbed.
-  let(:created_by_user) { User.create!(name: 'CreatedBy', email: "cb-#{SecureRandom.hex(4)}@test.com") }
-
-  before do
-    allow(User).to receive(:where).and_call_original
-    allow(User).to receive(:where).with(type: 'SuperAdmin').and_return(double(first: created_by_user))
-  end
-
   after { Current.reset }
 
   def rule_with(due_in)
-    # task_type/priority are passed explicitly by the handler, so a nil overrides the
-    # column default and the record fails validation — the rule always carries them.
+    # task_type/priority are passed explicitly, so nil would override the column default.
     params = { 'title' => 'Call the customer', 'task_type' => 'call', 'priority' => 'medium' }
     params['due_in'] = due_in unless due_in.nil?
 
@@ -51,8 +37,6 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
     pipeline_item.reload.tasks.last
   end
 
-  # The bug as reported: the two examples printed on screen. With the old parser both
-  # fall through split('.') and produce due_date nil.
   describe 'the compact format the screen advertises' do
     it 'reads "2d" as two days from now' do
       expect(run('2d').due_date).to be_within(60.seconds).of(2.days.from_now)
@@ -90,14 +74,11 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
       expect(run('  5d  ').due_date).to be_within(60.seconds).of(5.days.from_now)
     end
 
-    # "m" reads as minutes to one operator and months to the next; guessing either one
-    # would silently schedule the other's task. It is refused instead of guessed.
     it 'refuses the ambiguous bare "m" instead of guessing minutes or months' do
       expect { run('30m') }.not_to(change { pipeline_item.reload.tasks.count })
     end
   end
 
-  # Rules written before CRM-563 use these two, and they must keep working.
   describe 'the formats that already worked' do
     it 'still reads an absolute date' do
       target = 10.days.from_now.to_date
@@ -128,8 +109,6 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
     end
   end
 
-  # The whole point of the card: a due_in the parser cannot read must not turn into a
-  # task that looks scheduled and never comes due.
   describe 'an unreadable due_in' do
     ['abc', '1.destroy', 'tomorrow', '2026-99-99', 'd', '1.5.days'].each do |bad|
       it "refuses to create the task for #{bad.inspect}" do
@@ -152,9 +131,6 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
     end
   end
 
-  # `value.to_i.send(unit)` called whatever method the rule's JSON named, so a due_in of
-  # "1.destroy" reached `1.destroy`. The allowlist is what stops user config from
-  # dispatching arbitrary methods on Integer.
   describe 'unit allowlist (arbitrary method dispatch)' do
     it 'never calls a method the rule names but the allowlist does not carry' do
       calls = []
@@ -179,9 +155,6 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
     end
   end
 
-  # The operator reads the rule's execution timeline, not the Rails log — and the
-  # listener records every action as success BEFORE running it, so a refusal that only
-  # logged would still show up green.
   describe 'execution timeline' do
     let(:rule) { rule_with('abc') }
     let(:recorder) do
@@ -221,8 +194,6 @@ RSpec.describe 'Automation rule create_pipeline_task due_in parsing' do
     end
   end
 
-  # The flow-canvas executor reaches the same handler through execute_node_action, with
-  # its own node_data normalisation, so the parser needs coverage on that surface too.
   describe 'flow-canvas surface' do
     let(:flow_rule) { rule_with('2d') }
     let(:flow_service) { AutomationRules::FlowExecutionService.new(flow_rule, nil, conversation) }

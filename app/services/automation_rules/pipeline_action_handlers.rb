@@ -14,20 +14,8 @@ module AutomationRules
   # `execute_node_action` (FlowExecutionService); they invoke these via send/
   # direct private dispatch.
   module PipelineActionHandlers
-    # Units a `due_in` may be written in, mapped to the ActiveSupport duration method
-    # they stand for. Two spellings of the same thing land here: the compact form the
-    # automation screen advertises ("2d", "1w" — automation.json:create_pipeline_task_due_in
-    # in all 7 locales) and the legacy dotted form rules were written with ("3.days").
-    #
-    # This is also the security boundary. `value.to_i.send(unit)` used to take whatever
-    # string the rule's JSON carried, so a `due_in` of "1.destroy" reached `1.destroy` —
-    # user-supplied config calling an arbitrary method on Integer. An unknown unit is now
-    # a parse failure, never a method call.
-    #
-    # `m` alone is deliberately absent: it reads as "minutes" to one operator and
-    # "months" to the next, and silently picking either schedules the other one's task
-    # some 43_000x off. Both are reachable unambiguously as "30min"/"6mo" (or via the
-    # dotted "30.minutes"/"6.months").
+    # Units due_in accepts, compact ("2d") and dotted ("3.days"); doubles as the allowlist
+    # so rule JSON cannot name an arbitrary Integer method. Bare "m" is ambiguous, left out.
     DUE_IN_UNITS = {
       'min' => :minutes, 'minute' => :minutes, 'minutes' => :minutes,
       'h' => :hours, 'hour' => :hours, 'hours' => :hours,
@@ -37,14 +25,9 @@ module AutomationRules
       'y' => :years, 'year' => :years, 'years' => :years
     }.freeze
 
-    # Matches "2d", "1w", "2 D" and the legacy "3.days" with one expression. The optional
-    # sign preserves the dotted form's previous `to_i` behaviour ("-1.days" stayed in the
-    # past); the optional dot and spaces make the compact form forgiving of what an
-    # operator actually types.
+    # The sign keeps "-1.days" in the past, as the old to_i did.
     DUE_IN_PATTERN = /\A([+-]?\d+)\s*\.?\s*([a-z]+)\z/i
 
-    # An absolute date ("2026-09-30", optionally with a time after it) is handed to
-    # Time.zone.parse untouched.
     DUE_IN_ABSOLUTE_PATTERN = /\A\d{4}-\d{2}-\d{2}/
 
     private
@@ -277,9 +260,7 @@ module AutomationRules
       Rails.logger.error "Automation Rule #{@rule.id}: Failed to move conversation #{@conversation.id} to stage #{stage.name}"
     end
 
-    # nil means "no due date" for a blank due_in and "could not read it" for anything
-    # else — the caller tells the two apart via skip_unparseable_due_in, because only
-    # the second one must stop the task from being created.
+    # nil for a blank due_in means no due date; for anything else it means unreadable.
     def calculate_due_date(due_in)
       return nil if due_in.blank?
 
@@ -298,14 +279,7 @@ module AutomationRules
       nil
     end
 
-    # A due_in the parser cannot read must NOT become a task with no due date — that is
-    # the failure the customer reported (CRM-563): the rule reports "Matched", the task
-    # exists, and nothing ever comes due. Between refusing and creating-and-logging we
-    # refuse, following the house pattern for an action that turns itself down mid-run
-    # (skip_archived_pipeline): a warn in the Rails log AND a `Skipped:` step on the
-    # rule's execution timeline, which also downgrades the run status — the operator
-    # reads that timeline, not the server log. A dateless task would otherwise sit in
-    # the board looking scheduled, which is worse than no task at all.
+    # Refusing beats a dateless task that looks scheduled; the timeline step is what the operator sees.
     def skip_unparseable_due_in(due_in, due_date)
       return false if due_in.blank? || due_date.present?
 
