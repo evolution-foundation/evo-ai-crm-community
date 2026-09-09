@@ -161,7 +161,9 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       content: message_content || '',
       inbox_id: @inbox.id,
       source_id: raw_message_id,
-      sender: incoming? ? @contact : User.where(type: 'SuperAdmin').first || User.first,
+      # CRM-578: same fossil as the go handler — the SuperAdmin lookup never resolved, and
+      # raises SubclassNotFound against a legacy row instead of falling through.
+      sender: incoming? ? @contact : User.first,
       sender_type: incoming? ? 'Contact' : 'User',
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: message_content_attributes

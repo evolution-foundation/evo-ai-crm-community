@@ -360,7 +360,12 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       content: content,
       inbox_id: channel.inbox.id,
       source_id: message_id,
-      sender: from_me ? User.where(type: 'SuperAdmin').first || User.first : conversation.contact,
+      # CRM-578: the SuperAdmin lookup that used to precede User.first is gone. The STI
+      # class does not exist in this codebase, so the query never returned anyone — and if
+      # an installation still carries a legacy row with that type, .first raises
+      # ActiveRecord::SubclassNotFound before the `||` is ever evaluated, taking this job
+      # with it. What actually selected the sender was always User.first.
+      sender: from_me ? User.first : conversation.contact,
       sender_type: from_me ? 'User' : 'Contact',
       message_type: from_me ? :outgoing : :incoming,
       created_at: created_at,  # 🎯 Data real da mensagem!

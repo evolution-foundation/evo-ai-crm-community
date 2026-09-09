@@ -270,8 +270,11 @@ module AutomationRules
     # --- Helpers -----------------------------------------------------------
 
     def agent_belongs_to_inbox?(agent_ids)
-      member_ids = @conversation.inbox.members.pluck(:user_id)
-      assignable_agent_ids = member_ids + User.where(type: 'SuperAdmin').pluck(:id)
+      # CRM-578: the SuperAdmin ids that used to be appended here are gone. The STI class
+      # does not exist in this codebase, so the query returned an empty list and the rule
+      # "a super admin is always assignable" never held. Removing it changes nothing an
+      # installation can observe, and stops the code promising a rule it does not keep.
+      assignable_agent_ids = @conversation.inbox.members.pluck(:user_id)
 
       assignable_agent_ids.include?(agent_ids[0])
     end

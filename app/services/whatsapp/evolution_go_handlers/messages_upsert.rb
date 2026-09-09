@@ -260,7 +260,11 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       content: message_content || '',
       source_id: raw_message_id,
       created_at: Time.zone.at(message_timestamp),
-      sender: incoming? ? @contact : (User.where(type: 'SuperAdmin').first || User.first),
+      # CRM-578: SuperAdmin is an STI class this fork does not define, so the lookup never
+      # resolved and User.first is what always chose the sender. Against a legacy row of
+      # that type it was worse than useless: .first raises SubclassNotFound before the
+      # `||` is evaluated, so the fallback never gets its chance.
+      sender: incoming? ? @contact : User.first,
       sender_type: incoming? ? 'Contact' : 'User',
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: content_attrs
