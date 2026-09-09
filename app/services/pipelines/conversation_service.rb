@@ -101,16 +101,23 @@ class Pipelines::ConversationService
     @analytics_service ||= Pipelines::AnalyticsService.new(@pipeline)
   end
 
+  # CRM-566: this used to destroy every item the conversation had in OTHER pipelines before
+  # creating the new one — the second half of the same bug as
+  # AutomationRules::PipelineActionHandlers#execute_pipeline_assignment. Adding a conversation
+  # to funnel B is not a statement about funnel A: the unique index behind pipeline_items is
+  # (conversation_id, pipeline_id) WHERE completed_at IS NULL, so being active in several
+  # funnels at once is the supported shape and only a duplicate inside ONE funnel is not.
+  # Deleting was also unrecoverable — pipeline_items are hard-deleted and cascade into
+  # stage_movements, PipelineTasks and pipeline_item_products.
+  #
+  # Callers that genuinely want a MOVE (the conversation leaves the old funnel) already have
+  # one that keeps the row, its history and its tasks: #move_to_pipeline_stage, which is what
+  # PipelineItemsController#relocate_conversation and StageAutomationService#move_to_pipeline
+  # use. #add_conversation only adds.
+  #
+  # The reload stays: callers reach here with a conversation loaded before the rule ran, and
+  # create_pipeline_item's uniqueness validation has to see the current items.
   def prepare_conversation_for_pipeline(conversation)
-    conversation.reload
-
-    # Only remove active items from OTHER pipelines (not this one)
-    # This preserves completed journey history in the current pipeline
-    other_pipeline_items = conversation.pipeline_items.where.not(pipeline_id: @pipeline.id)
-    return unless other_pipeline_items.exists?
-
-    Rails.logger.info "Pipeline Service: Removing conversation #{conversation.id} from #{other_pipeline_items.count} other pipeline(s)"
-    other_pipeline_items.destroy_all
     conversation.reload
   end
 
