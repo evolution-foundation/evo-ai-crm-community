@@ -24,7 +24,8 @@ class Messages::MentionService
 
   def filter_mentioned_ids_by_inbox
     inbox = message.inbox
-    valid_mentionable_ids = User.where(type: 'SuperAdmin').pluck(:id) + inbox.members.map(&:id)
+    # No SuperAdmin STI class in this fork: super_admin is an auth role, not a user type.
+    valid_mentionable_ids = inbox.members.map(&:id)
     # Intersection of ids
     mentioned_ids & valid_mentionable_ids.uniq.map(&:to_s)
   end
