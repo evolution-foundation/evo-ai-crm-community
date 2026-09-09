@@ -12,16 +12,6 @@ require 'rails_helper'
 # move_to_target_stage_after_assignment to move it to the requested stage.
 # This spec is a regression guard for that two-step sequence; removing the
 # follow-up move would silently leave conversations on the wrong stage.
-#
-# CRM-566: the auto-assign step used to hard-delete the conversation's cards in every OTHER
-# pipeline, because add_conversation did — an inheritance this spec named out loud
-# ("assign_to_pipeline-style behaviour"). That was the reported bug, not an acceptance
-# criterion of EVO-1080: the wipe cascaded into stage_movements, PipelineTasks and
-# pipeline_item_products, and the schema behind pipeline_items (unique on
-# (conversation_id, pipeline_id) WHERE completed_at IS NULL) exists precisely so a
-# conversation can sit in several funnels at once. Landing on the REQUESTED stage is what
-# EVO-1080 locks, and that is unchanged; the assertions below now expect the source funnel's
-# card to survive instead of being destroyed.
 
 RSpec.describe AutomationRules::ActionService do
   let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
@@ -68,8 +58,6 @@ RSpec.describe AutomationRules::ActionService do
         expect(item.pipeline_stage).to eq(stage_b3)
       end
 
-      # CRM-566: was 'destroys the previous pipeline assignment'. Adding the conversation to
-      # pipeline B says nothing about pipeline A, and the delete was unrecoverable.
       it 'leaves the previous pipeline assignment untouched' do
         rule = build_rule_with_stage_action(stage_b2)
         described_class.new(rule, nil, conversation).perform

@@ -211,11 +211,8 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
       let(:other_pipeline) { Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user) }
       let!(:other_stage) { PipelineStage.create!(pipeline: other_pipeline, name: 'Triage', position: 1) }
 
-      # The contact already holds a lead card in `pipeline`, which Conversation#promote_lead_card
-      # turns into this conversation's card on create — so the conversation starts INSIDE the
-      # target pipeline. Until CRM-566, add_conversation silently destroyed that card and the
-      # cross-pipeline scenario appeared by accident; now that adding to a funnel no longer
-      # empties the others, the scenario this context is named after has to be set up on purpose.
+      # Conversation#promote_lead_card turns the contact's lead card into this conversation's
+      # card in `pipeline` on create, so "not in the target pipeline" has to be made true.
       before do
         Pipelines::ConversationService.new(pipeline: other_pipeline, user: user).add_conversation(conversation, stage: other_stage)
         conversation.pipeline_items.where(pipeline: pipeline).destroy_all
@@ -237,8 +234,7 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
     end
 
     context 'when the conversation is not in any pipeline (auto-assign)' do
-      # Same reason as the cross-pipeline context: the promoted lead card puts the conversation
-      # in `pipeline` the moment it is created, so "in no pipeline" has to be made true.
+      # Same promoted lead card as above.
       before { conversation.pipeline_items.destroy_all }
 
       it 'creates a pipeline_item in the target pipeline at the target stage' do
