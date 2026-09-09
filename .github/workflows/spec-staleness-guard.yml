@@ -434,4 +434,5 @@ jobs:
             spec/requests/api/v1/inboxes_abort_hub_connection_spec.rb \
             spec/jobs/channels/whatsapp/credential_probe_scheduler_job_spec.rb \
             spec/jobs/channels/whatsapp/credential_probe_job_spec.rb \
+            spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             --format progress

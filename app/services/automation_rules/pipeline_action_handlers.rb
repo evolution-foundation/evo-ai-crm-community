@@ -66,8 +66,11 @@ module AutomationRules
       assigned_to_id = params[:assigned_to_id]
       due_in = params[:due_in]
 
+      creator_id = pipeline_task_creator_id(pipeline_item)
+      return if skip_without_task_creator(creator_id)
+
       task = pipeline_item.tasks.create!(
-        created_by_id: User.where(type: 'SuperAdmin').first&.id,
+        created_by_id: creator_id,
         assigned_to_id: assigned_to_id,
         title: title,
         description: description,
@@ -82,6 +85,33 @@ module AutomationRules
       EvolutionExceptionTracker.new(e).capture_exception
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+    # exists? reads without instantiating; a legacy STI-typed row raises on load, which is
+    # also why the sibling resolve_task_creator's User.order(:created_at).first stays out.
+    def pipeline_task_creator_id(pipeline_item)
+      candidates = [pipeline_item.pipeline&.created_by_id,
+                    @conversation&.assignee_id,
+                    pipeline_item.assigned_by_id]
+
+      candidates.compact.find { |id| User.exists?(id: id) }
+    end
+
+    # created_by_id is NOT NULL, so no author means no task. Without this the create!
+    # raises into the rescue below and the operator sees nothing.
+    def skip_without_task_creator(creator_id)
+      return false if creator_id.present?
+
+      Rails.logger.warn(
+        "Automation Rule #{@rule.id}: no user can be recorded as the author of the task " \
+        '(board owner, assignee and assigner are all missing or deleted); ' \
+        "skipping create_pipeline_task for conversation #{@conversation.id}"
+      )
+      @recorder&.action_skipped!(
+        'Skipped: create_pipeline_task',
+        data: { reason: 'no_task_creator' }
+      )
+      true
+    end
 
     def extract_pipeline_id(param)
       param.is_a?(Hash) ? param[:id] : param
