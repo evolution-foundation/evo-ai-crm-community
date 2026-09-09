@@ -89,44 +89,27 @@ module AutomationRules
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-    # Who the automation records as the author of the task it just created.
-    #
-    # This used to be `User.where(type: 'SuperAdmin').first&.id`, and that expression
-    # cannot succeed in this codebase — there is no deployment where it works:
-    #
-    #   * the STI class `SuperAdmin` does not exist here (it is a fossil of the upstream
-    #     project), so an install WITHOUT such a row gets `nil`, and `created_by_id` is
-    #     NOT NULL with a required `belongs_to :created_by` — `create!` fails validation;
-    #   * an install WITH such a row is worse: `.first` instantiates it and raises
-    #     `ActiveRecord::SubclassNotFound` before returning anything.
-    #
-    # Both ended in the `rescue` below: no task, no error for the operator, and a rule
-    # still reporting success. That is CRM-576.
-    #
-    # The funnel's owner is the stable answer. `pipelines.created_by_id` is NOT NULL, so
-    # every card has one, and "who owns the board this task appeared on" is provenance a
-    # human can explain — unlike an arbitrary `User.first`. The column carries no foreign
-    # key, so a deleted owner is possible and is checked with `exists?`, which reads the
-    # row without instantiating it (an STI-typed row would raise on instantiation).
+    # The board owner first, then the same fallbacks PipelineTasksController#resolve_task_creator
+    # uses for the journey surface — minus its `User.order(:created_at).first` tail, which
+    # instantiates and would raise on a legacy STI-typed row (CRM-576, CRM-578).
+    # `exists?` reads without instantiating; none of these columns carries a foreign key.
     def pipeline_task_creator_id(pipeline_item)
-      creator_id = pipeline_item.pipeline&.created_by_id
-      return nil if creator_id.blank?
+      candidates = [pipeline_item.pipeline&.created_by_id,
+                    @conversation&.assignee_id,
+                    pipeline_item.assigned_by_id]
 
-      User.exists?(id: creator_id) ? creator_id : nil
+      candidates.compact.find { |id| User.exists?(id: id) }
     end
 
-    # Without an author the task cannot be persisted at all. Refuse out loud instead of
-    # letting `create!` raise into the rescue, following the same house pattern as
-    # skip_archived_pipeline: a warn in the Rails log AND a `Skipped:` step on the rule's
-    # execution timeline, which also downgrades the run status. The operator reads that
-    # timeline, not the server log — and an automation that silently does nothing is the
-    # exact failure this card exists to end.
+    # created_by_id is NOT NULL, so no author means no task. Refuse on the rule's timeline
+    # instead of letting create! raise into the rescue below, which is what made CRM-576
+    # invisible: the operator reads that timeline, not the server log.
     def skip_without_task_creator(creator_id)
       return false if creator_id.present?
 
       Rails.logger.warn(
         "Automation Rule #{@rule.id}: no user can be recorded as the author of the task " \
-        '(the funnel owner is missing or was deleted); ' \
+        '(board owner, assignee and assigner are all missing or deleted); ' \
         "skipping create_pipeline_task for conversation #{@conversation.id}"
       )
       @recorder&.action_skipped!(

@@ -2,17 +2,10 @@
 
 require 'rails_helper'
 
-# CRM-576: `create_pipeline_task` resolved the task's author with
-# `User.where(type: 'SuperAdmin').first&.id`, an expression that cannot succeed in this
-# codebase. `SuperAdmin` is a fossil of the upstream project and is defined nowhere here,
-# so an install without such a row gets nil (and `created_by_id` is NOT NULL, with a
-# required `belongs_to`), while an install WITH one raises SubclassNotFound on the lookup
-# itself. Either way the action's own rescue swallowed it: no task, no error, and a rule
-# still reporting success.
-#
-# These examples deliberately DO NOT stub the SuperAdmin lookup. Stubbing it is what kept
-# the defect invisible — a spec that hands the lookup a valid user tests a path that never
-# happens in production.
+# CRM-576. These examples deliberately DO NOT stub the SuperAdmin lookup: stubbing it is
+# what kept the defect invisible, because a stub hands the action a user that no install
+# of this product can produce. The action's own rescue swallows the failure, so the only
+# assertion that means anything here is the task row itself.
 RSpec.describe 'Automation rule create_pipeline_task author' do
   let(:owner) { User.create!(name: 'Funnel Owner', email: "owner-#{SecureRandom.hex(4)}@test.com") }
   let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
@@ -25,9 +18,7 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
   let!(:stage) { PipelineStage.create!(pipeline: pipeline, name: 'S1', position: 1) }
   let!(:pipeline_item) { PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, conversation: conversation) }
 
-  after { Current.reset }
-
-  def rule
+  let(:rule) do
     AutomationRule.create!(
       name: "Rule #{SecureRandom.hex(3)}",
       event_name: 'conversation_created',
@@ -38,6 +29,8 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
       active: true
     )
   end
+
+  after { Current.reset }
 
   def perform(recorder: nil)
     AutomationRules::ActionService.new(rule, nil, conversation, recorder: recorder).perform
@@ -82,15 +75,43 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
       expect { perform }.to change { pipeline_item.reload.tasks.count }.from(0).to(1)
       expect(pipeline_item.reload.tasks.last.created_by_id).to eq(owner.id)
     end
+  end
 
-    it 'does not raise SubclassNotFound' do
-      expect { perform }.not_to raise_error
+  # None of these columns carries a foreign key, so the chain has to survive a deleted
+  # user at any position — the same fallbacks PipelineTasksController#resolve_task_creator
+  # gives the journey surface, so one automation does not author tasks differently from
+  # the other.
+  describe 'when the board owner is gone' do
+    let(:assignee) { User.create!(name: 'Assignee', email: "assignee-#{SecureRandom.hex(4)}@test.com") }
+
+    before do
+      conversation.update!(assignee: assignee)
+      User.where(id: owner.id).delete_all
+    end
+
+    it 'records the conversation assignee as the author' do
+      expect { perform }.to change { pipeline_item.reload.tasks.count }.from(0).to(1)
+      expect(pipeline_item.reload.tasks.last.created_by_id).to eq(assignee.id)
     end
   end
 
-  # `pipelines.created_by_id` has no foreign key, so the owner can be gone. Without an
-  # author the row cannot be written at all — the point is that it must not fail silently.
-  describe 'when the funnel owner no longer exists' do
+  describe 'when the board owner and the assignee are both gone' do
+    let(:assigner) { User.create!(name: 'Assigner', email: "assigner-#{SecureRandom.hex(4)}@test.com") }
+
+    before do
+      pipeline_item.update!(assigned_by: assigner)
+      User.where(id: owner.id).delete_all
+    end
+
+    it "records the item's assigner as the author" do
+      expect { perform }.to change { pipeline_item.reload.tasks.count }.from(0).to(1)
+      expect(pipeline_item.reload.tasks.last.created_by_id).to eq(assigner.id)
+    end
+  end
+
+  # Nothing left to attribute the task to: created_by_id is NOT NULL, so the row cannot be
+  # written at all — the point is that it must not fail silently.
+  describe 'when no candidate author exists' do
     before { User.where(id: owner.id).delete_all }
 
     it 'creates no task' do
