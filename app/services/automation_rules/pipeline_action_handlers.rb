@@ -14,6 +14,22 @@ module AutomationRules
   # `execute_node_action` (FlowExecutionService); they invoke these via send/
   # direct private dispatch.
   module PipelineActionHandlers
+    # Units due_in accepts, compact ("2d") and dotted ("3.days"); doubles as the allowlist
+    # so rule JSON cannot name an arbitrary Integer method. Bare "m" is ambiguous, left out.
+    DUE_IN_UNITS = {
+      'min' => :minutes, 'minute' => :minutes, 'minutes' => :minutes,
+      'h' => :hours, 'hour' => :hours, 'hours' => :hours,
+      'd' => :days, 'day' => :days, 'days' => :days,
+      'w' => :weeks, 'week' => :weeks, 'weeks' => :weeks,
+      'mo' => :months, 'month' => :months, 'months' => :months,
+      'y' => :years, 'year' => :years, 'years' => :years
+    }.freeze
+
+    # The sign keeps "-1.days" in the past, as the old to_i did.
+    DUE_IN_PATTERN = /\A([+-]?\d+)\s*\.?\s*([a-z]+)\z/i
+
+    DUE_IN_ABSOLUTE_PATTERN = /\A\d{4}-\d{2}-\d{2}/
+
     private
 
     def assign_to_pipeline(pipeline_params)
@@ -66,6 +82,9 @@ module AutomationRules
       assigned_to_id = params[:assigned_to_id]
       due_in = params[:due_in]
 
+      due_date = calculate_due_date(due_in)
+      return if skip_unparseable_due_in(due_in, due_date)
+
       creator_id = pipeline_task_creator_id(pipeline_item)
       return if skip_without_task_creator(creator_id)
 
@@ -75,7 +94,7 @@ module AutomationRules
         title: title,
         description: description,
         task_type: task_type,
-        due_date: calculate_due_date(due_in),
+        due_date: due_date,
         priority: priority
       )
 
@@ -241,18 +260,39 @@ module AutomationRules
       Rails.logger.error "Automation Rule #{@rule.id}: Failed to move conversation #{@conversation.id} to stage #{stage.name}"
     end
 
+    # nil for a blank due_in means no due date; for anything else it means unreadable.
     def calculate_due_date(due_in)
       return nil if due_in.blank?
 
-      return Time.zone.parse(due_in) if due_in.is_a?(String) && due_in.match?(/^\d{4}-\d{2}-\d{2}/)
+      raw = due_in.to_s.strip
+      return Time.zone.parse(raw) if raw.match?(DUE_IN_ABSOLUTE_PATTERN)
 
-      value, unit = due_in.to_s.split('.')
-      return nil unless value.present? && unit.present?
+      match = DUE_IN_PATTERN.match(raw)
+      return nil unless match
 
-      value.to_i.send(unit).from_now
+      unit = DUE_IN_UNITS[match[2].downcase]
+      return nil unless unit
+
+      match[1].to_i.public_send(unit).from_now
     rescue StandardError => e
       Rails.logger.error "Error parsing due_date: #{e.message}"
       nil
+    end
+
+    # Refusing beats a dateless task that looks scheduled; the timeline step is what the operator sees.
+    def skip_unparseable_due_in(due_in, due_date)
+      return false if due_in.blank? || due_date.present?
+
+      Rails.logger.warn(
+        "Automation Rule #{@rule.id}: due_in #{due_in.to_s.inspect} is not a date or a duration " \
+        '(expected e.g. 2d, 1w, 3.days or 2026-09-30); ' \
+        "skipping create_pipeline_task for conversation #{@conversation.id}"
+      )
+      @recorder&.action_skipped!(
+        'Skipped: create_pipeline_task',
+        data: { reason: 'invalid_due_in', due_in: due_in.to_s }
+      )
+      true
     end
   end
 end
