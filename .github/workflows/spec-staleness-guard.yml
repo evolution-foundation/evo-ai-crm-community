@@ -194,6 +194,11 @@ on:
       - 'app/services/whatsapp/incoming_message_base_service.rb'
       - 'app/services/whatsapp/incoming_message_service_helpers.rb'
       - 'app/services/whatsapp/evolution_handlers/messages_upsert.rb'
+      - 'app/services/whatsapp/evolution_go_handlers/messages_upsert.rb'
+      - 'app/jobs/webhooks/whatsapp_events_job.rb'
+      - 'app/services/facebook/moderation/action_executor_service.rb'
+      - 'app/services/messages/mention_service.rb'
+      - 'spec/services/super_admin_fossil_spec.rb'
       - 'spec/services/whatsapp/incoming_message_base_service_spec.rb'
       - 'spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb'
       # CRM-318: the screen that opened the Hub tab only leaves "Aguardando" because
@@ -434,5 +439,6 @@ jobs:
             spec/requests/api/v1/inboxes_abort_hub_connection_spec.rb \
             spec/jobs/channels/whatsapp/credential_probe_scheduler_job_spec.rb \
             spec/jobs/channels/whatsapp/credential_probe_job_spec.rb \
+            spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             --format progress

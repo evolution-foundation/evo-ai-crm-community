@@ -161,7 +161,8 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       content: message_content || '',
       inbox_id: @inbox.id,
       source_id: raw_message_id,
-      sender: incoming? ? @contact : User.where(type: 'SuperAdmin').first || User.first,
+      # No SuperAdmin STI class in this fork; a lookup on it raises on a legacy row.
+      sender: incoming? ? @contact : User.first,
       sender_type: incoming? ? 'Contact' : 'User',
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: message_content_attributes

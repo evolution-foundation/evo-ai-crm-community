@@ -270,8 +270,8 @@ module AutomationRules
     # --- Helpers -----------------------------------------------------------
 
     def agent_belongs_to_inbox?(agent_ids)
-      member_ids = @conversation.inbox.members.pluck(:user_id)
-      assignable_agent_ids = member_ids + User.where(type: 'SuperAdmin').pluck(:id)
+      # No SuperAdmin STI class in this fork: super_admin is an auth role, not a user type.
+      assignable_agent_ids = @conversation.inbox.members.pluck(:user_id)
 
       assignable_agent_ids.include?(agent_ids[0])
     end
