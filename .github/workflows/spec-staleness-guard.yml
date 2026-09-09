@@ -352,6 +352,7 @@ jobs:
         run: |
           bundle exec rspec \
             spec/services/automation_rules/action_service_spec.rb \
+            spec/services/automation_rules/pipeline_assignment_multi_pipeline_spec.rb \
             spec/services/automation_rules/conditions_filter_service_spec.rb \
             spec/services/automation_rules/conditions_filter_service_contact_spec.rb \
             spec/services/pipelines/stage_automation_service_spec.rb \
