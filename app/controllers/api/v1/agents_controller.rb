@@ -10,11 +10,7 @@ class Api::V1::AgentsController < Api::V1::BaseController
     destroy: 'ai_agents.delete'
   })
 
-  # CRM-565 — every action here is a proxy hop to evo-core, and a proxy answering
-  # 500 says "the CRM broke", which is a lie when the core refused the request or
-  # was not running. Both handlers are declared in this controller on purpose:
-  # Api::BaseController's `rescue_from StandardError` (the one that produced the
-  # reported 500) is matched last, so these take precedence over it.
+  # Declared here so they win over Api::BaseController's `rescue_from StandardError`.
   rescue_from EvoAiCoreService::UnavailableError, with: :handle_core_unavailable
   rescue_from EvoAiCoreService::UpstreamError, with: :handle_core_upstream_error
 
@@ -40,9 +36,6 @@ class Api::V1::AgentsController < Api::V1::BaseController
   
   private
 
-  # The core was never reached (down, unreachable, or EVO_AI_CORE_SERVICE_URL not
-  # pointing anywhere usable). 503 is the honest answer: nothing is wrong with the
-  # request, and retrying later may work.
   def handle_core_unavailable(exception)
     log_core_failure(exception)
     error_response(
@@ -52,16 +45,13 @@ class Api::V1::AgentsController < Api::V1::BaseController
     )
   end
 
-  # The core answered, but not 2xx. A 4xx is about the request the client made, so
-  # it is relayed as-is. A 5xx is the core failing, which is a bad gateway from
-  # here — relaying it verbatim would put the blame back on the CRM.
-  # The core's own wording is deliberately NOT echoed: it can carry internal hosts,
-  # SQL, or stack detail. It is logged instead; the client gets the status.
+  # 4xx is relayed; 5xx (and 401, a CRM<->core credential problem, not the
+  # client's) becomes 502. The core's wording is logged, never echoed.
   def handle_core_upstream_error(exception)
     log_core_failure(exception)
 
     status = exception.status.to_i
-    if status.between?(400, 499)
+    if status.between?(400, 499) && status != 401
       error_response(
         ApiErrorCodes::EXTERNAL_SERVICE_ERROR,
         'AI core service rejected the request',

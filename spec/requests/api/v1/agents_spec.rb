@@ -123,12 +123,9 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     end
   end
 
-  # CRM-565 — the reported bug. These examples let the real EvoAiCoreService run
-  # (the outer `before` stub is undone with and_call_original) and cut the wire at
-  # the HTTP boundary instead, so the whole proxy path is exercised: the HTTParty
-  # call, handle_response, and the controller's translation. Each one asserts the
-  # absence of 500 explicitly — that is the symptom the customer reported.
-  context 'when evo-core fails (CRM-565)' do
+  # The real service runs here (and_call_original); WebMock cuts the wire at
+  # the HTTP boundary so the whole proxy path is exercised.
+  context 'when evo-core fails' do
     let(:core_agents_url) { %r{\A#{Regexp.escape(EvoAiCoreService.base_uri)}/api/v1/agents} }
 
     before do
@@ -183,6 +180,22 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
         expect(response).to have_http_status(:service_unavailable)
       end
 
+      it 'answers 503 on a TCP-level timeout' do
+        stub_request(:get, core_agents_url).to_raise(Errno::ETIMEDOUT)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
+      it 'answers 503 when the port does not speak HTTP' do
+        stub_request(:get, core_agents_url).to_raise(Net::HTTPBadResponse)
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:service_unavailable)
+      end
+
       it 'keeps the failure detail in the log and out of the body' do
         stub_request(:get, core_agents_url).to_raise(Errno::ECONNREFUSED)
         allow(Rails.logger).to receive(:error)
@@ -223,6 +236,26 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
         expect(response).to have_http_status(:bad_request)
         expect(response.body).not_to include('evo_core_agents')
       end
+
+      it 'turns a 401 into 502: the token was already accepted by the CRM' do
+        stub_request(:get, core_agents_url).to_return(core_json(401, { error: 'invalid token' }))
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).to have_http_status(:bad_gateway)
+        expect(json_response['error']['details']['upstream_status']).to eq(401)
+      end
+
+      it 'relays a 400 whose body is not valid JSON, without echoing it' do
+        stub_request(:get, core_agents_url)
+          .to_return(status: 400, body: '{bad', headers: { 'Content-Type' => 'application/json' })
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:bad_request)
+        expect(response.body).not_to include('{bad')
+      end
     end
 
     context 'when the core answers 5xx' do
@@ -249,8 +282,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       end
 
       it 'returns 200 for a bare JSON array (the payload shape that used to raise)' do
-        # `parsed.dig('data')` on an Array raises TypeError, which the base
-        # controller turned into a 500 for a perfectly good 200 upstream.
         stub_request(:get, core_agents_url).to_return(core_json(200, [{ id: 'agent-1' }]))
 
         get '/api/v1/agents', headers: headers, as: :json
@@ -258,6 +289,17 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
         expect(response).not_to have_http_status(:internal_server_error)
         expect(response).to have_http_status(:ok)
         expect(json_response.first['id']).to eq('agent-1')
+      end
+
+      it 'answers 502 when a 200 carries an unparsable JSON body' do
+        stub_request(:get, core_agents_url)
+          .to_return(status: 200, body: '{bad', headers: { 'Content-Type' => 'application/json' })
+
+        get '/api/v1/agents', headers: headers, as: :json
+
+        expect(response).not_to have_http_status(:internal_server_error)
+        expect(response).to have_http_status(:bad_gateway)
+        expect(json_response['error']['details']['upstream_status']).to eq(200)
       end
 
       it 'returns 200 when the body is not JSON at all' do

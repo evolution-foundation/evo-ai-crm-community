@@ -6,13 +6,10 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
-  # CRM-565 — this class is the CRM half of a proxy, and raising a bare StandardError
-  # from it makes the CRM look broken for a failure that happened somewhere else:
-  # Api::BaseController's `rescue_from StandardError` turns every one of them into a
-  # 500. These two errors are the honest outcomes of a failed call to evo-core, and
-  # they carry enough for a controller to answer with a status the client can act on.
+  # Failures talking to evo-core surface as these two, never as a bare
+  # StandardError (which Api::BaseController turns into a 500).
 
-  # evo-core answered, but with a non-2xx. `status` is the code IT returned.
+  # evo-core answered with a non-2xx; `status` is the code it returned.
   class UpstreamError < StandardError
     attr_reader :status
 
@@ -22,22 +19,19 @@ class EvoAiCoreService
     end
   end
 
-  # evo-core was never reached: connection refused, DNS/TLS failure, timeout, or a
-  # base_uri that is not a usable URL (with EVO_AI_CORE_SERVICE_URL unset the default
-  # `http://localhost:5555` refuses inside the CRM container).
+  # evo-core was never reached (refused, DNS/TLS, timeout, unusable base_uri).
   class UnavailableError < StandardError
     def initialize(message = 'AI core service is unavailable')
       super
     end
   end
 
-  # Everything here means "the request never got an answer", so it maps to
-  # UnavailableError. Net::OpenTimeout/Net::ReadTimeout are Timeout::Error;
-  # Errno::ECONNREFUSED & friends are listed one by one so an unrelated
-  # SystemCallError is not silently reported as an availability problem.
+  # Listed one by one so an unrelated SystemCallError is not reported as
+  # "core down". Net::OpenTimeout/ReadTimeout are Timeout::Error.
   NETWORK_ERRORS = [
     Errno::ECONNREFUSED,
     Errno::ECONNRESET,
+    Errno::ETIMEDOUT,
     Errno::EHOSTUNREACH,
     Errno::ENETUNREACH,
     Errno::EPIPE,
@@ -46,6 +40,9 @@ class EvoAiCoreService
     Timeout::Error,
     OpenSSL::SSL::SSLError,
     URI::Error,
+    Net::ProtocolError,
+    Net::HTTPBadResponse,
+    Net::HTTPHeaderSyntaxError,
     HTTParty::Error
   ].freeze
 
@@ -106,16 +103,8 @@ class EvoAiCoreService
       build_headers
     end
 
-    # Runs one call against evo-core and hands back the parsed payload. Network and
-    # configuration failures never surface as themselves: they become
-    # UnavailableError, so a caller cannot mistake "the core is down" for "the CRM
-    # is broken". The detail stays in the log, where it is useful, instead of in a
-    # response body a customer reads.
-    #
-    # Named `call_core`, not `perform_request`: HTTParty::ClassMethods already has a
-    # private `perform_request`, and every verb (get/post/put/delete) funnels through
-    # it. Defining one here overrode it, so each verb called THIS method with
-    # HTTParty's own arguments and every request broke, working ones included.
+    # Not named `perform_request`: HTTParty already defines a private one that
+    # every verb funnels through, and overriding it breaks all requests.
     def call_core(http_method, url, options = {})
       response = public_send(http_method, url, options)
       handle_response(response)
@@ -128,32 +117,33 @@ class EvoAiCoreService
     end
 
     def handle_response(response)
-      # Return the complete response from evo-ai-core-service
-      # The service already returns standardized format: { success, data, message, meta }
-      parsed = response.parsed_response
+      parsed = parse_body(response)
 
       case response.code
       when 200, 201
-        # Extract payload if it exists (Evolution API format). The guard is not
-        # cosmetic: `parsed` is only a Hash when the core answered with a JSON
-        # object. A bare JSON array (`[...]`) made `dig('data')` raise TypeError and
-        # a non-JSON body (an HTML error page from a gateway, say) made it raise
-        # NoMethodError — both landing on the CRM as a 500 for a 200 upstream.
+        # Unwrap the `{ data: ... }` envelope; a bare array or a non-JSON body
+        # is only a Hash-less `parsed`, not an error.
         parsed.is_a?(Hash) ? (parsed['data'] || parsed) : parsed
       when 204
         nil
       else
-        raise UpstreamError.new(upstream_message(response), status: response.code)
+        raise UpstreamError.new(upstream_message(parsed, response.code), status: response.code)
       end
     end
 
-    # The core's own wording when it sent a JSON object with an `error`/`message`
-    # key, else a neutral line. Controllers decide whether any of it reaches the
-    # client; this is what gets logged either way.
-    def upstream_message(response)
-      parsed = response.parsed_response
+    # HTTParty parses lazily and raises on an invalid body under a JSON
+    # content-type, on any status.
+    def parse_body(response)
+      response.parsed_response
+    rescue JSON::ParserError => e
+      Rails.logger.error("EvoAiCoreService: evo-core responded #{response.code} with an unparsable body — #{e.message[0, 200]}")
+      raise UpstreamError.new("evo-core responded #{response.code} with an unparsable body", status: response.code)
+    end
+
+    # Logged by the caller; controllers decide what reaches the client.
+    def upstream_message(parsed, code)
       message = parsed.is_a?(Hash) ? (parsed['error'] || parsed['message']) : nil
-      message.presence || "evo-core responded #{response.code}"
+      message.presence || "evo-core responded #{code}"
     end
 
     # Agents endpoints (Core AI Service)
