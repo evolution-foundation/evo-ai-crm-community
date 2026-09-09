@@ -89,10 +89,8 @@ module AutomationRules
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-    # The board owner first, then the same fallbacks PipelineTasksController#resolve_task_creator
-    # uses for the journey surface — minus its `User.order(:created_at).first` tail, which
-    # instantiates and would raise on a legacy STI-typed row (CRM-576, CRM-578).
-    # `exists?` reads without instantiating; none of these columns carries a foreign key.
+    # exists? reads without instantiating; a legacy STI-typed row raises on load, which is
+    # also why the sibling resolve_task_creator's User.order(:created_at).first stays out.
     def pipeline_task_creator_id(pipeline_item)
       candidates = [pipeline_item.pipeline&.created_by_id,
                     @conversation&.assignee_id,
@@ -101,9 +99,8 @@ module AutomationRules
       candidates.compact.find { |id| User.exists?(id: id) }
     end
 
-    # created_by_id is NOT NULL, so no author means no task. Refuse on the rule's timeline
-    # instead of letting create! raise into the rescue below, which is what made CRM-576
-    # invisible: the operator reads that timeline, not the server log.
+    # created_by_id is NOT NULL, so no author means no task. Without this the create!
+    # raises into the rescue below and the operator sees nothing.
     def skip_without_task_creator(creator_id)
       return false if creator_id.present?
 

@@ -2,10 +2,8 @@
 
 require 'rails_helper'
 
-# CRM-576. These examples deliberately DO NOT stub the SuperAdmin lookup: stubbing it is
-# what kept the defect invisible, because a stub hands the action a user that no install
-# of this product can produce. The action's own rescue swallows the failure, so the only
-# assertion that means anything here is the task row itself.
+# Do not stub the SuperAdmin lookup here: it would hand the action a user no install of
+# this product has, and the action's own rescue hides the difference.
 RSpec.describe 'Automation rule create_pipeline_task author' do
   let(:owner) { User.create!(name: 'Funnel Owner', email: "owner-#{SecureRandom.hex(4)}@test.com") }
   let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
@@ -36,8 +34,6 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
     AutomationRules::ActionService.new(rule, nil, conversation, recorder: recorder).perform
   end
 
-  # The defect as it reaches the customer: the rule matches, the timeline reads fine, and
-  # the board stays empty.
   describe 'an install with no SuperAdmin row (every install)' do
     it 'creates the task' do
       expect { perform }.to change { pipeline_item.reload.tasks.count }.from(0).to(1)
@@ -61,13 +57,10 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
     end
   end
 
-  # The second failure mode, and the reason the old lookup could not simply be kept with a
-  # fallback: reading a SuperAdmin row at all raises, because the class does not exist.
   describe 'an install that still carries a SuperAdmin row' do
     before do
       legacy = User.create!(name: 'Legacy', email: "legacy-#{SecureRandom.hex(4)}@test.com")
-      # update_all on purpose: assigning `type = 'SuperAdmin'` through the model would
-      # need the class to exist, and its absence is precisely what is under test.
+      # update_all because assigning the type through the model needs the class to exist.
       User.where(id: legacy.id).update_all(type: 'SuperAdmin') # rubocop:disable Rails/SkipsModelValidations
     end
 
@@ -77,10 +70,6 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
     end
   end
 
-  # None of these columns carries a foreign key, so the chain has to survive a deleted
-  # user at any position — the same fallbacks PipelineTasksController#resolve_task_creator
-  # gives the journey surface, so one automation does not author tasks differently from
-  # the other.
   describe 'when the board owner is gone' do
     let(:assignee) { User.create!(name: 'Assignee', email: "assignee-#{SecureRandom.hex(4)}@test.com") }
 
@@ -109,8 +98,6 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
     end
   end
 
-  # Nothing left to attribute the task to: created_by_id is NOT NULL, so the row cannot be
-  # written at all — the point is that it must not fail silently.
   describe 'when no candidate author exists' do
     before { User.where(id: owner.id).delete_all }
 
@@ -139,8 +126,6 @@ RSpec.describe 'Automation rule create_pipeline_task author' do
     end
   end
 
-  # The flow-canvas executor reaches the same handler through execute_node_action, so the
-  # author resolution has to hold on that surface too.
   describe 'flow-canvas surface' do
     let(:flow_service) { AutomationRules::FlowExecutionService.new(rule, nil, conversation) }
     let(:node) do

@@ -83,7 +83,7 @@ Add at least:
 - A no-op spec for the missing-required-field path (e.g. node_data without the ID).
 - A parity assertion under the existing `'EVO-1262 parity'` describe block: drive the same logical action through `ActionService.perform` (with `@rule.actions` configured) and through `FlowExecutionService.execute_node_action` (with a flow node), then compare DB state.
 
-If your action depends on a model/feature with peculiar setup, seed it explicitly instead of stubbing the lookup the action uses. A stub hands the action a value production never produces, and the silent-rescue path here swallows the difference: the spec goes green over a code path that is dead in production. That is how CRM-576 stayed invisible.
+If your action depends on a model/feature with peculiar setup, seed it explicitly instead of stubbing the lookup the action uses. A stub can hand the action a value production never produces, and the silent-rescue path here swallows the difference — the spec goes green over a dead code path.
 
 ### 6. (Frontend, out of this directory) Build the node config component
 
