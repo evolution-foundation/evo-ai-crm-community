@@ -32,10 +32,9 @@ class Channel::Whatsapp < ApplicationRecord
   # half of Channels::ConnectionStateResolver::CONNECTION_MAP.
   DISCONNECTED_CONNECTIONS = %w[close closed disconnected].freeze
 
-  # Token providers whose credential probe is a read-only request, so it can be
-  # repeated on a schedule. 360dialog is absent because its probe is a POST
-  # that re-registers the webhook.
-  CREDENTIAL_PROBE_PROVIDERS = %w[whatsapp_cloud notificame].freeze
+  # Token providers whose credential probe is read-only, so the scheduler can
+  # repeat it; membership also turns on the resolver's evidence TTL.
+  CREDENTIAL_PROBE_PROVIDERS = %w[default whatsapp_cloud notificame].freeze
 
   # provider_connection keys the credential probe owns, kept across an
   # unrelated snapshot so a QR/Hub event does not erase its evidence.

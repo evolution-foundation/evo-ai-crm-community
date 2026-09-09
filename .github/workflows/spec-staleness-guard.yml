@@ -233,6 +233,7 @@ on:
       - 'app/jobs/send_reply_job.rb'
       - 'spec/services/whatsapp/send_on_whatsapp_service_spec.rb'
       - 'spec/services/whatsapp/providers/whatsapp_cloud_service_spec.rb'
+      - 'spec/services/whatsapp/providers/whatsapp360_dialog_service_spec.rb'
       - 'spec/services/whatsapp/providers/evolution_service_spec.rb'
       - 'spec/services/whatsapp/providers/evolution_go_service_send_spec.rb'
       - 'spec/services/whatsapp/providers/notificame_service_send_spec.rb'
@@ -426,6 +427,7 @@ jobs:
             spec/lib/meta_base_url_spec.rb \
             spec/services/whatsapp/send_on_whatsapp_service_spec.rb \
             spec/services/whatsapp/providers/whatsapp_cloud_service_spec.rb \
+            spec/services/whatsapp/providers/whatsapp360_dialog_service_spec.rb \
             spec/services/whatsapp/providers/evolution_service_spec.rb \
             spec/services/whatsapp/providers/evolution_go_service_send_spec.rb \
             spec/services/whatsapp/providers/notificame_service_send_spec.rb \
