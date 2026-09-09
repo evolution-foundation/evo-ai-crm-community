@@ -27,9 +27,6 @@ module AutomationRules
         return
       end
 
-      # Guarded before execute_pipeline_assignment, which starts with destroy_all: assigning
-      # to an archived pipeline would first wipe every other pipeline membership of this
-      # conversation, and pipeline_items are hard-deleted.
       return if skip_archived_pipeline(pipeline, action: 'assign_to_pipeline')
 
       log_pipeline_assignment(pipeline)
@@ -46,7 +43,7 @@ module AutomationRules
       log_stage_update_attempt(stage)
       @conversation.reload
 
-      pipeline_item = @conversation.pipeline_items.find_by(pipeline: stage.pipeline)
+      pipeline_item = @conversation.pipeline_items.active.find_by(pipeline: stage.pipeline)
 
       if pipeline_item
         move_to_existing_stage(pipeline_item, stage)
@@ -118,7 +115,11 @@ module AutomationRules
     end
 
     def execute_pipeline_assignment(pipeline)
-      @conversation.pipeline_items.destroy_all
+      @conversation.reload
+
+      existing_item = @conversation.pipeline_items.active.find_by(pipeline_id: pipeline.id)
+      return log_assignment_noop(pipeline) if existing_item
+
       result = Pipelines::ConversationService.new(pipeline: pipeline, user: nil).add_conversation(@conversation)
 
       if result
@@ -126,6 +127,16 @@ module AutomationRules
       else
         log_assignment_failure(pipeline)
       end
+    end
+
+    def log_assignment_noop(pipeline)
+      Rails.logger.info "Automation Rule #{@rule.id}: Conversation #{@conversation.id} is already active in " \
+                        "pipeline #{pipeline.name}; assign_to_pipeline is a no-op"
+      # info, not action_skipped!: the conversation IS in the pipeline, so the run is not degraded.
+      @recorder&.add_step(
+        'assign_to_pipeline: already in the pipeline',
+        data: { pipeline_id: pipeline.id, pipeline_name: pipeline.name }
+      )
     end
 
     def log_assignment_success(pipeline)
@@ -184,7 +195,7 @@ module AutomationRules
 
     def move_to_target_stage_after_assignment(stage, service)
       @conversation.reload
-      pipeline_item = @conversation.pipeline_items.find_by(pipeline: stage.pipeline)
+      pipeline_item = @conversation.pipeline_items.active.find_by(pipeline: stage.pipeline)
 
       return unless pipeline_item && stage != stage.pipeline.pipeline_stages.first
 

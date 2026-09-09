@@ -211,8 +211,11 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
       let(:other_pipeline) { Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user) }
       let!(:other_stage) { PipelineStage.create!(pipeline: other_pipeline, name: 'Triage', position: 1) }
 
+      # Conversation#promote_lead_card turns the contact's lead card into this conversation's
+      # card in `pipeline` on create, so "not in the target pipeline" has to be made true.
       before do
         Pipelines::ConversationService.new(pipeline: other_pipeline, user: user).add_conversation(conversation, stage: other_stage)
+        conversation.pipeline_items.where(pipeline: pipeline).destroy_all
       end
 
       it 'relocates the item to the target pipeline/stage and removes it from the previous pipeline' do
@@ -231,6 +234,9 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
     end
 
     context 'when the conversation is not in any pipeline (auto-assign)' do
+      # Same promoted lead card as above.
+      before { conversation.pipeline_items.destroy_all }
+
       it 'creates a pipeline_item in the target pipeline at the target stage' do
         expect do
           patch :move_conversation, params: {

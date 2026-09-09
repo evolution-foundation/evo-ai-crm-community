@@ -4,11 +4,13 @@ class Pipelines::ConversationService
     @user = user
   end
 
+  # Adds only. A real move — the conversation leaves the old funnel — is #move_to_pipeline_stage,
+  # which keeps the row, its history and its tasks.
   def add_conversation(conversation, stage: nil, custom_fields: {})
     stage ||= @pipeline.pipeline_stages.first
     return false unless stage
 
-    prepare_conversation_for_pipeline(conversation)
+    conversation.reload
     create_pipeline_item(conversation, stage, custom_fields)
   end
 
@@ -99,19 +101,6 @@ class Pipelines::ConversationService
 
   def analytics_service
     @analytics_service ||= Pipelines::AnalyticsService.new(@pipeline)
-  end
-
-  def prepare_conversation_for_pipeline(conversation)
-    conversation.reload
-
-    # Only remove active items from OTHER pipelines (not this one)
-    # This preserves completed journey history in the current pipeline
-    other_pipeline_items = conversation.pipeline_items.where.not(pipeline_id: @pipeline.id)
-    return unless other_pipeline_items.exists?
-
-    Rails.logger.info "Pipeline Service: Removing conversation #{conversation.id} from #{other_pipeline_items.count} other pipeline(s)"
-    other_pipeline_items.destroy_all
-    conversation.reload
   end
 
   def create_pipeline_item(conversation, stage, custom_fields)
