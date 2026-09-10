@@ -69,6 +69,48 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
     end
   end
 
+  describe 'a conversation already active in the funnel the rule names' do
+    # The assignment is a no-op — the conversation is already there, so no card is created and the
+    # target funnel is NOT the most recent one.
+    let!(:card_b) do
+      PipelineItem.create!(pipeline: funnel_b, pipeline_stage: funnel_b.pipeline_stages.first,
+                           conversation: conversation, created_at: 3.hours.ago)
+    end
+    let!(:card_a) do
+      PipelineItem.create!(pipeline: funnel_a, pipeline_stage: stage_a1,
+                           conversation: conversation, created_at: 1.hour.ago)
+    end
+
+    it 'still writes the task on the card of the funnel the rule named' do
+      run(rule_with([{ 'action_name' => 'assign_to_pipeline', 'action_params' => [funnel_b.id] },
+                     { 'action_name' => 'create_pipeline_task', 'action_params' => task_params }]))
+
+      expect(card_b.reload.tasks.count).to eq(1)
+      expect(card_a.reload.tasks.count).to eq(0)
+    end
+  end
+
+  describe 'a rule that moves the stage instead of assigning' do
+    let!(:card_b) do
+      PipelineItem.create!(pipeline: funnel_b, pipeline_stage: funnel_b.pipeline_stages.first,
+                           conversation: conversation, created_at: 3.hours.ago)
+    end
+    let!(:card_a) do
+      PipelineItem.create!(pipeline: funnel_a, pipeline_stage: stage_a1,
+                           conversation: conversation, created_at: 1.hour.ago)
+    end
+
+    it 'writes the task on the card of the funnel whose stage it moved' do
+      stage_b2 = PipelineStage.create!(pipeline: funnel_b, name: 'B2', position: 2)
+
+      run(rule_with([{ 'action_name' => 'update_pipeline_stage', 'action_params' => [stage_b2.id] },
+                     { 'action_name' => 'create_pipeline_task', 'action_params' => task_params }]))
+
+      expect(card_b.reload.tasks.count).to eq(1)
+      expect(card_a.reload.tasks.count).to eq(0)
+    end
+  end
+
   describe 'a funnel that holds a completed card and an active one' do
     # Built in the order the product builds it: the card is completed by an update, never born
     # completed — the uniqueness validation reads the whole funnel, so a card that arrives already

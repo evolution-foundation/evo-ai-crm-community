@@ -45,6 +45,7 @@ module AutomationRules
 
       return if skip_archived_pipeline(pipeline, action: 'assign_to_pipeline')
 
+      @pipeline_action_target_id = pipeline.id
       log_pipeline_assignment(pipeline)
       execute_pipeline_assignment(pipeline)
     end
@@ -56,6 +57,7 @@ module AutomationRules
       return unless stage
       return if skip_archived_pipeline(stage.pipeline, action: 'update_pipeline_stage')
 
+      @pipeline_action_target_id = stage.pipeline_id
       log_stage_update_attempt(stage)
       @conversation.reload
 
@@ -70,7 +72,7 @@ module AutomationRules
 
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     def create_pipeline_task(task_params)
-      pipeline_item = @conversation.pipeline_items.active.order(:created_at).last
+      pipeline_item = pipeline_task_target_item
       return unless pipeline_item
 
       params = task_params[0] || {}
@@ -104,6 +106,18 @@ module AutomationRules
       EvolutionExceptionTracker.new(e).capture_exception
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+    # A funnel named by an earlier pipeline action in the same run wins, even when that action
+    # turned out to be a no-op: the conversation was already there, so no card was created and the
+    # most recent one would point at a funnel this rule never mentioned. With no such action, the
+    # newest active card is the funnel the conversation entered last. A completed card is never a
+    # candidate — the task would land where nobody looks.
+    def pipeline_task_target_item
+      items = @conversation.pipeline_items.active
+      targeted = items.find_by(pipeline_id: @pipeline_action_target_id) if @pipeline_action_target_id
+
+      targeted || items.order(:created_at).last
+    end
 
     # exists? reads without instantiating; a legacy STI-typed row raises on load, which is
     # also why the sibling resolve_task_creator's User.order(:created_at).first stays out.
