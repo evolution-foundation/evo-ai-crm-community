@@ -444,4 +444,5 @@ jobs:
             spec/services/automation_rules/create_pipeline_task_due_in_spec.rb \
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
+            spec/services/automation_rules/create_pipeline_task_card_spec.rb \
             --format progress

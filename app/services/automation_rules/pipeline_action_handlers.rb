@@ -70,9 +70,9 @@ module AutomationRules
 
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     def create_pipeline_task(task_params)
-      return unless @conversation.pipeline_items.exists?
+      pipeline_item = @conversation.pipeline_items.active.order(:created_at).last
+      return unless pipeline_item
 
-      pipeline_item = @conversation.pipeline_items.first
       params = task_params[0] || {}
 
       title = params[:title]
