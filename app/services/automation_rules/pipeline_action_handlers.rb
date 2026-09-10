@@ -45,6 +45,7 @@ module AutomationRules
 
       return if skip_archived_pipeline(pipeline, action: 'assign_to_pipeline')
 
+      @pipeline_action_target_id = pipeline.id
       log_pipeline_assignment(pipeline)
       execute_pipeline_assignment(pipeline)
     end
@@ -56,6 +57,7 @@ module AutomationRules
       return unless stage
       return if skip_archived_pipeline(stage.pipeline, action: 'update_pipeline_stage')
 
+      @pipeline_action_target_id = stage.pipeline_id
       log_stage_update_attempt(stage)
       @conversation.reload
 
@@ -70,9 +72,9 @@ module AutomationRules
 
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     def create_pipeline_task(task_params)
-      return unless @conversation.pipeline_items.exists?
+      pipeline_item = pipeline_task_target_item
+      return unless pipeline_item
 
-      pipeline_item = @conversation.pipeline_items.first
       params = task_params[0] || {}
 
       title = params[:title]
@@ -104,6 +106,28 @@ module AutomationRules
       EvolutionExceptionTracker.new(e).capture_exception
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+    # The funnel an earlier action named wins even when that action was a no-op: no card was
+    # created, so the newest card could belong to a funnel the rule never mentioned.
+    def pipeline_task_target_item
+      items = @conversation.pipeline_items.active
+      return items.order(:created_at).last unless @pipeline_action_target_id
+
+      items.find_by(pipeline_id: @pipeline_action_target_id) || skip_without_target_card
+    end
+
+    # Falling back to another funnel here would recreate the misfiled task the targeting prevents.
+    def skip_without_target_card
+      Rails.logger.warn(
+        "Automation Rule #{@rule.id}: no active card in pipeline #{@pipeline_action_target_id}; " \
+        "skipping create_pipeline_task for conversation #{@conversation.id}"
+      )
+      @recorder&.action_skipped!(
+        'Skipped: create_pipeline_task',
+        data: { reason: 'pipeline_target_missing', pipeline_id: @pipeline_action_target_id }
+      )
+      nil
+    end
 
     # exists? reads without instantiating; a legacy STI-typed row raises on load, which is
     # also why the sibling resolve_task_creator's User.order(:created_at).first stays out.
