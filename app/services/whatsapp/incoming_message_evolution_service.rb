@@ -11,7 +11,7 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
     Rails.logger.debug { "Evolution API: Full payload: #{processed_params.inspect}" }
 
     case event_type
-    when 'messages.upsert'
+    when 'messages.upsert', 'send.message'
       process_messages_upsert
     when 'messages.update'
       process_messages_update
