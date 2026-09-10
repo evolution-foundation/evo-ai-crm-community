@@ -258,6 +258,37 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     nil
   end
 
+  # Checks whether a phone number is registered on WhatsApp, via Evolution
+  # API's whatsappNumbers lookup (Baileys' onWhatsApp under the hood).
+  # Returns true/false when Evolution answers definitively, or nil when the
+  # check itself could not be performed (missing config, network/API error) --
+  # callers should treat nil as "couldn't verify" and not block on it.
+  def check_number_exists?(phone_number)
+    number = phone_number.to_s.delete('+')
+    return nil if number.blank? || api_base_path.blank? || instance_name.blank?
+
+    response = HTTParty.post(
+      "#{api_base_path}/chat/whatsappNumbers/#{instance_name}",
+      headers: api_headers,
+      body: { numbers: [number] }.to_json,
+      open_timeout: 5,
+      read_timeout: 10
+    )
+
+    unless response.success?
+      Rails.logger.warn "Evolution API: whatsappNumbers HTTP #{response.code}"
+      return nil
+    end
+
+    entry = Array(response.parsed_response).first
+    return nil if entry.blank?
+
+    ActiveModel::Type::Boolean.new.cast(entry['exists'])
+  rescue StandardError => e
+    Rails.logger.error "Evolution API: whatsappNumbers check error: #{e.class} - #{e.message}"
+    nil
+  end
+
   private
 
   def try_logout_instance(instance_name)

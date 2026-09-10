@@ -1,8 +1,11 @@
 class Api::V1::Contacts::ContactInboxesController < Api::V1::Contacts::BaseController
   include HmacConcern
+  include WhatsappNumberValidatable
   before_action :ensure_inbox, only: [:create]
 
   def create
+    return if render_whatsapp_number_unreachable_error(inbox: @inbox, phone_number: @contact.phone_number)
+
     @contact_inbox = ContactInboxBuilder.new(
       contact: @contact,
       inbox: @inbox,

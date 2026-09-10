@@ -197,6 +197,37 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
     end
   end
 
+  # Checks whether a phone number is registered on WhatsApp, via Evolution Go's
+  # /user/check endpoint (whatsmeow's IsOnWhatsApp under the hood). Returns
+  # true/false when Evolution Go answers definitively, or nil when the check
+  # itself could not be performed (missing config, network/API error) --
+  # callers should treat nil as "couldn't verify" and not block on it.
+  def check_number_exists?(phone_number)
+    number = phone_number.to_s.delete('+')
+    return nil if number.blank? || api_base_path.blank?
+
+    response = HTTParty.post(
+      "#{api_base_path}/user/check",
+      headers: instance_headers,
+      body: { number: [number] }.to_json,
+      open_timeout: 5,
+      read_timeout: 10
+    )
+
+    unless response.success?
+      Rails.logger.warn "Evolution Go API: /user/check HTTP #{response.code}"
+      return nil
+    end
+
+    entry = Array(response.parsed_response.dig('data', 'Users')).first
+    return nil if entry.blank?
+
+    ActiveModel::Type::Boolean.new.cast(entry['IsInWhatsapp'])
+  rescue StandardError => e
+    Rails.logger.error "Evolution Go API: /user/check error: #{e.class} - #{e.message}"
+    nil
+  end
+
   private
 
   def api_base_path
