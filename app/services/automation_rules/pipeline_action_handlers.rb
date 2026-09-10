@@ -107,16 +107,26 @@ module AutomationRules
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-    # A funnel named by an earlier pipeline action in the same run wins, even when that action
-    # turned out to be a no-op: the conversation was already there, so no card was created and the
-    # most recent one would point at a funnel this rule never mentioned. With no such action, the
-    # newest active card is the funnel the conversation entered last. A completed card is never a
-    # candidate — the task would land where nobody looks.
+    # The funnel an earlier action named wins even when that action was a no-op: no card was
+    # created, so the newest card could belong to a funnel the rule never mentioned.
     def pipeline_task_target_item
       items = @conversation.pipeline_items.active
-      targeted = items.find_by(pipeline_id: @pipeline_action_target_id) if @pipeline_action_target_id
+      return items.order(:created_at).last unless @pipeline_action_target_id
 
-      targeted || items.order(:created_at).last
+      items.find_by(pipeline_id: @pipeline_action_target_id) || skip_without_target_card
+    end
+
+    # Falling back to another funnel here would recreate the misfiled task the targeting prevents.
+    def skip_without_target_card
+      Rails.logger.warn(
+        "Automation Rule #{@rule.id}: no active card in pipeline #{@pipeline_action_target_id}; " \
+        "skipping create_pipeline_task for conversation #{@conversation.id}"
+      )
+      @recorder&.action_skipped!(
+        'Skipped: create_pipeline_task',
+        data: { reason: 'pipeline_target_missing', pipeline_id: @pipeline_action_target_id }
+      )
+      nil
     end
 
     # exists? reads without instantiating; a legacy STI-typed row raises on load, which is

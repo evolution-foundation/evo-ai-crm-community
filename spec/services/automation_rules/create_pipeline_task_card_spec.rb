@@ -39,9 +39,8 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
   after { Current.reset }
 
   describe 'a conversation living in two funnels' do
-    # The id is pinned to the lowest possible uuid on purpose. An unordered `.first` resolves to
-    # `ORDER BY id LIMIT 1`, so without this the wrong card wins only about half the runs and the
-    # example proves nothing.
+    # Pinned to the lowest uuid: the old unordered `.first` resolved to `ORDER BY id`, so without
+    # this the wrong card won only about half the runs.
     let!(:card_a) do
       PipelineItem.create!(id: '00000000-0000-4000-8000-000000000001',
                            pipeline: funnel_a, pipeline_stage: stage_a1,
@@ -70,8 +69,7 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
   end
 
   describe 'a conversation already active in the funnel the rule names' do
-    # The assignment is a no-op — the conversation is already there, so no card is created and the
-    # target funnel is NOT the most recent one.
+    # No-op assignment: the card of the funnel the rule names is the older one.
     let!(:card_b) do
       PipelineItem.create!(pipeline: funnel_b, pipeline_stage: funnel_b.pipeline_stages.first,
                            conversation: conversation, created_at: 3.hours.ago)
@@ -112,10 +110,8 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
   end
 
   describe 'a funnel that holds a completed card and an active one' do
-    # Built in the order the product builds it: the card is completed by an update, never born
-    # completed — the uniqueness validation reads the whole funnel, so a card that arrives already
-    # completed is still refused while an active sibling exists.
-    # It ends up more recent than the active card, so only the completed filter can keep it out.
+    # Completed by update, not born completed: the uniqueness validation refuses a new completed row
+    # while an active sibling exists. Newer than the active card, so only the filter keeps it out.
     let!(:completed_card) do
       item = PipelineItem.create!(pipeline: funnel_a, pipeline_stage: stage_a1,
                                   conversation: conversation, created_at: 1.hour.ago)
@@ -133,6 +129,38 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
 
       expect(active_card.reload.tasks.count).to eq(1)
       expect(completed_card.reload.tasks.count).to eq(0)
+    end
+  end
+
+  describe 'a funnel the rule named that refused the assignment' do
+    let!(:card_a) do
+      PipelineItem.create!(pipeline: funnel_a, pipeline_stage: stage_a1,
+                           conversation: conversation, created_at: 1.hour.ago)
+    end
+    let(:empty_funnel) { Pipeline.create!(name: 'No stages', pipeline_type: 'sales', created_by: user) }
+    let(:rule) do
+      rule_with([{ 'action_name' => 'assign_to_pipeline', 'action_params' => [empty_funnel.id] },
+                 { 'action_name' => 'create_pipeline_task', 'action_params' => task_params }])
+    end
+    let(:recorder) do
+      AutomationRules::RunRecorder.new(rule: rule, event_name: 'conversation_created', payload: {})
+    end
+
+    it 'creates no task instead of falling back to another funnel' do
+      expect { run(rule) }.not_to change(PipelineTask, :count).from(0)
+
+      expect(card_a.reload.tasks).to be_empty
+    end
+
+    it 'records the skip on the execution timeline' do
+      AutomationRules::ActionService.new(rule, nil, conversation, recorder: recorder).perform
+      recorder.matched!
+      recorder.persist!
+
+      run = AutomationRuleRun.where(automation_rule_id: rule.id).last
+      skipped = run.steps.find { |s| s['label'] == 'Skipped: create_pipeline_task' }
+      expect(skipped.dig('data', 'reason')).to eq('pipeline_target_missing')
+      expect(skipped.dig('data', 'pipeline_id')).to eq(empty_funnel.id)
     end
   end
 
