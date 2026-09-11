@@ -94,7 +94,10 @@ module Pipelines::StageMessageActions
 
     # Refusing the move leaves the conversation where it is, visible. Allowing it would
     # push the conversation into a board the operator archived and can no longer see.
-    return unless target_pipeline.is_active
+    unless target_pipeline.is_active
+      Rails.logger.warn "[StageMessageActions] item=#{pipeline_item.id} move_to_pipeline skipped: pipeline #{target_pipeline.id} is archived (is_active=false)"
+      return
+    end
 
     target_stage =
       if target_stage_id.present?
