@@ -96,7 +96,7 @@ class ActionCableListener < BaseListener
       CONVERSATION_TYPING_ON,
       conversation: conversation.push_event_data,
       user: user_push_data(user),
-      is_private: event.data[:is_private] || false
+      is_private: ActiveModel::Type::Boolean.new.cast(event.data[:is_private]) || false
     )
   end
 
@@ -112,7 +112,7 @@ class ActionCableListener < BaseListener
       CONVERSATION_TYPING_OFF,
       conversation: conversation.push_event_data,
       user: user_push_data(user),
-      is_private: event.data[:is_private] || false
+      is_private: ActiveModel::Type::Boolean.new.cast(event.data[:is_private]) || false
     )
   end
 

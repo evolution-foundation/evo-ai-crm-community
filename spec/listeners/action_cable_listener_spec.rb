@@ -72,6 +72,7 @@ RSpec.describe ActionCableListener do
     before do
       Current.reset
       Current.account = { 'settings' => { 'mask_contact_pii' => true } }
+      allow(RuntimeConfig).to receive(:account).and_return({ 'id' => 1, 'settings' => { 'mask_contact_pii' => true } })
     end
 
     after { Current.reset }
@@ -127,6 +128,7 @@ RSpec.describe ActionCableListener do
     before do
       Current.reset
       Current.account = { 'settings' => { 'mask_contact_pii' => true } }
+      allow(RuntimeConfig).to receive(:account).and_return({ 'id' => 1, 'settings' => { 'mask_contact_pii' => true } })
       Current.user = instance_double('User', administrator?: true, name: 'Admin', push_event_data: { id: 1, name: 'Admin', type: 'user' })
     end
 
@@ -170,6 +172,7 @@ RSpec.describe ActionCableListener do
     before do
       Current.reset
       Current.account = { 'settings' => { 'mask_contact_pii' => true } }
+      allow(RuntimeConfig).to receive(:account).and_return({ 'id' => 1, 'settings' => { 'mask_contact_pii' => true } })
       Current.user = instance_double('User', administrator?: true, name: 'Admin', push_event_data: { id: 1, name: 'Admin', type: 'user' })
     end
 
@@ -197,6 +200,34 @@ RSpec.describe ActionCableListener do
       source_id = payload.dig(:contact_inbox, 'source_id') || payload.dig(:contact_inbox, :source_id)
       expect(source_id).not_to include('5511999998888')
       expect(source_id).to end_with('@s.whatsapp.net')
+    end
+  end
+
+  describe '#conversation_typing_on' do
+    it 'casts string is_private to boolean false' do
+      payload = nil
+      allow(ActionCableBroadcastJob).to receive(:perform_later) do |_tokens, _event, data|
+        payload = data
+      end
+
+      listener.conversation_typing_on(EventData.new({ conversation: conversation, is_private: 'false' }))
+
+      expect(payload).not_to be_nil
+      expect(payload[:is_private]).to be false
+    end
+  end
+
+  describe '#conversation_typing_off' do
+    it 'casts string is_private to boolean false' do
+      payload = nil
+      allow(ActionCableBroadcastJob).to receive(:perform_later) do |_tokens, _event, data|
+        payload = data
+      end
+
+      listener.conversation_typing_off(EventData.new({ conversation: conversation, is_private: 'false' }))
+
+      expect(payload).not_to be_nil
+      expect(payload[:is_private]).to be false
     end
   end
 end
