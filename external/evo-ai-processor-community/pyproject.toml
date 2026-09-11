@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evo-ai-agent-processor"
+version = "1.0.0"
+description = "Agent Processor for Evo IA"
+readme = "README.md"
+authors = [
+    {name = "Davidson Gomes", email = "contato@evolution-api.com"}
+]
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+# Main dependencies
+dependencies = [
+    "fastapi==0.115.12",
+    "uvicorn==0.34.2",
+    "pydantic==2.11.10",
+    "pydantic-settings==2.15.0",
+    "sqlalchemy==2.0.40",
+    "psycopg2-binary==2.9.10",
+    "python-dotenv==1.2.3",
+    "alembic==1.15.2",
+    "asyncpg==0.30.0",
+    "httpx==0.28.1",
+    "httpx-sse==0.4.0",
+    "redis==5.3.0",
+    "pyjwt[crypto]==2.9.0",
+    "python-jose==3.4.0",
+    "opensearch-py==2.8.0",
+    "pinecone==7.0.1",
+    "openai==2.54.0",
+    "google-auth>=2.27.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.116.0",
+    "qdrant-client==1.14.2",
+    "requests==2.32.4",
+    "minio==7.2.15",
+    "google-adk==1.19.0",
+    "opentelemetry-sdk==1.37.0",
+    "opentelemetry-exporter-otlp>=1.36.0",
+    "a2a-sdk==0.2.4",
+    "mcp==1.9.0",
+    "langgraph==0.4.1",
+    "litellm>=1.99.0,<2.0.0",
+    "greenlet==3.2.3",
+    "psutil==5.9.8"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==25.1.0",
+    "flake8==7.2.0",
+    "pytest==8.3.5",
+    "pytest-cov==6.1.1",
+    "httpx==0.28.1",
+    "pytest-asyncio==0.26.0",
+]
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+  | alembic/versions
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "alembic/*"]

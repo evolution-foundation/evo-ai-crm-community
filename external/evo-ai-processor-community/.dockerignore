@@ -1,0 +1,98 @@
+# Environment and IDE
+.venv
+venv
+.env
+.idea
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+
+# Version control
+.git
+.github
+.gitignore
+
+# Logs and temp files
+logs
+*.log
+tmp
+.DS_Store
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*
+
+# Documentation
+LICENSE
+docs/
+
+# Development tools
+tests/
+.flake8
+requirements-dev.txt
+
+# Ambiente virtual
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Arquivos específicos do Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Git
+.git
+.gitignore
+
+# Logs e dados
+logs/
+*.log
+data/
+
+# Configuração local
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de teste
+tests/
+test_*
+*_test.py
+
+# Documentação
+docs/

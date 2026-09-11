@@ -1,0 +1,252 @@
+{
+    "tools": [
+        {
+            "id": "text_to_speech",
+            "name": "text_to_speech",
+            "description": "Convert text to speech using ElevenLabs",
+            "tags": [
+                "audio",
+                "synthesis",
+                "ai",
+                "elevenlabs"
+            ],
+            "examples": [
+                "Create narration for videos",
+                "Generate audio for accessibility",
+                "Produce podcast content"
+            ],
+            "inputModes": [
+                "text/plain"
+            ],
+            "outputModes": [
+                "audio/mp3",
+                "audio/wav",
+                "audio/mpeg"
+            ],
+            "config": {
+                "required_fields": [
+                    "eleven_labs_token",
+                    "voice_id"
+                ],
+                "optional_fields": [
+                    "model_id",
+                    "stability",
+                    "similarity_boost",
+                    "style",
+                    "use_speaker_boost",
+                    "speed"
+                ],
+                "default_values": {
+                    "model_id": "eleven_multilingual_v2",
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                    "use_speaker_boost": true,
+                    "speed": 1.0
+                },
+                "field_types": {
+                    "eleven_labs_token": "string",
+                    "voice_id": "string",
+                    "model_id": "string",
+                    "stability": "float",
+                    "similarity_boost": "float",
+                    "style": "float",
+                    "use_speaker_boost": "boolean",
+                    "speed": "float"
+                },
+                "max_text_length": 5000
+            }
+        },
+        {
+            "id": "speech_to_text",
+            "name": "speech_to_text",
+            "description": "Convert speech from audio to text using AI transcription",
+            "tags": [
+                "audio",
+                "transcription",
+                "ai",
+                "whisper",
+                "speech-to-text"
+            ],
+            "examples": [
+                "Transcribe meeting recordings",
+                "Convert podcast audio to text",
+                "Create subtitles from audio",
+                "Process voice messages"
+            ],
+            "inputModes": [
+                "audio/mp3",
+                "audio/wav",
+                "audio/m4a",
+                "audio/ogg",
+                "audio/webm"
+            ],
+            "outputModes": [
+                "text/plain",
+                "application/json"
+            ],
+            "config": {
+                "required_fields": [
+                    "provider",
+                    "api_key_id"
+                ],
+                "optional_fields": [
+                    "model",
+                    "language"
+                ],
+                "default_values": {
+                    "model": "auto",
+                    "language": "auto"
+                },
+                "field_types": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "openai",
+                            "groq",
+                            "google"
+                        ]
+                    },
+                    "api_key_id": {
+                        "type": "string",
+                        "description": "The ID of the API key to use for the tool"
+                    },
+                    "model": "string",
+                    "language": {
+                        "type": "string",
+                        "enum": [
+                            "auto",
+                            "en",
+                            "pt",
+                            "es",
+                            "fr",
+                            "de",
+                            "it",
+                            "ja",
+                            "ko",
+                            "zh"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "web_scraper",
+            "name": "web_scraper",
+            "description": "Extract content from web pages",
+            "tags": [
+                "web",
+                "scraping",
+                "data",
+                "extraction"
+            ],
+            "examples": [
+                "Extract article content",
+                "Get product information",
+                "Monitor website changes"
+            ],
+            "inputModes": [
+                "text/url"
+            ],
+            "outputModes": [
+                "text/html",
+                "text/plain",
+                "application/json"
+            ],
+            "config": {
+                "required_fields": [],
+                "optional_fields": [],
+                "default_values": {},
+                "field_types": {}
+            }
+        },
+        {
+            "id": "knowledge_nexus_search",
+            "name": "knowledge_nexus_search",
+            "description": "Search the EvoNexus knowledge base (hybrid vector + BM25 retrieval) for chunks relevant to a user query. Use this before answering when factual grounding from indexed company knowledge is needed.",
+            "tags": [
+                "knowledge",
+                "rag",
+                "retrieval",
+                "nexus",
+                "search"
+            ],
+            "examples": [
+                "Look up the company's refund policy before answering a billing question",
+                "Retrieve product specs from the curated knowledge space",
+                "Ground a support reply with indexed FAQ entries"
+            ],
+            "inputModes": [
+                "text/plain"
+            ],
+            "outputModes": [
+                "application/json"
+            ],
+            "config": {
+                "required_fields": [
+                    "nexus_base_url",
+                    "nexus_api_key",
+                    "space_id"
+                ],
+                "optional_fields": [
+                    "default_top_k",
+                    "default_filters",
+                    "timeout_seconds"
+                ],
+                "default_values": {
+                    "default_top_k": 10,
+                    "default_filters": {},
+                    "timeout_seconds": 15.0
+                },
+                "field_types": {
+                    "nexus_base_url": "string",
+                    "nexus_api_key": {
+                        "type": "string",
+                        "secret": true,
+                        "description": "EvoNexus API key in the format evo_k_<prefix>.<secret>"
+                    },
+                    "space_id": {
+                        "type": "string",
+                        "description": "UUID of the target Nexus knowledge space"
+                    },
+                    "default_top_k": "integer",
+                    "default_filters": "object",
+                    "timeout_seconds": "float"
+                }
+            }
+        }
+    ],
+    "categories": [
+        {
+            "id": "audio",
+            "name": "Audio Tools",
+            "description": "Audio tools for LoopAgent",
+            "tools": [
+                "text_to_speech",
+                "speech_to_text"
+            ]
+        },
+        {
+            "id": "web",
+            "name": "Web Tools",
+            "description": "Web scraping and data extraction tools",
+            "tools": [
+                "web_scraper"
+            ]
+        },
+        {
+            "id": "knowledge",
+            "name": "Knowledge Tools",
+            "description": "Retrieval-augmented generation tools backed by curated knowledge bases",
+            "tools": [
+                "knowledge_nexus_search"
+            ]
+        }
+    ],
+    "metadata": {
+        "version": "1.2.0",
+        "last_updated": "2026-05-13",
+        "total_tools": 4,
+        "total_categories": 3
+    }
+}

@@ -1,0 +1,108 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/evo_community
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-""}
+      REDIS_SSL: "false"
+      REDIS_KEY_PREFIX: "a2a:"
+      REDIS_TTL: 3600
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      APP_URL: ${APP_URL}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD}
+      # Performance optimization settings
+      RATE_LIMIT_GLOBAL_RPS: ${RATE_LIMIT_GLOBAL_RPS:-1000}
+      RATE_LIMIT_GLOBAL_BURST: ${RATE_LIMIT_GLOBAL_BURST:-50}
+      RATE_LIMIT_CLIENT_RPS: ${RATE_LIMIT_CLIENT_RPS:-100}
+      RATE_LIMIT_CLIENT_BURST: ${RATE_LIMIT_CLIENT_BURST:-10}
+      RATE_LIMIT_CLEANUP_INTERVAL: ${RATE_LIMIT_CLEANUP_INTERVAL:-300}
+      # Health check optimization settings
+      HEALTH_CHECK_TIMEOUT: ${HEALTH_CHECK_TIMEOUT:-5.0}
+      READINESS_CHECK_TIMEOUT: ${READINESS_CHECK_TIMEOUT:-2.0}
+      DB_HEALTH_CHECK_QUERY: ${DB_HEALTH_CHECK_QUERY:-SELECT 1}
+      DB_CONN_THRESHOLD_DEGRADED: ${DB_CONN_THRESHOLD_DEGRADED:-90}
+      DB_WAIT_COUNT_THRESHOLD: ${DB_WAIT_COUNT_THRESHOLD:-100}
+      MEMORY_THRESHOLD_WARNING: ${MEMORY_THRESHOLD_WARNING:-400}
+      MEMORY_THRESHOLD_CRITICAL: ${MEMORY_THRESHOLD_CRITICAL:-500}
+    volumes:
+      - ./logs:/app/logs
+      - ./static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: evo_community
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  redis:
+    image: redis:alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 500M
+
+volumes:
+  postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-evo-ai-postgres-data}
+  redis_data:
+    name: ${REDIS_VOLUME_NAME:-evo-ai-redis-data}

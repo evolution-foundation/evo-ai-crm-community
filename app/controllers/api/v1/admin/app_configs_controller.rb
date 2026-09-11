@@ -14,6 +14,11 @@ module Api
           'storage' => %w[STORAGE_BUCKET_NAME STORAGE_ACCESS_KEY_ID
                           STORAGE_ACCESS_SECRET STORAGE_REGION STORAGE_ENDPOINT],
           'google_oauth' => %w[GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_CALLBACK_URL],
+          'dropbox' => %w[DROPBOX_APP_KEY DROPBOX_APP_SECRET],
+          'marketing_alerts' => %w[
+            MARKETING_ALERTS_CHANNELS MARKETING_ALERTS_INBOX_ID
+            MARKETING_ALERTS_WHATSAPP_NUMBER MARKETING_ALERTS_EMAIL
+          ],
           'facebook' => %w[FB_APP_ID FB_VERIFY_TOKEN FB_APP_SECRET FACEBOOK_API_VERSION
                            ENABLE_MESSENGER_CHANNEL_HUMAN_AGENT FB_FEED_COMMENTS_ENABLED],
           'whatsapp' => %w[WP_APP_ID WP_VERIFY_TOKEN WP_APP_SECRET WP_WHATSAPP_CONFIG_ID WP_API_VERSION],
@@ -65,7 +70,44 @@ module Api
           ],
           'push_notifications' => %w[FIREBASE_PROJECT_ID FIREBASE_CREDENTIALS_SECRET
                                      IOS_APP_ID ANDROID_BUNDLE_ID],
-          'frontend_runtime' => %w[RECAPTCHA_SITE_KEY CLARITY_PROJECT_ID]
+          'frontend_runtime' => %w[RECAPTCHA_SITE_KEY CLARITY_PROJECT_ID],
+          'ifood' => %w[IFOOD_CLIENT_ID IFOOD_CLIENT_SECRET IFOOD_MERCHANT_ID],
+          'ninety_nine' => %w[NINETY_NINE_BASE_URL NINETY_NINE_STORE_ID NINETY_NINE_CLIENT_ID NINETY_NINE_CLIENT_SECRET],
+          'digital_menu' => %w[
+            MENU_COMPANY_NAME MENU_HEADER_COLOR MENU_BACKGROUND_COLOR MENU_FOOTER_COLOR
+            MENU_ICON_COLOR MENU_TEXT_COLOR MENU_TITLE_COLOR MENU_COMPANY_NAME_COLOR
+            MENU_GTM_ID MENU_WHATSAPP_NUMBER MENU_ORDER_INBOX_ID
+          ],
+          # Organização > Dados da Empresa. ORG_UNIDADES_JSON/ORG_COLORS_JSON hold
+          # JSON-stringified arrays (units w/ opening hours, color tokens) — stored
+          # as opaque strings so they fit the same flat key/value config mechanism
+          # as everything else here, parsed back into arrays on the frontend.
+          'organization_profile' => %w[
+            ORG_NOME_CURTO ORG_NOME_COMPLETO ORG_CNPJ ORG_CATEGORIA ORG_DESCRICAO ORG_NOME_RESPONSAVEL
+            ORG_LOGO_COLORIDO ORG_LOGO_PRETO_BRANCO ORG_LOGO_ICONE ORG_MASCOTE ORG_AVATAR
+            ORG_MISSAO ORG_VISAO ORG_VALORES
+            ORG_EMAIL ORG_CONTATO_GERAL ORG_ATENDIMENTO_DIRETO ORG_ATENDIMENTO_IA
+            ORG_FACEBOOK ORG_INSTAGRAM ORG_TIKTOK ORG_YOUTUBE ORG_LINKEDIN ORG_TWITTER_X ORG_HASHTAGS
+            ORG_UNIDADES_JSON ORG_COLORS_JSON
+            ORG_SITE_INSTITUCIONAL ORG_SITE_LP ORG_SITE_COMERCIAL ORG_POLITICAS_PRIVACIDADE ORG_TERMO_SERVICO_URL
+            ORG_REGIME_TRIBUTARIO ORG_CNAE_PRINCIPAL ORG_INSCRICAO_ESTADUAL ORG_INSCRICAO_MUNICIPAL
+            ORG_ALIQUOTA_EFETIVA_SIMPLES ORG_ANEXO_SIMPLES
+          ],
+          # Marketing > GTM — pixels/IDs de rastreamento usados pelo painel "Configurar
+          # Variáveis" da aba Marketing. Os campos *_SECRET são tokens de API de
+          # conversão (Meta/TikTok CAPI) e ficam mascarados/criptografados como
+          # qualquer outro segredo desta tela.
+          'marketing_tracking' => %w[
+            MKT_COMPANY_NAME MKT_GOOGLE_EMAIL
+            MKT_SITE_URL MKT_SITE_TYPE MKT_SITE_TYPE_OTHER
+            MKT_PIXEL_META MKT_TOKEN_META_SECRET
+            MKT_PIXEL_TIKTOK MKT_TOKEN_TIKTOK_SECRET
+            MKT_PIXEL_PINTEREST MKT_PIXEL_LINKEDIN
+            MKT_GA4_ID MKT_GADS_ID
+            MKT_GADS_VIEWCONTENT MKT_GADS_CART MKT_GADS_CHECKOUT MKT_GADS_PURCHASE
+            MKT_URL_SERVER_META MKT_URL_SERVER_TIKTOK
+            MKT_GOOGLE_SHEETS_URL
+          ]
         }.freeze
 
         # Required-key enforcement: see `IntegrationRequirements` for the per-integration
