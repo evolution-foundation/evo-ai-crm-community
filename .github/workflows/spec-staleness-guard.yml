@@ -300,6 +300,14 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # CRM-606: the public CSAT page is the only consumer of this payload, and the
+      # endpoint is served under `defaults: { format: 'json' }` — an action that
+      # stops rendering does not fail, it answers 204, and the page silently goes
+      # blank. The `null` csat_survey_response is load-bearing the same way: an
+      # empty object reads on the page as "already answered". No other lane runs
+      # spec/requests/public/**.
+      - 'app/controllers/public/api/v1/csat_survey_controller.rb'
+      - 'spec/requests/public/api/v1/csat_survey_controller_spec.rb'
 
 permissions:
   contents: read
@@ -445,4 +453,5 @@ jobs:
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             spec/services/automation_rules/create_pipeline_task_card_spec.rb \
+            spec/requests/public/api/v1/csat_survey_controller_spec.rb \
             --format progress
