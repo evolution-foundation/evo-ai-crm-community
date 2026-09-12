@@ -52,6 +52,8 @@ en:
     inbox_deletetion_response: Your inbox deletion request will be processed in some time.
 
   errors:
+    api:
+      validation_failed: Validation failed
     validations:
       presence: must not be blank
       invalid_hex_color: must be a valid hex color
@@ -72,16 +74,16 @@ en:
         failed: File is blank
       export:
         success: We will notify you once contacts export file is ready to view.
+      email:
+        invalid: Invalid email
+      phone_number:
+        invalid: should be in e164 format
     conversations:
       import:
         missing_file: File is required
         too_large: 'CSV exceeds the maximum allowed rows (%{limit})'
         too_large_bytes: 'File exceeds the maximum allowed size (%{limit} bytes)'
         invalid_csv: 'CSV is malformed: %{error}'
-      email:
-        invalid: Invalid email
-      phone_number:
-        invalid: should be in e164 format
     categories:
       locale:
         unique: should be unique in the category and portal
