@@ -300,6 +300,12 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # CRM-607: what stops two simultaneous creations from picking the same
+      # display_id is the advisory lock in ensure_display_id. Dropping it brings
+      # back a 500 on conversation creation, and on the widget it takes the
+      # visitor's first message down with it. Invisible to every other lane,
+      # because it only shows up under real concurrency.
+      - 'spec/models/conversation_display_id_concurrency_spec.rb'
 
 permissions:
   contents: read
@@ -445,4 +451,5 @@ jobs:
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             spec/services/automation_rules/create_pipeline_task_card_spec.rb \
+            spec/models/conversation_display_id_concurrency_spec.rb \
             --format progress

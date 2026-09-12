@@ -57,6 +57,11 @@ class Conversation < ApplicationRecord
   include ConversationMuteHelpers
   include Wisper::Publisher
 
+  # Chave do advisory lock que serializa a alocação de display_id (ver
+  # #ensure_display_id). Arbitrária: só precisa não colidir com outro advisory
+  # lock da aplicação.
+  DISPLAY_ID_LOCK_KEY = 6_070_607
+
   validates :inbox_id, presence: true
   validates :contact_id, presence: true
   before_validation :validate_additional_attributes
@@ -278,8 +283,24 @@ class Conversation < ApplicationRecord
   def ensure_display_id
     return if display_id.present?
 
-    # Use a globally sequential display_id
-    # This is thread-safe because we're using a database transaction
+    # Sem o lock, duas criações simultâneas leem o MESMO máximo (sob READ COMMITTED
+    # nenhuma enxerga a linha não commitada da outra) e todas menos uma morrem no
+    # índice único. Medido em 8 criações simultâneas: 7 falhavam (CRM-607).
+    #
+    # Tem que ser `_xact_`, não `pg_advisory_lock`: o transacional é liberado no
+    # COMMIT, sem unlock explícito num caminho que pode levantar exceção. E o aviso do
+    # config/database.yml (advisory lock não funciona em PgBouncer transaction mode) é
+    # sobre o de SESSÃO: ele sobrevive ao COMMIT, e em transaction mode o PgBouncer
+    # devolve o backend ao pool dele com o lock ainda preso, envenenando quem receber
+    # aquele backend. O `_xact_` cabe inteiro na janela em que o backend fica preso ao
+    # cliente, que é a transação. O `advisory_locks: false` de lá não alcança esta
+    # linha: a chave só governa o lock que o ActiveRecord toma sozinho no migrator
+    # (advisory_locks_enabled? é lido apenas por Migrator#use_advisory_lock?).
+    #
+    # O máximo segue vindo do escopo corrente, e não de uma sequence: é o que dá a
+    # cada tenant a numeração 1,2,3 dele sob RLS na camada enterprise.
+    self.class.connection.execute("SELECT pg_advisory_xact_lock(#{DISPLAY_ID_LOCK_KEY})")
+
     max_display_id = self.class.maximum(:display_id) || 0
     self.display_id = max_display_id + 1
   end
@@ -348,9 +369,10 @@ class Conversation < ApplicationRecord
   end
 
   def load_attributes_created_by_db_triggers
-    # Display id is set via a trigger in the database
-    # So we need to specifically fetch it after the record is created
-    # We can't use reload because it will clear the previous changes, which we need for the dispatcher
+    # `uuid` vem de um default do banco (gen_random_uuid()), então só existe depois
+    # do INSERT. Não dá para usar reload: ele limparia previous_changes, de que o
+    # dispatcher depende. display_id já vem preenchido do before_create desde que o
+    # trigger foi removido, e é relido aqui só por ser a mesma ida ao banco.
     obj_from_db = self.class.find(id)
     self[:display_id] = obj_from_db[:display_id]
     self[:uuid] = obj_from_db[:uuid]
