@@ -39,6 +39,38 @@ RSpec.describe Pipelines::StageInactivityTargetResolver do
     end
   end
 
+  # EVO: templates aren't a Cloud-only concept — an Evolution/Z-API/etc. WhatsApp
+  # channel has real per-channel templates too, so the shortcut must not be
+  # restricted to provider == 'whatsapp_cloud'.
+  context 'when the send_template action targets a non-Cloud WhatsApp (Evolution) template' do
+    # Created first so it would be the generic scan's pick if the template-channel shortcut
+    # were not used — a second, unrelated WhatsApp (Evolution) inbox is exactly the "wrong
+    # inbox" scenario the shortcut exists to avoid (a whatsapp_cloud-only check would miss
+    # this: both are Channel::Whatsapp with provider 'evolution', so a broken shortcut falls
+    # through to the scan and silently lands on this decoy instead of the template's own inbox).
+    let!(:decoy_inbox) do
+      decoy_channel = Channel::Whatsapp.new(provider: 'evolution', phone_number: "+1555#{SecureRandom.hex(3)}")
+      decoy_channel.save!(validate: false)
+      Inbox.create!(name: 'WA Evolution Decoy', channel: decoy_channel)
+    end
+
+    let(:channel) do
+      c = Channel::Whatsapp.new(provider: 'evolution', phone_number: "+1555#{SecureRandom.hex(3)}")
+      c.save!(validate: false)
+      c
+    end
+    let!(:inbox) { Inbox.create!(name: 'WA Evolution', channel: channel) }
+    let(:template) { MessageTemplate.create!(name: "tpl-#{SecureRandom.hex(4)}", content: 'Oi {{1}}', channel: channel) }
+
+    it 'creates the conversation on the inbox that owns the template channel, not the decoy' do
+      result = resolver.resolve('send_template', template.id)
+
+      expect(result).not_to be_nil
+      expect(result.conversation.inbox_id).to eq(inbox.id)
+      expect(result.created).to be true
+    end
+  end
+
   context 'when the send_template action targets a template with no channel' do
     let!(:inbox) { Inbox.create!(name: 'API only', channel: Channel::Api.create!) }
     let(:template) { MessageTemplate.create!(name: "g-#{SecureRandom.hex(4)}", content: 'Oi {{1}}') }

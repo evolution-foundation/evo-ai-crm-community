@@ -62,15 +62,18 @@ class Pipelines::StageInactivityTargetResolver
     nil
   end
 
-  # A send_template rule's MessageTemplate already names exactly one channel/inbox when it
-  # is WhatsApp Cloud (MessageTemplate#channel_required_for_whatsapp_cloud) — use it
-  # directly instead of the generic contactable-inbox scan, which could pick the wrong
-  # inbox or fail to find one even though the template unambiguously specifies its own.
+  # A send_template rule's MessageTemplate is bound to exactly one channel/inbox whenever
+  # it has a channel at all — WhatsApp Cloud enforces this (MessageTemplate#channel_
+  # required_for_whatsapp_cloud), but any other WhatsApp provider (Evolution, Evolution Go,
+  # Z-API, 360dialog, ...) can just as legitimately have its own per-channel templates. Use
+  # that inbox directly instead of the generic contactable-inbox scan, which could pick a
+  # different WhatsApp inbox on the account even though the template unambiguously names
+  # its own.
   def template_contactable(contact, action, action_value)
     return nil unless action == 'send_template' && action_value.present?
 
     channel = MessageTemplate.find_by(id: action_value)&.channel
-    return nil unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'whatsapp_cloud'
+    return nil unless channel.is_a?(Channel::Whatsapp)
 
     inbox = channel.inbox
     return nil if inbox.blank? || contact.phone_number.blank?
