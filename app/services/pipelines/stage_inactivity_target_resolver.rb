@@ -24,8 +24,11 @@ class Pipelines::StageInactivityTargetResolver
   end
 
   # action: the rule action string, used to decide whether creation is allowed
-  # for the resolved channel. Returns a Result or nil (no usable target).
-  def resolve(action)
+  # for the resolved channel. action_value: the rule's action_value — for
+  # send_template this is a MessageTemplate id, used to prefer that template's
+  # own channel/inbox over the generic scan (see #template_contactable).
+  # Returns a Result or nil (no usable target).
+  def resolve(action, action_value = nil)
     existing = existing_conversation
     return Result.new(conversation: existing, created: false, requires_template: false) if existing
 
@@ -35,7 +38,7 @@ class Pipelines::StageInactivityTargetResolver
     contact = @pipeline_item.contact
     return nil if contact.nil?
 
-    contactable = pick_contactable_inbox(contact)
+    contactable = template_contactable(contact, action, action_value) || pick_contactable_inbox(contact)
     return nil if contactable.nil?
 
     provider = contactable[:inbox].channel.try(:provider)
@@ -59,6 +62,24 @@ class Pipelines::StageInactivityTargetResolver
     nil
   end
 
+  # A send_template rule's MessageTemplate already names exactly one channel/inbox when it
+  # is WhatsApp Cloud (MessageTemplate#channel_required_for_whatsapp_cloud) — use it
+  # directly instead of the generic contactable-inbox scan, which could pick the wrong
+  # inbox or fail to find one even though the template unambiguously specifies its own.
+  def template_contactable(contact, action, action_value)
+    return nil unless action == 'send_template' && action_value.present?
+
+    channel = MessageTemplate.find_by(id: action_value)&.channel
+    return nil unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'whatsapp_cloud'
+
+    inbox = channel.inbox
+    return nil if inbox.blank? || contact.phone_number.blank?
+
+    # Matches Contacts::ContactableInboxesService#whatsapp_contactable_inbox: WhatsApp wants
+    # the phone number without the leading '+' (E.164 minus the plus).
+    { inbox: inbox, source_id: contact.phone_number.delete('+') }
+  end
+
   def pick_contactable_inbox(contact)
     Contacts::ContactableInboxesService.new(contact: contact).get.first
   rescue StandardError => e
@@ -74,8 +95,10 @@ class Pipelines::StageInactivityTargetResolver
     ).perform
     return nil unless contact_inbox
 
+    # ConversationBuilder expects real params (it calls `.permit!` on additional_attributes) —
+    # every other caller passes an actual controller `params`; wrap ours the same way.
     ConversationBuilder.new(
-      params: { additional_attributes: { 'created_by' => CREATED_BY } },
+      params: ActionController::Parameters.new(additional_attributes: { 'created_by' => CREATED_BY }),
       contact_inbox: contact_inbox
     ).perform
   rescue StandardError => e

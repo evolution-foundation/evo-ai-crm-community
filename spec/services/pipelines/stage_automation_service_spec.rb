@@ -258,5 +258,43 @@ RSpec.describe Pipelines::StageAutomationService do
         expect { service.perform }.to change { pipeline_item.reload.pipeline_id }.to(target.id)
       end
     end
+
+    # EVO: send_template rules may carry action_variables/action_variable_fallbacks so a
+    # WhatsApp template's {{1}}-style placeholders get filled instead of sent literally.
+    context 'with send_template action carrying action_variables' do
+      let(:changed_attributes) { { 'label_list' => [[], ['urgent']] } }
+      let(:template) do
+        MessageTemplate.create!(name: "hello-#{SecureRandom.hex(4)}", content: 'Oi {{1}}, tudo bem?', channel: nil)
+      end
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                        'action' => 'send_template', 'action_value' => template.id,
+                        'action_variables' => { '1' => '{{contact.name}}' } }]
+        })
+      end
+
+      it 'sends the template with the placeholder resolved from the contact' do
+        expect { service.perform }.to change { conversation.messages.count }.by(1)
+        expect(conversation.messages.order(:created_at).last.content).to eq("Oi #{contact.name}, tudo bem?")
+      end
+
+      context 'when the resolved variable is blank and a fallback is provided' do
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                          'action' => 'send_template', 'action_value' => template.id,
+                          'action_variables' => { '1' => '{{contact.identifier}}' },
+                          'action_variable_fallbacks' => { '1' => 'amigo' } }]
+          })
+        end
+
+        it 'falls back to the configured text' do
+          service.perform
+          expect(conversation.messages.order(:created_at).last.content).to eq('Oi amigo, tudo bem?')
+        end
+      end
+    end
   end
 end

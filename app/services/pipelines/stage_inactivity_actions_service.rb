@@ -132,7 +132,7 @@ class Pipelines::StageInactivityActionsService
   # --- firing (reserve-before-send) ----------------------------------------
 
   def fire(rule, rule_id, base)
-    target = Pipelines::StageInactivityTargetResolver.new(@pipeline_item).resolve(rule[:action])
+    target = Pipelines::StageInactivityTargetResolver.new(@pipeline_item).resolve(rule[:action], rule[:action_value])
     return if target.nil?
 
     execution = reserve(rule, rule_id, base)
@@ -183,10 +183,6 @@ class Pipelines::StageInactivityActionsService
     else
       Rails.logger.warn "[StageInactivity] unsupported inactivity action: #{rule[:action]}"
     end
-  end
-
-  def template_params_for(rule)
-    { id: rule[:action_value] }
   end
 
   # Only message-sending actions have meaningful "message_sent" text; the

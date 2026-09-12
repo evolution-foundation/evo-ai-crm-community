@@ -103,6 +103,35 @@ RSpec.describe Api::V1::PipelineStagesController, type: :controller do
 
       expect(stage.reload.automation_rules['rules']).to eq([rule])
     end
+
+    # EVO: send_template rules may carry action_variables/action_variable_fallbacks so a
+    # WhatsApp template's {{1}}-style placeholders get filled instead of sent literally.
+    it 'persists action_variables and action_variable_fallbacks on a send_template rule' do
+      send_template_rule = {
+        'trigger' => 'label_added', 'trigger_value' => 'lead qualificado',
+        'action' => 'send_template', 'action_value' => SecureRandom.uuid,
+        'action_variables' => { '1' => '{{contact.name}}' },
+        'action_variable_fallbacks' => { '1' => 'amigo' }
+      }
+
+      update_stage(rules: [send_template_rule])
+
+      expect(response).to have_http_status(:ok)
+      persisted = stage.reload.automation_rules['rules'].first
+      expect(persisted['action_variables']).to eq({ '1' => '{{contact.name}}' })
+      expect(persisted['action_variable_fallbacks']).to eq({ '1' => 'amigo' })
+    end
+
+    it 'rejects a rule whose action_variables is not an object' do
+      bad_rule = rule.merge('action' => 'send_template', 'action_variables' => 'not-an-object')
+
+      update_stage(rules: [bad_rule])
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body).dig('error', 'details')).to include(
+        a_string_including('action_variables must be an object')
+      )
+    end
   end
 
   describe 'reading the stage back' do

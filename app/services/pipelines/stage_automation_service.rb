@@ -100,7 +100,7 @@ class Pipelines::StageAutomationService
     when 'apply_label'         then apply_label(action_value)
     when 'send_ai_message'     then send_ai_message(@conversation, suggested_message: rule[:ai_message])
     when 'send_direct_message' then send_direct_message(@conversation, action_value)
-    when 'send_template'       then send_template(@conversation, { id: action_value })
+    when 'send_template'       then send_template(@conversation, template_params_for(rule))
     when 'finalize'            then finalize(@conversation, action_value)
     end
   rescue StandardError => e

@@ -21,13 +21,16 @@ RSpec.describe Pipelines::StageInactivityActionsService do
 
   subject(:service) { described_class.new(pipeline_item.reload) }
 
-  def set_rule(minutes:, base:, action: 'send_direct_message', action_value: 'Ainda por aqui?', id: SecureRandom.uuid, ai_message: nil)
+  def set_rule(minutes:, base:, action: 'send_direct_message', action_value: 'Ainda por aqui?', id: SecureRandom.uuid,
+               ai_message: nil, action_variables: nil, action_variable_fallbacks: nil)
     rule = {
       'id' => id, 'trigger' => 'inactivity',
       'trigger_value' => { 'minutes' => minutes, 'base' => base },
       'action' => action, 'action_value' => action_value
     }
     rule['ai_message'] = ai_message if ai_message
+    rule['action_variables'] = action_variables if action_variables
+    rule['action_variable_fallbacks'] = action_variable_fallbacks if action_variable_fallbacks
     stage_a.update!(automation_rules: { 'rules' => [rule] })
     rule
   end
@@ -114,6 +117,41 @@ RSpec.describe Pipelines::StageInactivityActionsService do
       StageInactivityExecution.reset_for_item(pipeline_item.id, base: 'no_customer_reply')
       remaining = StageInactivityExecution.for_item(pipeline_item.id).pluck(:base)
       expect(remaining).to eq(['stage_stagnation'])
+    end
+  end
+
+  # EVO: send_template inactivity rules may carry action_variables/action_variable_fallbacks
+  # so a WhatsApp template's {{1}}-style placeholders get filled instead of sent literally
+  # (mirrors AutomationRules::MessageActionHandlers#resolve_template_params).
+  describe '#process — send_template with action_variables' do
+    let(:template) do
+      MessageTemplate.create!(name: "greet-#{SecureRandom.hex(4)}", content: 'Oi {{1}}, tudo bem?', channel: nil)
+    end
+
+    before do
+      set_rule(minutes: 5, base: 'no_customer_reply', action: 'send_template', action_value: template.id,
+                action_variables: { '1' => '{{contact.name}}' })
+      conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'oi', created_at: 6.minutes.ago)
+    end
+
+    it 'fills the template placeholder from the contact name' do
+      service.process
+      message = conversation.messages.order(:created_at).last
+      expect(message.content).to eq("Oi #{contact.name}, tudo bem?")
+    end
+
+    context 'when the resolved variable is blank and a fallback is provided' do
+      before do
+        set_rule(minutes: 5, base: 'no_customer_reply', action: 'send_template', action_value: template.id,
+                  action_variables: { '1' => '{{contact.identifier}}' },
+                  action_variable_fallbacks: { '1' => 'amigo' })
+      end
+
+      it 'falls back to the configured text' do
+        service.process
+        message = conversation.messages.order(:created_at).last
+        expect(message.content).to eq('Oi amigo, tudo bem?')
+      end
     end
   end
 

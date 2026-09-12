@@ -35,6 +35,11 @@ class PipelineStage < ApplicationRecord
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :pipeline_id }
   validates :color, format: { with: /\A#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\z/, message: :invalid_hex_color }
+  # Only re-checked when automation_rules is actually part of this save. Without this guard,
+  # a channel that later goes bad (disconnected, inbox deleted) would make the stage
+  # permanently unsavable for anything else — a rename, a drag-and-drop reorder — until an
+  # operator fixes the unrelated channel.
+  validate :validate_send_template_whatsapp_cloud_channel, if: :will_save_change_to_automation_rules?
 
   scope :ordered, -> { order(:position) }
 
@@ -67,6 +72,36 @@ class PipelineStage < ApplicationRecord
   end
 
   private
+
+  # A send_template rule bound to a WhatsApp Cloud template is unusable once that
+  # template's channel/inbox is gone or disconnected. Rejecting the save here (rather than
+  # letting the rule silently misfire later) mirrors MessageTemplate#channel_required_for_
+  # whatsapp_cloud, one layer up: the stage rule, not just the template row.
+  def validate_send_template_whatsapp_cloud_channel
+    send_template_action_values.each do |template_id|
+      template = MessageTemplate.find_by(id: template_id)
+      next unless template
+
+      channel = template.channel
+      next unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'whatsapp_cloud'
+
+      if channel.inbox.blank?
+        errors.add(:automation_rules, "template #{template.name.inspect} has no inbox for its WhatsApp Cloud channel")
+      elsif channel.reauthorization_required?
+        errors.add(:automation_rules, "template #{template.name.inspect}'s WhatsApp Cloud channel requires reauthorization")
+      end
+    end
+  end
+
+  def send_template_action_values
+    rules = automation_rules&.dig('rules') || []
+    rules.filter_map do |rule|
+      next unless rule.is_a?(Hash)
+
+      r = rule.with_indifferent_access
+      r[:action_value] if r[:action] == 'send_template'
+    end
+  end
 
   def set_default_automation_rules
     self.automation_rules = {} if automation_rules.blank?

@@ -38,6 +38,19 @@ module Pipelines::StageMessageActions
     true
   end
 
+  # Builds the template_params hash Messages::MessageBuilder expects (string keys — see
+  # Messages::MessageBuilder#process_template_content) from a stage rule's action_value
+  # plus its optional action_variables/action_variable_fallbacks. Same shape/contract as
+  # AutomationRules::MessageActionHandlers#resolve_template_params, so the canvas flow and
+  # both stage-automation paths resolve {{path}} placeholders identically.
+  def template_params_for(rule)
+    {
+      'id' => rule[:action_value],
+      'processed_params' => rule[:action_variables],
+      'variable_fallbacks' => rule[:action_variable_fallbacks]
+    }.compact
+  end
+
   # template_params: Hash with `id` (preferred) or `name`+`language`+`namespace`
   # +`processed_params`. Resolved/rendered by MessageBuilder + SendResolver.
   def send_template(conversation, template_params, source: AUTOMATION_SOURCE)

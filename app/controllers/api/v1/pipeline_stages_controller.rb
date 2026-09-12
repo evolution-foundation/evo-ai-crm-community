@@ -5,6 +5,7 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
   RULE_ID_MAX_LENGTH = 64
   TRIGGER_VALUE_MAX_LENGTH = 255
   AUTOMATION_RULES_KEYS = %w[description rules].freeze
+  ACTION_VARIABLE_MAP_FIELDS = %w[action_variables action_variable_fallbacks].freeze
   INACTIVITY_BASES = %w[no_customer_reply stage_stagnation].freeze
 
   require_permissions({
@@ -269,7 +270,24 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
 
     errors.concat(scalar_rule_field_errors(r, index))
     errors.concat(inactivity_trigger_value_errors(r[:trigger_value], index)) if trigger == 'inactivity'
+    ACTION_VARIABLE_MAP_FIELDS.each { |field| errors.concat(variable_map_errors(r[field], field, index)) }
     errors
+  end
+
+  # action_variables / action_variable_fallbacks: an optional map of a send_template
+  # rule's template placeholder keys (e.g. "1" for a WhatsApp {{1}}) to literal strings
+  # (which may embed {{path}} tokens — resolved later by TemplateVariableResolver).
+  def variable_map_errors(value, field, index)
+    return [] if value.nil?
+
+    label = "automation_rules.rules[#{index}].#{field}"
+    return ["#{label} must be an object"] unless value.is_a?(Hash) || value.respond_to?(:to_unsafe_h)
+
+    hash = value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h : value
+    hash.filter_map do |key, val|
+      next "#{label} values must be single values, not objects or lists" if val.is_a?(Hash) || val.is_a?(Array)
+      next "#{label}.#{key} must be at most #{ACTION_VALUE_MAX_LENGTH} characters" if val.to_s.length > ACTION_VALUE_MAX_LENGTH
+    end
   end
 
   # These were cut to length on the way in: a 300-character follow-up answered 200 with 255
@@ -415,11 +433,24 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
         # scalar_rule_field_errors refuses anything over the limit before this runs.
         normalized['id'] = r[:id].to_s if r[:id].present?
         normalized['ai_message'] = r[:ai_message].to_s if r[:ai_message].present?
+        # Not truncated: variable_map_errors refuses oversized values before this runs.
+        ACTION_VARIABLE_MAP_FIELDS.each do |field|
+          normalized[field] = stringify_variable_map(r[field]) if r[field].present?
+        end
         normalized
       end
     end
 
     result
+  end
+
+  # Coerces an action_variables/action_variable_fallbacks map to plain string => string,
+  # same treatment as every other rule field (trigger, action_value, ai_message, ...).
+  def stringify_variable_map(map)
+    hash = map.respond_to?(:to_unsafe_h) ? map.to_unsafe_h : map
+    return {} unless hash.is_a?(Hash)
+
+    hash.transform_keys(&:to_s).transform_values(&:to_s)
   end
 
   # For the `inactivity` trigger the value is an object { minutes, base };
