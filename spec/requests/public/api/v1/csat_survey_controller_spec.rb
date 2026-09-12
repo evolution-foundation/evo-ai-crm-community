@@ -67,14 +67,20 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
       expect(body['content']).not_to include('/survey/responses/')
     end
 
-    it 'falls back to the default prompt when the inbox configures no message' do
+    # No server-side default, so the page can render its own in the READER's
+    # language: this endpoint is anonymous and PublicController does not include
+    # SwitchLocale, so an `I18n.t` here would resolve at I18n.default_locale and
+    # serve one installation-wide language to every contact of every account. With
+    # the key absent the page falls back to `survey.description`, which is where
+    # that phrase has its single owner.
+    it 'omits the prompt entirely when the inbox configures no message' do
       inbox.update!(csat_config: { 'display_type' => 'star' })
 
       get "/public/api/v1/csat_survey/#{conversation.uuid}"
 
       body = JSON.parse(response.body)
-      expect(body['content']).to eq(I18n.t('conversations.templates.csat_input_message_body'))
-      expect(body['content']).not_to include('/survey/responses/')
+      expect(body).not_to have_key('content')
+      expect(body['display_type']).to eq('star')
     end
 
     it 'falls back to the emoji display type when the message carries none' do
