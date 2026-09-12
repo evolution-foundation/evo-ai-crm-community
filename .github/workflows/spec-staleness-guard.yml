@@ -301,8 +301,10 @@ on:
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
       # CRM-608: the language of a validation 422 is spread across the locale catalogue, the
-      # default-locale wiring, the envelope message and the generic length validator. Any one of
-      # them reverting alone puts English back on a pt-BR screen, and no other lane reads them.
+      # default-locale wiring, the fallback chain, the envelope message and the generic length
+      # validator. Any one of them reverting alone puts English back on a pt-BR screen, or the
+      # missing-translation dump on an es one, and no other lane reads them.
+      - 'config/application.rb'
       - 'config/initializers/languages.rb'
       - 'config/locales/en.yml'
       - 'config/locales/pt_BR.yml'

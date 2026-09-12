@@ -142,4 +142,45 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
       expect(detail_for('email')['messages']).to eq(['has already been taken'])
     end
   end
+
+  # Four of the six enabled languages (es, fr, it, pt) carry no errors.messages and no
+  # errors.api of their own. Feeding default_locale from DEFAULT_LOCALE therefore aims the whole
+  # validation body at a catalogue with a hole in it, and error.message is the field the CRM
+  # puts on screen. The floor under it is the fallback chain in config/application.rb; without
+  # it the body below reads "Translation missing".
+  describe 'an installation on an enabled language that ships no error catalogue' do
+    around do |example|
+      previous_default = I18n.default_locale
+      previous_locale = I18n.locale
+      I18n.default_locale = :es
+      I18n.with_locale(:es) { example.run }
+    ensure
+      I18n.default_locale = previous_default
+      I18n.locale = previous_locale # rubocop:disable Rails/I18nLocaleAssignment
+    end
+
+    it 'answers the gaps in English instead of a missing-translation marker' do
+      owner = Contact.create!(name: 'Dueña', email: 'taken-es@example.com')
+      contact = Contact.create!(name: 'Editando', email: 'editing-es@example.com')
+
+      patch "/api/v1/contacts/#{contact.id}",
+            params: { email: owner.email },
+            headers: headers,
+            as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body.dig('error', 'message')).to eq('Validation failed')
+      expect(detail_for('email')['messages']).to eq(['has already been taken'])
+      # The floor does not shadow what the language does carry.
+      expect(I18n.t('errors.validations.presence')).to eq('no debe estar en blanco')
+    end
+
+    # The language first, English as the floor. `fallbacks = true` yields neither: its chain
+    # ends at I18n.default_locale, the value DEFAULT_LOCALE has just moved to :es.
+    it 'puts the installation language first and ends every chain at :en' do
+      expect(I18n.fallbacks[:es]).to eq(%i[es en])
+      # No pt hop on the way: the locale symbol is pt_BR and ancestry splits on a hyphen.
+      expect(I18n.fallbacks[:pt_BR]).to eq(%i[pt_BR en])
+    end
+  end
 end

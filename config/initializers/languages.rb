@@ -52,6 +52,8 @@ Rails.configuration.i18n.available_locales = enabled_locales
 # already unwound by then and only default_locale is left. Assigned as config, and not with
 # I18n.default_locale=, because the railtie applies it with the available-locales check off — the
 # list above has not reached I18n yet. Unset or unknown, the Rails default (:en) stands.
+# Any enabled language is accepted, including the four that carry no errors.messages of their own
+# (es, fr, it, pt): the fallback chain in config/application.rb answers those gaps in English.
 configured_locale = ENV.fetch('DEFAULT_LOCALE', nil).presence&.to_sym
 if enabled_locales.include?(configured_locale)
   Rails.configuration.i18n.default_locale = configured_locale
