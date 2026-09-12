@@ -7,6 +7,8 @@ require 'rails_helper'
 # with no template falls through to ImplicitRender's `head :no_content`, so the page
 # got a 204 and never learned what to ask about.
 RSpec.describe 'Public CSAT Survey API', type: :request do
+  include ActiveJob::TestHelper
+
   let(:channel) { Channel::Api.create! }
   let(:inbox) { Inbox.create!(name: 'suporte', channel: channel, csat_config: { 'display_type' => 'star', 'message' => 'Como foi o atendimento?' }) }
   let(:contact) { Contact.create!(name: 'Ada Lovelace', email: "ada-#{SecureRandom.hex(4)}@test.com") }
@@ -97,12 +99,60 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
       { message: { submitted_values: { csat_survey_response: { rating: 5, feedback_message: 'Perfeito' } } } }
     end
 
-    it 'records the rating on the conversation and answers 200 with a body' do
+    it 'answers 200 with a body and stores the submitted values on the message' do
       put "/public/api/v1/csat_survey/#{conversation.uuid}", params: rating_payload, as: :json
 
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)).to have_key('csat_survey_response')
       expect(csat_message.reload.content_attributes.dig('submitted_values', 'csat_survey_response', 'rating')).to eq(5)
+    end
+
+    # The acceptance criterion is that the rating lands on the RIGHT conversation,
+    # and the message's content_attributes above is not where that is settled: the
+    # `csat_survey_responses` row every report reads is written by
+    # CsatSurveyListener, which runs inside EventDispatcherJob (AsyncDispatcher).
+    # Query it straight after the PUT and it is still empty, so draining that job is
+    # the only way to see the write. Same harness as
+    # spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb.
+    context 'when the MESSAGE_UPDATED fan-out runs' do
+      let(:other_contact) { Contact.create!(name: 'Grace Hopper', email: "grace-#{SecureRandom.hex(4)}@test.com") }
+      let(:other_contact_inbox) { ContactInbox.create!(inbox: inbox, contact: other_contact, source_id: SecureRandom.hex(4)) }
+      let(:other_conversation) { Conversation.create!(inbox: inbox, contact: other_contact, contact_inbox: other_contact_inbox) }
+      let!(:other_csat_message) do
+        other_conversation.messages.create!(
+          inbox: inbox, message_type: :template, content_type: :input_csat,
+          content: 'Como foi o atendimento?', content_attributes: { display_type: 'star' }
+        )
+      end
+
+      it 'has recorded nothing at the moment the endpoint answers' do
+        put "/public/api/v1/csat_survey/#{conversation.uuid}", params: rating_payload, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(CsatSurveyResponse.where(message_id: csat_message.id)).to be_empty
+      end
+
+      it 'records the rating on the rated conversation, its contact and its message' do
+        perform_enqueued_jobs(only: [EventDispatcherJob]) do
+          put "/public/api/v1/csat_survey/#{conversation.uuid}", params: rating_payload, as: :json
+        end
+
+        recorded = CsatSurveyResponse.find_by!(message_id: csat_message.id)
+        expect(recorded.rating).to eq(5)
+        expect(recorded.feedback_message).to eq('Perfeito')
+        expect(recorded.conversation_id).to eq(conversation.id)
+        expect(recorded.contact_id).to eq(contact.id)
+      end
+
+      it 'leaves the other open survey in the same inbox unrated' do
+        perform_enqueued_jobs(only: [EventDispatcherJob]) do
+          put "/public/api/v1/csat_survey/#{conversation.uuid}", params: rating_payload, as: :json
+        end
+
+        expect(CsatSurveyResponse.where(conversation_id: other_conversation.id)).to be_empty
+        expect(CsatSurveyResponse.where(message_id: other_csat_message.id)).to be_empty
+        expect(CsatSurveyResponse.count).to eq(1)
+      end
     end
 
     it 'refuses a survey older than 14 days with the error the page shows' do
