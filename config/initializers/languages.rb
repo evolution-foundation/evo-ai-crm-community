@@ -44,4 +44,17 @@ LANGUAGES_CONFIG = {
   39 => { name: 'Српски (sr)', iso_639_3_code: 'srp', iso_639_1_code: 'sr', enabled: false }
 }.filter { |_key, val| val[:enabled] }.freeze
 
-Rails.configuration.i18n.available_locales = LANGUAGES_CONFIG.map { |_index, lang| lang[:iso_639_1_code].to_sym }
+enabled_locales = LANGUAGES_CONFIG.map { |_index, lang| lang[:iso_639_1_code].to_sym }
+Rails.configuration.i18n.available_locales = enabled_locales
+
+# DEFAULT_LOCALE reached only the around_action in SwitchLocale, which never covers a body built
+# from rescue_from: ActionController::Rescue wraps the callbacks, so the request's with_locale has
+# already unwound by then and only default_locale is left. Assigned as config, and not with
+# I18n.default_locale=, because the railtie applies it with the available-locales check off — the
+# list above has not reached I18n yet. Unset or unknown, the Rails default (:en) stands.
+configured_locale = ENV.fetch('DEFAULT_LOCALE', nil).presence&.to_sym
+if enabled_locales.include?(configured_locale)
+  Rails.configuration.i18n.default_locale = configured_locale
+elsif configured_locale
+  Rails.logger&.warn("DEFAULT_LOCALE=#{configured_locale} is not an enabled language; keeping #{I18n.default_locale}")
+end

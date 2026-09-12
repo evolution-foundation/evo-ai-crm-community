@@ -116,7 +116,9 @@ class Api::BaseController < ApplicationController
     log_rescued_exception(exception)
     error_response(
       ApiErrorCodes::VALIDATION_ERROR,
-      'Validation failed',
+      # This is the only part of the envelope the CRM puts on screen, so it has to follow the
+      # installation's language like the messages under :details do.
+      I18n.t('errors.api.validation_failed'),
       details: format_validation_errors(exception.record.errors),
       status: :unprocessable_entity
     )

@@ -37,7 +37,54 @@ pt_BR:
     reset_password_success: Legal! A solicitação de alteração de senha foi bem sucedida. Verifique seu e-mail para obter instruções.
     reset_password_failure: Uh ho! Não conseguimos encontrar nenhum usuário com o e-mail especificado.
     inbox_deletetion_response: Seu pedido de exclusão da caixa de entrada será processado dentro de algum tempo.
+  activerecord:
+    errors:
+      messages:
+        record_invalid: 'A validação falhou: %{errors}'
+        # Added on :base, so they render on their own, without an attribute prefix.
+        restrict_dependent_destroy:
+          has_one: 'Não é possível excluir o registro pois existe um %{record} dependente'
+          has_many: 'Não é possível excluir o registro pois existem %{record} dependentes'
   errors:
+    # Standard ActiveModel/ActiveRecord messages. The API builds the validation body from
+    # rescue_from, which ActionController::Rescue runs OUTSIDE the locale around_action, so
+    # these resolve under I18n.default_locale — see config/initializers/languages.rb.
+    format: '%{attribute} %{message}'
+    messages:
+      model_invalid: 'A validação falhou: %{errors}'
+      inclusion: não está incluído na lista
+      exclusion: não está disponível
+      invalid: não é válido
+      confirmation: não é igual a %{attribute}
+      accepted: deve ser aceito
+      empty: não pode ficar vazio
+      blank: não pode ficar em branco
+      present: deve ficar em branco
+      too_long:
+        one: 'é muito longo (máximo: 1 caractere)'
+        other: 'é muito longo (máximo: %{count} caracteres)'
+      password_too_long: é muito longo
+      too_short:
+        one: 'é muito curto (mínimo: 1 caractere)'
+        other: 'é muito curto (mínimo: %{count} caracteres)'
+      wrong_length:
+        one: 'não possui o tamanho esperado (1 caractere)'
+        other: 'não possui o tamanho esperado (%{count} caracteres)'
+      not_a_number: não é um número
+      not_an_integer: não é um número inteiro
+      greater_than: deve ser maior que %{count}
+      greater_than_or_equal_to: deve ser maior ou igual a %{count}
+      equal_to: deve ser igual a %{count}
+      less_than: deve ser menor que %{count}
+      less_than_or_equal_to: deve ser menor ou igual a %{count}
+      other_than: deve ser diferente de %{count}
+      in: deve estar em %{count}
+      odd: deve ser ímpar
+      even: deve ser par
+      required: é obrigatório
+      taken: já está em uso
+    api:
+      validation_failed: Falha na validação
     validations:
       presence: não pode ficar em branco
     webhook:
@@ -57,16 +104,16 @@ pt_BR:
         failed: Arquivo vazio
       export:
         success: Avisaremos você assim que a exportação de arquivos estiver pronta para ser exibida.
+      email:
+        invalid: E-mail inválido
+      phone_number:
+        invalid: deve estar no formato e164
     conversations:
       import:
         missing_file: Arquivo é obrigatório
         too_large: 'CSV excede o limite máximo de linhas (%{limit})'
         too_large_bytes: 'Arquivo excede o tamanho máximo permitido (%{limit} bytes)'
         invalid_csv: 'CSV malformado: %{error}'
-      email:
-        invalid: E-mail inválido
-      phone_number:
-        invalid: deve estar no formato e164
     categories:
       locale:
         unique: deve ser único na categoria e no portal
