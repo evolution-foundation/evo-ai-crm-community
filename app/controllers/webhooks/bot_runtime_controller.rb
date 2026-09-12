@@ -52,6 +52,10 @@ class Webhooks::BotRuntimeController < ActionController::API
       Rails.logger.warn "[BotRuntime::Postback] Message creation failed: conversation=#{conversation.display_id}"
       render json: { error: 'Message creation failed' }, status: :unprocessable_entity
     end
+  ensure
+    if conversation && agent_bot
+      Rails.configuration.dispatcher.dispatch('conversation.typing_off', Time.zone.now, conversation: conversation, user: agent_bot, is_private: false)
+    end
   end
 
   private

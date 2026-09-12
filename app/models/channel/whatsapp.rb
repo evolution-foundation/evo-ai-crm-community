@@ -109,6 +109,10 @@ class Channel::Whatsapp < ApplicationRecord
     false
   end
 
+  def use_internal_host?
+    (provider == 'baileys' && ENV.fetch('BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL', false)) || (provider.in?(%w[evolution evolution_go]) && ENV.fetch('EVOLUTION_PROVIDER_USE_INTERNAL_HOST_URL', false))
+  end
+
   def mark_message_templates_updated
     # No-op: templates are now tracked via message_templates table updated_at timestamps
     # This method is kept for backward compatibility but does nothing

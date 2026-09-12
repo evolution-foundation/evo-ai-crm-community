@@ -303,6 +303,46 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
     end
   end
 
+  describe '#toggle_typing_status' do
+    # Business Rule: toggle_typing_status MUST be a public method so that
+    # Channel::Whatsapp#toggle_typing_status can detect it via respond_to?(:toggle_typing_status)
+    # and call it. If the method is private, respond_to? returns false, silently
+    # preventing the typing indicator from being sent to the WhatsApp provider.
+    it 'is a public method (accessible via respond_to?)' do
+      expect(service.respond_to?(:toggle_typing_status)).to be(true)
+    end
+
+    context 'when typing_status is conversation.typing_on' do
+      it 'POSTs composing presence to the Evolution API' do
+        expect(HTTParty).to receive(:post).with(
+          'https://evo.example.com/chat/sendPresence/test-instance',
+          hash_including(
+            headers: hash_including('Content-Type' => 'application/json'),
+            body: include('"presence":"composing"')
+          )
+        ).and_return(instance_double(HTTParty::Response, success?: true))
+
+        service.toggle_typing_status('+5511999999999', 'conversation.typing_on')
+      end
+    end
+
+    context 'when typing_status is conversation.typing_off' do
+      it 'POSTs paused presence to the Evolution API' do
+        expect(HTTParty).to receive(:post).with(
+          'https://evo.example.com/chat/sendPresence/test-instance',
+          hash_including(body: include('"presence":"paused"'))
+        ).and_return(instance_double(HTTParty::Response, success?: true))
+
+        service.toggle_typing_status('+5511999999999', 'conversation.typing_off')
+      end
+    end
+
+    context 'when typing_status is unknown' do
+      it 'does not make any HTTP request' do
+        expect(HTTParty).not_to receive(:post)
+
+        service.toggle_typing_status('+5511999999999', 'conversation.unknown_event')
+      end
   describe '#send_message — unsupported content (CRM-448)' do
     it 'flags the message is_unsupported and returns nil (the caller turns it into failed)' do
       message = instance_double(Message, attachments: [], content_type: 'text', content: nil)
