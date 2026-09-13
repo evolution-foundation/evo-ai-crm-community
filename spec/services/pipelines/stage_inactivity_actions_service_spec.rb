@@ -155,6 +155,82 @@ RSpec.describe Pipelines::StageInactivityActionsService do
     end
   end
 
+  # EVO: inactivity gains the same 4 actions as the event-driven stage automation path
+  # (mirroring AutomationRules::MessageActionHandlers / ConversationActionHandlers).
+  describe '#process — send_canned_response' do
+    let(:canned) { CannedResponse.create!(content: 'Ainda por aqui?', short_code: "cr-#{SecureRandom.hex(4)}") }
+
+    before do
+      set_rule(minutes: 5, base: 'no_customer_reply', action: 'send_canned_response', action_value: canned.id)
+      conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'oi', created_at: 6.minutes.ago)
+    end
+
+    it 'sends the canned response content as a message' do
+      expect { service.process }.to change { conversation.messages.count }.by(1)
+      expect(conversation.messages.order(:created_at).last.content).to eq('Ainda por aqui?')
+    end
+  end
+
+  describe '#process — send_email_to_team' do
+    let(:team) { Team.create!(name: "Team-#{SecureRandom.hex(4)}") }
+
+    before do
+      set_rule(minutes: 5, base: 'no_customer_reply', action: 'send_email_to_team',
+                action_value: { 'team_ids' => [team.id], 'message' => 'Heads up' }.to_json)
+      conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'oi', created_at: 6.minutes.ago)
+    end
+
+    it 'emails the team about the conversation' do
+      mailer = double(deliver_now: true)
+      allow(TeamNotifications::AutomationNotificationMailer).to receive(:conversation_creation).and_return(mailer)
+
+      service.process
+
+      expect(TeamNotifications::AutomationNotificationMailer)
+        .to have_received(:conversation_creation).with(conversation, team, 'Heads up')
+    end
+  end
+
+  describe '#process — send_email_transcript' do
+    before do
+      set_rule(minutes: 5, base: 'no_customer_reply', action: 'send_email_transcript',
+                action_value: 'ops@example.com, sales@example.com')
+      conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'oi', created_at: 6.minutes.ago)
+    end
+
+    it 'delivers the conversation transcript to each email' do
+      delivery = double(deliver_later: true)
+      with_proxy = double('with_proxy')
+      allow(ConversationReplyMailer).to receive(:with).with(account: nil).and_return(with_proxy)
+      allow(with_proxy).to receive(:conversation_transcript).and_return(delivery)
+
+      service.process
+
+      expect(with_proxy).to have_received(:conversation_transcript).with(conversation, 'ops@example.com')
+      expect(with_proxy).to have_received(:conversation_transcript).with(conversation, 'sales@example.com')
+    end
+  end
+
+  describe '#process — update_custom_attribute' do
+    let!(:definition) do
+      CustomAttributeDefinition.create!(attribute_display_name: 'Deal Size', attribute_key: 'deal_size',
+                                         attribute_display_type: 'text', attribute_model: 'pipeline_item_attribute')
+    end
+
+    before do
+      set_rule(minutes: 5, base: 'no_customer_reply', action: 'update_custom_attribute',
+                action_value: { 'custom_attribute_key' => 'deal_size',
+                                 'custom_attribute_model' => 'pipeline_item_attribute',
+                                 'custom_attribute_value' => '5000' }.to_json)
+      conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'oi', created_at: 6.minutes.ago)
+    end
+
+    it 'sets the custom field on the pipeline item' do
+      service.process
+      expect(pipeline_item.reload.custom_fields['deal_size']).to eq('5000')
+    end
+  end
+
   # EVO-2201: this path is time-based and fires unattended, so an archived pipeline that
   # kept its inactivity rules would message customers from a board the operator turned off.
   describe 'archived pipeline' do

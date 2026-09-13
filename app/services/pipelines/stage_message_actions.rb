@@ -214,7 +214,12 @@ module Pipelines::StageMessageActions
   def create_pipeline_task(pipeline_item, task_title)
     return if task_title.blank?
 
-    creator = Current.user || User.where(type: 'SuperAdmin').first
+    # No Current.user in a system-triggered (event/inactivity) automation, and
+    # this Community fork has no seeded SuperAdmin (EVO-659 removed that STI
+    # subclass, so the lookup always returns nil here) — PipelineTask#created_by
+    # is required, so the create! was silently failing (swallowed by
+    # execute_action's rescue). Falls back to any user instead.
+    creator = Current.user || User.first
     pipeline_item.tasks.create!(
       created_by: creator,
       title: task_title.to_s.strip,
@@ -224,7 +229,141 @@ module Pipelines::StageMessageActions
     Rails.logger.info "[StageMessageActions] item=#{pipeline_item.id} task created: #{task_title}"
   end
 
+  # --- Ported from AutomationRules::MessageActionHandlers /
+  # ConversationActionHandlers (account-level canvas automation) -------------
+  #
+  # Stage automation rules only carry a single string `action_value` per rule, unlike
+  # the canvas automation actions these mirror (which take a params array/hash). Each
+  # method below documents the action_value contract the frontend must produce.
+
+  # action_value: the CannedResponse id as a plain string (bare id, like apply_label).
+  def send_canned_response(conversation, action_value)
+    return unless conversation
+    return if action_value.blank?
+
+    canned = CannedResponse.find_by(id: action_value)
+    unless canned
+      Rails.logger.warn "[StageMessageActions] canned response #{action_value.inspect} not found; " \
+                        "skipping send_canned_response for conversation #{conversation.id}"
+      return false
+    end
+
+    message_params = {
+      content: canned.content,
+      private: false,
+      content_attributes: { automation_source: AUTOMATION_SOURCE }
+    }
+
+    if canned.attachments.any?
+      blobs = canned.attachments.map(&:file).select(&:attached?).map(&:blob)
+      message_params[:attachments] = blobs if blobs.any?
+    end
+
+    ::Messages::MessageBuilder.new(nil, conversation, message_params).perform
+    true
+  end
+
+  # action_value: JSON string `{"team_ids": ["<uuid>", ...], "message": "..."}`.
+  def send_email_to_team(conversation, action_value)
+    return unless conversation
+
+    params = parse_stage_action_json(action_value, 'send_email_to_team')
+    return if params.blank?
+
+    team_ids = Array(params['team_ids'])
+    return if team_ids.blank?
+
+    Team.where(id: team_ids).find_each do |team|
+      TeamNotifications::AutomationNotificationMailer.conversation_creation(conversation, team, params['message'])&.deliver_now
+    end
+    true
+  end
+
+  # action_value: plain string, comma-separated emails (matches the upstream
+  # send_email_transcript input shape — no JSON needed).
+  def send_email_transcript(conversation, action_value)
+    return unless conversation
+    return if action_value.blank?
+
+    emails = action_value.to_s.gsub(/\s+/, '').split(',')
+    return if emails.blank?
+
+    emails.each do |email|
+      ConversationReplyMailer.with(account: nil).conversation_transcript(conversation, email)&.deliver_later
+    end
+    true
+  end
+
+  # action_value: JSON string `{"custom_attribute_key": "...",
+  # "custom_attribute_model": "conversation_attribute"|"contact_attribute"|"pipeline_item_attribute",
+  # "custom_attribute_value": "..."}`.
+  def update_custom_attribute(conversation, pipeline_item, action_value)
+    params = parse_stage_action_json(action_value, 'update_custom_attribute')
+    return if params.blank?
+
+    key = params['custom_attribute_key'].to_s
+    model = params['custom_attribute_model'].to_s
+    return if key.blank? || model.blank?
+
+    definition = CustomAttributeDefinition.find_by(attribute_key: key, attribute_model: model)
+    return unless definition
+
+    value = cast_stage_custom_attribute_value(definition, params['custom_attribute_value'])
+    apply_stage_custom_attribute(model, key, value, conversation, pipeline_item)
+    true
+  end
+
   private
+
+  # Parses a stage-automation action_value JSON string defensively — a bad or missing
+  # payload must never raise into the automation dispatch loop, only warn and no-op.
+  def parse_stage_action_json(action_value, action_name)
+    return nil if action_value.blank?
+
+    JSON.parse(action_value.to_s)
+  rescue JSON::ParserError => e
+    Rails.logger.warn "[StageMessageActions] #{action_name}: invalid action_value JSON (#{e.message}); skipping"
+    nil
+  end
+
+  # The wire value is a string; checkbox attributes must be stored as a real boolean so
+  # the canonical read path (Boolean(raw)) matches — mirrors
+  # AutomationRules::ConversationActionHandlers#cast_custom_attribute_value.
+  def cast_stage_custom_attribute_value(definition, value)
+    return value unless definition.attribute_display_type == 'checkbox'
+
+    ActiveModel::Type::Boolean.new.cast(value)
+  end
+
+  def apply_stage_custom_attribute(model, key, value, conversation, pipeline_item)
+    case model
+    when 'conversation_attribute' then set_stage_conversation_custom_attribute(conversation, key, value)
+    when 'contact_attribute' then set_stage_contact_custom_attribute(conversation, key, value)
+    when 'pipeline_item_attribute' then set_stage_pipeline_item_custom_field(pipeline_item, key, value)
+    end
+  end
+
+  def set_stage_conversation_custom_attribute(conversation, key, value)
+    return unless conversation
+
+    attributes = (conversation.custom_attributes || {}).merge(key => value)
+    conversation.update!(custom_attributes: attributes)
+  end
+
+  def set_stage_contact_custom_attribute(conversation, key, value)
+    contact = conversation&.contact
+    return unless contact
+
+    attributes = (contact.custom_attributes || {}).merge(key => value)
+    contact.update!(custom_attributes: attributes)
+  end
+
+  def set_stage_pipeline_item_custom_field(pipeline_item, key, value)
+    return unless pipeline_item
+
+    fields = (pipeline_item.custom_fields || {}).merge(key => value)
+    pipeline_item.update!(custom_fields: fields)
+  end
 
   def parse_move_to_pipeline_value(value)
     return [nil, nil] if value.blank?

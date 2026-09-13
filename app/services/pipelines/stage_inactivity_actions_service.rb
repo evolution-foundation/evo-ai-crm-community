@@ -139,7 +139,7 @@ class Pipelines::StageInactivityActionsService
     return if execution.nil? # lost the race — another worker already reserved
 
     message = dispatch(rule, target)
-    execution.update(message_sent: message_text(rule, message))
+    execution.update!(message_sent: message_text(rule, message))
   rescue StandardError => e
     Rails.logger.error "[StageInactivity] item=#{@pipeline_item.id} fire failed: #{e.message}"
   end
@@ -192,6 +192,14 @@ class Pipelines::StageInactivityActionsService
       send_webhook_event(conversation, rule[:action_value])
     when 'create_pipeline_task'
       create_pipeline_task(@pipeline_item, rule[:action_value])
+    when 'send_canned_response'
+      send_canned_response(conversation, rule[:action_value])
+    when 'send_email_to_team'
+      send_email_to_team(conversation, rule[:action_value])
+    when 'send_email_transcript'
+      send_email_transcript(conversation, rule[:action_value])
+    when 'update_custom_attribute'
+      update_custom_attribute(conversation, @pipeline_item, rule[:action_value])
     else
       Rails.logger.warn "[StageInactivity] unsupported inactivity action: #{rule[:action]}"
     end

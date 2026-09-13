@@ -125,7 +125,7 @@ RSpec.describe Pipelines::StageAutomationService do
     end
 
     context 'with assign_team action' do
-      let(:team) { Team.create!(name: 'Sales Team', account: inbox.account) }
+      let(:team) { Team.create!(name: 'Sales Team') }
       let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
 
       before do
@@ -360,6 +360,165 @@ RSpec.describe Pipelines::StageAutomationService do
         it 'falls back to the configured text' do
           service.perform
           expect(conversation.messages.order(:created_at).last.content).to eq('Oi amigo, tudo bem?')
+        end
+      end
+    end
+
+    # EVO: stage automation gains 4 actions mirroring the account-level canvas
+    # automation handlers (AutomationRules::MessageActionHandlers /
+    # ConversationActionHandlers), adapted to the single-string action_value
+    # stage automation rules carry.
+    context 'with send_canned_response action' do
+      let(:changed_attributes) { { 'label_list' => [[], ['urgent']] } }
+      let(:canned) { CannedResponse.create!(content: 'Hello from canned!', short_code: "cr-#{SecureRandom.hex(4)}") }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                        'action' => 'send_canned_response', 'action_value' => canned.id }]
+        })
+      end
+
+      it 'sends the canned response content as a message' do
+        expect { service.perform }.to change { conversation.messages.count }.by(1)
+        expect(conversation.messages.order(:created_at).last.content).to eq('Hello from canned!')
+      end
+
+      context 'when the canned response id does not exist' do
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                          'action' => 'send_canned_response', 'action_value' => SecureRandom.uuid }]
+          })
+        end
+
+        it 'logs a warning and does not send a message' do
+          allow(Rails.logger).to receive(:warn)
+          expect { service.perform }.not_to change { conversation.messages.count }
+          expect(Rails.logger).to have_received(:warn).with(/not found.*send_canned_response/i)
+        end
+      end
+    end
+
+    context 'with send_email_to_team action' do
+      let(:changed_attributes) { { 'label_list' => [[], ['urgent']] } }
+      let(:team) { Team.create!(name: "Team-#{SecureRandom.hex(4)}") }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent', 'action' => 'send_email_to_team',
+                        'action_value' => { 'team_ids' => [team.id], 'message' => 'Heads up' }.to_json }]
+        })
+      end
+
+      it 'emails the team about the conversation' do
+        mailer = double(deliver_now: true)
+        allow(TeamNotifications::AutomationNotificationMailer).to receive(:conversation_creation).and_return(mailer)
+
+        service.perform
+
+        expect(TeamNotifications::AutomationNotificationMailer)
+          .to have_received(:conversation_creation).with(conversation, team, 'Heads up')
+        expect(mailer).to have_received(:deliver_now)
+      end
+
+      context 'when action_value is not valid JSON' do
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                          'action' => 'send_email_to_team', 'action_value' => 'not-json' }]
+          })
+        end
+
+        it 'logs a warning and does not raise' do
+          allow(Rails.logger).to receive(:warn)
+          expect { service.perform }.not_to raise_error
+          expect(Rails.logger).to have_received(:warn).with(/send_email_to_team/i)
+        end
+      end
+    end
+
+    context 'with send_email_transcript action' do
+      let(:changed_attributes) { { 'label_list' => [[], ['urgent']] } }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                        'action' => 'send_email_transcript', 'action_value' => 'ops@example.com, sales@example.com' }]
+        })
+      end
+
+      it 'delivers the conversation transcript to each email' do
+        delivery = double(deliver_later: true)
+        with_proxy = double('with_proxy')
+        allow(ConversationReplyMailer).to receive(:with).with(account: nil).and_return(with_proxy)
+        allow(with_proxy).to receive(:conversation_transcript).and_return(delivery)
+
+        service.perform
+
+        expect(with_proxy).to have_received(:conversation_transcript).with(conversation, 'ops@example.com')
+        expect(with_proxy).to have_received(:conversation_transcript).with(conversation, 'sales@example.com')
+        expect(delivery).to have_received(:deliver_later).twice
+      end
+    end
+
+    context 'with update_custom_attribute action' do
+      let(:changed_attributes) { { 'label_list' => [[], ['urgent']] } }
+
+      context 'targeting a conversation_attribute' do
+        let!(:definition) do
+          CustomAttributeDefinition.create!(attribute_display_name: 'Priority Score', attribute_key: 'priority_score',
+                                             attribute_display_type: 'text', attribute_model: 'conversation_attribute')
+        end
+
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent', 'action' => 'update_custom_attribute',
+                          'action_value' => { 'custom_attribute_key' => 'priority_score',
+                                               'custom_attribute_model' => 'conversation_attribute',
+                                               'custom_attribute_value' => 'high' }.to_json }]
+          })
+        end
+
+        it 'sets the custom attribute on the conversation' do
+          service.perform
+          expect(conversation.reload.custom_attributes['priority_score']).to eq('high')
+        end
+      end
+
+      context 'targeting a pipeline_item_attribute' do
+        let!(:definition) do
+          CustomAttributeDefinition.create!(attribute_display_name: 'Deal Size', attribute_key: 'deal_size',
+                                             attribute_display_type: 'text', attribute_model: 'pipeline_item_attribute')
+        end
+
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent', 'action' => 'update_custom_attribute',
+                          'action_value' => { 'custom_attribute_key' => 'deal_size',
+                                               'custom_attribute_model' => 'pipeline_item_attribute',
+                                               'custom_attribute_value' => '5000' }.to_json }]
+          })
+        end
+
+        it 'sets the custom field on the pipeline item' do
+          service.perform
+          expect(pipeline_item.reload.custom_fields['deal_size']).to eq('5000')
+        end
+      end
+
+      context 'when action_value is not valid JSON' do
+        before do
+          stage_a.update!(automation_rules: {
+            'rules' => [{ 'trigger' => 'label_added', 'trigger_value' => 'urgent',
+                          'action' => 'update_custom_attribute', 'action_value' => 'not-json' }]
+          })
+        end
+
+        it 'logs a warning and does not raise' do
+          allow(Rails.logger).to receive(:warn)
+          expect { service.perform }.not_to raise_error
+          expect(Rails.logger).to have_received(:warn).with(/update_custom_attribute/i)
         end
       end
     end
