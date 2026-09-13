@@ -80,6 +80,20 @@ class Channel::Whatsapp < ApplicationRecord
     'Whatsapp'
   end
 
+  # Pre-send/pre-conversation validation: does this number exist on WhatsApp?
+  # Delegates to the provider's own check when it supports one (evolution,
+  # evolution_go). Returns true/false when a provider answers definitively,
+  # or nil when the provider can't check (whatsapp_cloud, 360dialog,
+  # notificame have no such lookup in the official/BSP APIs) or the check
+  # itself failed -- callers must treat nil as "couldn't verify" and let the
+  # action proceed rather than blocking on an inconclusive result.
+  def check_whatsapp_number_exists?(phone_number)
+    service = provider_service
+    return nil unless service.respond_to?(:check_number_exists?)
+
+    service.check_number_exists?(phone_number)
+  end
+
   def provider_service
     case provider
     when 'whatsapp_cloud'

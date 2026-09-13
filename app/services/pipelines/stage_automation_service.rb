@@ -6,8 +6,9 @@ class Pipelines::StageAutomationService
   # Pipelines::StageInactivityActionsService. The event path skips it.
   SUPPORTED_TRIGGERS = %w[label_added conversation_status_changed custom_attribute_updated inactivity].freeze
   SUPPORTED_ACTIONS  = %w[
-    move_to_stage move_to_pipeline assign_agent apply_label
-    send_ai_message send_direct_message send_template finalize
+    move_to_stage move_to_pipeline assign_agent assign_team apply_label remove_label
+    change_priority change_status send_ai_message send_direct_message send_template
+    finalize send_webhook_event create_pipeline_task
   ].freeze
   INACTIVITY_TRIGGER = 'inactivity'.freeze
 
@@ -94,14 +95,20 @@ class Pipelines::StageAutomationService
     return unless SUPPORTED_ACTIONS.include?(action)
 
     case action
-    when 'move_to_stage'       then move_to_stage(pipeline_item, action_value)
-    when 'move_to_pipeline'    then move_to_pipeline(pipeline_item, action_value)
-    when 'assign_agent'        then assign_agent(action_value)
-    when 'apply_label'         then apply_label(action_value)
-    when 'send_ai_message'     then send_ai_message(@conversation, suggested_message: rule[:ai_message])
-    when 'send_direct_message' then send_direct_message(@conversation, action_value)
-    when 'send_template'       then send_template(@conversation, template_params_for(rule))
-    when 'finalize'            then finalize(@conversation, action_value)
+    when 'move_to_stage'        then move_to_stage(pipeline_item, action_value)
+    when 'move_to_pipeline'     then move_to_pipeline(pipeline_item, action_value)
+    when 'assign_agent'         then assign_agent(action_value)
+    when 'assign_team'          then assign_team(@conversation, action_value)
+    when 'apply_label'          then apply_label(action_value)
+    when 'remove_label'         then remove_label(@conversation, action_value)
+    when 'change_priority'      then change_priority(@conversation, action_value)
+    when 'change_status'        then change_status(@conversation, action_value)
+    when 'send_ai_message'      then send_ai_message(@conversation, suggested_message: rule[:ai_message])
+    when 'send_direct_message'  then send_direct_message(@conversation, action_value)
+    when 'send_template'        then send_template(@conversation, template_params_for(rule))
+    when 'finalize'             then finalize(@conversation, action_value)
+    when 'send_webhook_event'   then send_webhook_event(@conversation, action_value)
+    when 'create_pipeline_task' then create_pipeline_task(pipeline_item, action_value)
     end
   rescue StandardError => e
     Rails.logger.error "[StageAutomation] conv=#{@conversation.id} action=#{rule[:action]}: #{e.message}"

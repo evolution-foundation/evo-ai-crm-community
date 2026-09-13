@@ -106,6 +106,73 @@ RSpec.describe Pipelines::StageAutomationService do
       end
     end
 
+    context 'with remove_label action' do
+      let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
+
+      before do
+        conversation.update!(label_list: ['lead', 'contacted'])
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'conversation_status_changed', 'trigger_value' => 'resolved',
+                        'action' => 'remove_label', 'action_value' => 'lead' }]
+        })
+      end
+
+      it 'removes the label from the conversation' do
+        service.perform
+        expect(conversation.reload.label_list).not_to include('lead')
+        expect(conversation.reload.label_list).to include('contacted')
+      end
+    end
+
+    context 'with assign_team action' do
+      let(:team) { Team.create!(name: 'Sales Team', account: inbox.account) }
+      let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'conversation_status_changed', 'trigger_value' => 'resolved',
+                        'action' => 'assign_team', 'action_value' => team.id }]
+        })
+      end
+
+      it 'assigns the team to the conversation' do
+        service.perform
+        expect(conversation.reload.team).to eq(team)
+      end
+    end
+
+    context 'with change_priority action' do
+      let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'conversation_status_changed', 'trigger_value' => 'resolved',
+                        'action' => 'change_priority', 'action_value' => 'urgent' }]
+        })
+      end
+
+      it 'changes conversation priority' do
+        service.perform
+        expect(conversation.reload.priority).to eq('urgent')
+      end
+    end
+
+    context 'with create_pipeline_task action' do
+      let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
+
+      before do
+        stage_a.update!(automation_rules: {
+          'rules' => [{ 'trigger' => 'conversation_status_changed', 'trigger_value' => 'resolved',
+                        'action' => 'create_pipeline_task', 'action_value' => 'Follow up on proposal' }]
+        })
+      end
+
+      it 'creates a task on the pipeline item' do
+        expect { service.perform }.to change { pipeline_item.tasks.count }.by(1)
+        expect(pipeline_item.tasks.last.title).to eq('Follow up on proposal')
+      end
+    end
+
     context 'with assign_agent action' do
       let(:changed_attributes) { { 'status' => ['open', 'resolved'] } }
 

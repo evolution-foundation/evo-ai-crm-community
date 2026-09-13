@@ -107,7 +107,10 @@ module Pipelines::StageMessageActions
 
     # Refusing the move leaves the conversation where it is, visible. Allowing it would
     # push the conversation into a board the operator archived and can no longer see.
-    return unless target_pipeline.is_active
+    unless target_pipeline.is_active
+      Rails.logger.warn "[StageMessageActions] item=#{pipeline_item.id} move_to_pipeline skipped: pipeline #{target_pipeline.id} is archived (is_active=false)"
+      return
+    end
 
     target_stage =
       if target_stage_id.present?
@@ -148,6 +151,16 @@ module Pipelines::StageMessageActions
     Rails.logger.info "[StageMessageActions] conv=#{conversation.id} assigned to agent=#{agent.name}"
   end
 
+  def assign_team(conversation, team_id)
+    return if team_id.blank?
+
+    team = Team.find_by(id: team_id)
+    return unless team
+
+    conversation.update!(team_id: team.id)
+    Rails.logger.info "[StageMessageActions] conv=#{conversation.id} assigned to team=#{team.name}"
+  end
+
   def apply_label(conversation, label_value)
     return if label_value.blank?
 
@@ -159,6 +172,56 @@ module Pipelines::StageMessageActions
 
     conversation.update!(label_list: current_labels + [title])
     Rails.logger.info "[StageMessageActions] conv=#{conversation.id} label=#{title} applied"
+  end
+
+  def remove_label(conversation, label_value)
+    return if label_value.blank?
+
+    title = resolve_label_title(label_value)
+    return if title.blank?
+
+    current_labels = conversation.label_list
+    return unless current_labels.include?(title)
+
+    conversation.update!(label_list: current_labels - [title])
+    Rails.logger.info "[StageMessageActions] conv=#{conversation.id} label=#{title} removed"
+  end
+
+  def change_priority(conversation, priority)
+    return if priority.blank?
+
+    priority_val = %w[nil none 0].include?(priority.to_s) ? nil : priority.to_s
+    conversation.update!(priority: priority_val)
+    Rails.logger.info "[StageMessageActions] conv=#{conversation.id} priority changed to #{priority_val}"
+  end
+
+  def change_status(conversation, status)
+    return if status.blank?
+
+    conversation.update!(status: status.to_s)
+    Rails.logger.info "[StageMessageActions] conv=#{conversation.id} status changed to #{status}"
+  end
+
+  def send_webhook_event(conversation, webhook_url)
+    return if webhook_url.blank?
+
+    clean_url = webhook_url.to_s.strip
+    payload = conversation.webhook_data.merge(event: 'automation_event.pipeline_stage_automation')
+    WebhookJob.perform_later(clean_url, payload)
+    Rails.logger.info "[StageMessageActions] conv=#{conversation.id} webhook dispatched to #{clean_url}"
+  end
+
+  def create_pipeline_task(pipeline_item, task_title)
+    return if task_title.blank?
+
+    creator = Current.user || User.where(type: 'SuperAdmin').first
+    pipeline_item.tasks.create!(
+      created_by: creator,
+      title: task_title.to_s.strip,
+      task_type: 'other',
+      priority: 'medium'
+    )
+    Rails.logger.info "[StageMessageActions] item=#{pipeline_item.id} task created: #{task_title}"
   end
 
   private

@@ -1,5 +1,6 @@
 class Api::V1::ContactsController < Api::V1::BaseController
   include Sift
+  include WhatsappNumberValidatable
   
   sort_on :email, type: :string
   sort_on :name, internal_name: :order_on_name, type: :scope, scope_params: [:direction]
@@ -215,6 +216,7 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
   def create
     return if render_invalid_create_labels_error
+    return if render_whatsapp_number_unreachable_error(inbox: create_target_inbox, phone_number: permitted_params[:phone_number])
 
     ActiveRecord::Base.transaction do
       @contact = Contact.all.new(contact_create_params)
@@ -440,10 +442,9 @@ class Api::V1::ContactsController < Api::V1::BaseController
   end
 
   def build_contact_inbox
-    return if params[:inbox_id].blank?
+    inbox = create_target_inbox
+    return if inbox.blank?
 
-    inbox = (current_user&.assigned_inboxes || Inbox.all).find(params[:inbox_id])
-    authorize inbox, :show?
     ContactInboxBuilder.new(
       contact: @contact,
       inbox: inbox,
@@ -525,6 +526,17 @@ class Api::V1::ContactsController < Api::V1::BaseController
       status: :unprocessable_content
     )
     true
+  end
+
+  # Memoized so the check in `create` and `build_contact_inbox` resolve the
+  # same inbox without a duplicate lookup/authorize call.
+  def create_target_inbox
+    return @create_target_inbox if defined?(@create_target_inbox)
+    return @create_target_inbox = nil if params[:inbox_id].blank?
+
+    inbox = (current_user&.assigned_inboxes || Inbox.all).find(params[:inbox_id])
+    authorize inbox, :show?
+    @create_target_inbox = inbox
   end
 
   def process_company_associations

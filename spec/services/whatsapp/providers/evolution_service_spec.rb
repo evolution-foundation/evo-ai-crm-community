@@ -85,6 +85,54 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
     end
   end
 
+  describe '#check_number_exists?' do
+    it 'POSTs to /chat/whatsappNumbers/{instance} and returns true when the number exists' do
+      response = instance_double(
+        HTTParty::Response,
+        success?: true,
+        parsed_response: [{ 'exists' => true, 'jid' => '5511999999999@s.whatsapp.net', 'number' => '5511999999999' }]
+      )
+      allow(HTTParty).to receive(:post).and_return(response)
+
+      expect(service.check_number_exists?(phone_number)).to eq(true)
+      expect(HTTParty).to have_received(:post) do |request_url, opts|
+        expect(request_url).to eq('https://evo.example.com/chat/whatsappNumbers/test-instance')
+        expect(JSON.parse(opts[:body])).to eq('numbers' => ['5511999999999'])
+      end
+    end
+
+    it 'returns false when Evolution reports the number does not exist' do
+      response = instance_double(
+        HTTParty::Response,
+        success?: true,
+        parsed_response: [{ 'exists' => false, 'jid' => '5511999999999@s.whatsapp.net', 'number' => '5511999999999' }]
+      )
+      allow(HTTParty).to receive(:post).and_return(response)
+
+      expect(service.check_number_exists?(phone_number)).to eq(false)
+    end
+
+    it 'returns nil when the upstream call fails, without raising' do
+      response = instance_double(HTTParty::Response, success?: false, code: 500)
+      allow(HTTParty).to receive(:post).and_return(response)
+
+      expect(service.check_number_exists?(phone_number)).to be_nil
+    end
+
+    it 'returns nil and rescues network errors' do
+      allow(HTTParty).to receive(:post).and_raise(SocketError, 'connection refused')
+
+      expect { service.check_number_exists?(phone_number) }.not_to raise_error
+      expect(service.check_number_exists?(phone_number)).to be_nil
+    end
+
+    it 'returns nil for blank input without hitting the network' do
+      expect(HTTParty).not_to receive(:post)
+      expect(service.check_number_exists?('')).to be_nil
+      expect(service.check_number_exists?(nil)).to be_nil
+    end
+  end
+
   describe '#send_text_message (HTML to WhatsApp formatting)' do
     it 'converts bold HTML to WhatsApp bold' do
       message = instance_double('Message', content: '<strong>Hello</strong> World', attachments: double(present?: false), content_type: 'text')

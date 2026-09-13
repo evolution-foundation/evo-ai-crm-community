@@ -178,8 +178,20 @@ class Pipelines::StageInactivityActionsService
       move_to_pipeline(@pipeline_item, rule[:action_value])
     when 'assign_agent'
       assign_agent(conversation, rule[:action_value])
+    when 'assign_team'
+      assign_team(conversation, rule[:action_value])
     when 'apply_label'
       apply_label(conversation, rule[:action_value])
+    when 'remove_label'
+      remove_label(conversation, rule[:action_value])
+    when 'change_priority'
+      change_priority(conversation, rule[:action_value])
+    when 'change_status'
+      change_status(conversation, rule[:action_value])
+    when 'send_webhook_event'
+      send_webhook_event(conversation, rule[:action_value])
+    when 'create_pipeline_task'
+      create_pipeline_task(@pipeline_item, rule[:action_value])
     else
       Rails.logger.warn "[StageInactivity] unsupported inactivity action: #{rule[:action]}"
     end

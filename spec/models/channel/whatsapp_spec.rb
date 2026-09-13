@@ -4,6 +4,29 @@ require 'rails_helper'
 require 'webmock/rspec'
 
 RSpec.describe Channel::Whatsapp, type: :model do
+  describe '#check_whatsapp_number_exists?' do
+    it 'delegates to the provider when it supports check_number_exists?' do
+      channel = described_class.new(provider: 'evolution')
+      provider = instance_double(Whatsapp::Providers::EvolutionService)
+      allow(channel).to receive(:provider_service).and_return(provider)
+      allow(provider).to receive(:respond_to?).with(:check_number_exists?).and_return(true)
+      allow(provider).to receive(:check_number_exists?).with('+5511999999999').and_return(false)
+
+      expect(channel.check_whatsapp_number_exists?('+5511999999999')).to eq(false)
+    end
+
+    it 'returns nil without calling the provider when it has no check_number_exists? method (e.g. whatsapp_cloud)' do
+      channel = described_class.new(provider: 'whatsapp_cloud')
+      provider = instance_double(Whatsapp::Providers::WhatsappCloudService)
+      allow(channel).to receive(:provider_service).and_return(provider)
+      allow(provider).to receive(:respond_to?).with(:check_number_exists?).and_return(false)
+
+      # check_number_exists? is never stubbed on this instance_double: if
+      # check_whatsapp_number_exists? tried to call it, this would raise.
+      expect(channel.check_whatsapp_number_exists?('+5511999999999')).to be_nil
+    end
+  end
+
   describe '#merge_evolution_go_global_config' do
     let(:base_config) do
       {

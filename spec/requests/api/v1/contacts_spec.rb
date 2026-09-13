@@ -68,6 +68,56 @@ RSpec.describe 'POST /api/v1/contacts', type: :request do
     expect(response).to have_http_status(:unprocessable_content)
     expect(json_response.dig('error', 'code')).to eq('INVALID_PARAMETER')
   end
+
+  describe 'creating a contact + WhatsApp conversation for a non-existent number (EVO-2xxx)' do
+    let(:whatsapp_channel) do
+      channel = Channel::Whatsapp.new(
+        phone_number: "+55119#{rand(10_000_000..99_999_999)}",
+        provider: 'evolution',
+        provider_config: { 'api_url' => 'https://evo.example.com', 'admin_token' => 'x', 'instance_name' => 'inst' }
+      )
+      channel.save(validate: false)
+      channel
+    end
+    let(:whatsapp_inbox) { Inbox.create!(name: 'WA Inbox', channel: whatsapp_channel) }
+
+    it 'blocks with a 422 when the provider confirms the number is not on WhatsApp, and creates nothing' do
+      allow_any_instance_of(Channel::Whatsapp).to receive(:check_whatsapp_number_exists?).and_return(false) # rubocop:disable RSpec/AnyInstance
+
+      expect do
+        post '/api/v1/contacts',
+             params: { name: 'Ghost Number', phone_number: '+5511900000000', inbox_id: whatsapp_inbox.id },
+             headers: headers,
+             as: :json
+      end.not_to change(Contact, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json_response.dig('error', 'code')).to eq('WHATSAPP_API_ERROR')
+    end
+
+    it 'proceeds when the provider confirms the number exists' do
+      allow_any_instance_of(Channel::Whatsapp).to receive(:check_whatsapp_number_exists?).and_return(true) # rubocop:disable RSpec/AnyInstance
+
+      post '/api/v1/contacts',
+           params: { name: 'Real Number', phone_number: '+5511900000001', inbox_id: whatsapp_inbox.id },
+           headers: headers,
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(Contact.find_by(phone_number: '+5511900000001')).to be_present
+    end
+
+    it 'proceeds when the provider cannot verify (nil)' do
+      allow_any_instance_of(Channel::Whatsapp).to receive(:check_whatsapp_number_exists?).and_return(nil) # rubocop:disable RSpec/AnyInstance
+
+      post '/api/v1/contacts',
+           params: { name: 'Unverifiable Number', phone_number: '+5511900000002', inbox_id: whatsapp_inbox.id },
+           headers: headers,
+           as: :json
+
+      expect(response).to have_http_status(:created)
+    end
+  end
 end
 
 RSpec.describe Api::V1::ContactsController, type: :controller do
