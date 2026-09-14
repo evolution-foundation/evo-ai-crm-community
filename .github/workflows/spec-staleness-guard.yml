@@ -317,10 +317,9 @@ on:
       - 'app/services/evo_ai_core_service.rb'
       - 'spec/services/evo_ai_core_service_spec.rb'
       - 'spec/requests/api/v1/agents_spec.rb'
-      # CRM-608: the language of a validation 422 is spread across the locale catalogue, the
-      # default-locale wiring, the fallback chain, the envelope message and the generic length
-      # validator. Any one of them reverting alone puts English back on a pt-BR screen, or the
-      # missing-translation dump on an es one, and no other lane reads them.
+      # A validation 422's language is spread across the catalogue, the default-locale wiring,
+      # the fallback chain, the envelope message and the generic length validator; any one of
+      # them reverting alone puts English back on a translated screen.
       - 'config/application.rb'
       - 'config/initializers/languages.rb'
       - 'config/locales/en.yml'
@@ -329,8 +328,8 @@ on:
       - 'app/models/application_record.rb'
       - 'spec/requests/api/v1/validation_error_locale_spec.rb'
       - 'spec/initializers/default_locale_spec.rb'
-      # Same variable, one consumer that is not a locale: it goes into an English prompt, so it
-      # has to arrive as a language name. Nothing else runs spec/lib/integrations/**.
+      # Same variable, one consumer that is not a locale: it reaches an English prompt, so it
+      # has to arrive as a language name.
       - 'lib/integrations/openai_base_service.rb'
       - 'lib/integrations/openai/processor_service.rb'
       - 'lib/integrations/openai/global_processor_service.rb'

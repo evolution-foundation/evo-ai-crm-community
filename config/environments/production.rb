@@ -70,9 +70,7 @@ Rails.application.configure do
   config.active_job.queue_adapter = :sidekiq
   # config.active_job.queue_name_prefix = "Evolution_#{Rails.env}"
 
-  # Locale fallbacks now live in config/application.rb, for every environment. The chain this
-  # file used to set, [I18n.default_locale], already resolved to [:en]: the i18n railtie applies
-  # its config in after_initialize, long after this file is read, so production is unchanged.
+  # Locale fallbacks live in config/application.rb, for every environment.
 
   # Send deprecation notices to registered listeners.
   config.active_support.deprecation = :notify

@@ -2,10 +2,10 @@
 
 require 'rails_helper'
 
-# CRM-608: DEFAULT_LOCALE became the installation language, and this is the one consumer that
-# does not treat it as a locale — it interpolates the value into an English prompt. Handed the
-# raw code, the model reads "Please respond in pt_BR", and GlobalConfigService falls back to the
-# environment here because DEFAULT_LOCALE is not a seeded installation_config.
+# DEFAULT_LOCALE is the installation language, and this is the one consumer that does not read
+# it as a locale: it interpolates the value into an English prompt, where the raw code would
+# land as "Please respond in pt_BR". GlobalConfigService falls through to the environment here,
+# because DEFAULT_LOCALE is not a seeded installation_config.
 RSpec.describe Integrations::OpenaiBaseService do
   around do |example|
     previous = ENV.fetch('DEFAULT_LOCALE', nil)

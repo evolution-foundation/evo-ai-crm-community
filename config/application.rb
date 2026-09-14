@@ -42,11 +42,10 @@ module Evolution
     # Configure as API-only application
     config.api_only = true
 
-    # Locale fallback in every environment, not only production: es, fr, it and pt ship no
-    # errors.messages, so with DEFAULT_LOCALE on one of them a 422 built from rescue_from
-    # answered the missing-translation dump. Pinned to :en and not to `true`, whose default
-    # chain ends at I18n.default_locale, the very value DEFAULT_LOCALE moves. Cost: a missing
-    # key now reads as English instead of announcing itself.
+    # Every environment, not only production: es, fr, it and pt ship no errors.messages, so a
+    # body rendered outside the locale around_action came out as the missing-translation dump.
+    # Pinned to :en, not `true`, whose chain ends at the default_locale DEFAULT_LOCALE moves —
+    # at the cost of a missing key now reading as English instead of announcing itself.
     config.i18n.fallbacks = [:en]
 
     config.eager_load_paths << Rails.root.join('lib')

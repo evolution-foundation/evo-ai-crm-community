@@ -47,13 +47,10 @@ LANGUAGES_CONFIG = {
 enabled_locales = LANGUAGES_CONFIG.map { |_index, lang| lang[:iso_639_1_code].to_sym }
 Rails.configuration.i18n.available_locales = enabled_locales
 
-# DEFAULT_LOCALE reached only the around_action in SwitchLocale, which never covers a body built
-# from rescue_from: ActionController::Rescue wraps the callbacks, so the request's with_locale has
-# already unwound by then and only default_locale is left. Assigned as config, and not with
-# I18n.default_locale=, because the railtie applies it with the available-locales check off — the
-# list above has not reached I18n yet.
-# pt-BR is normalised to pt_BR: the hyphen is what a deploy guide writes, and refusing it would
-# drop the installation back to English over a punctuation mark.
+# A body built from rescue_from renders under default_locale, never under the around_action's
+# with_locale: ActionController::Rescue wraps the callbacks and the block has already unwound.
+# Set as config, not with I18n.default_locale=, because the railtie applies it with the
+# available-locales check off. pt-BR is normalised to pt_BR, the form a deploy guide writes.
 configured_locale = ENV.fetch('DEFAULT_LOCALE', nil).presence
 normalized_locale = configured_locale&.tr('-', '_')&.to_sym
 if enabled_locales.include?(normalized_locale)

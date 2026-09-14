@@ -2,9 +2,9 @@
 
 require 'rails_helper'
 
-# CRM-608: DEFAULT_LOCALE used to reach only the around_action in SwitchLocale, which never
-# covers anything rendered from rescue_from. config/initializers/languages.rb now also feeds
-# I18n.default_locale from it, which is the value those handlers actually read.
+# DEFAULT_LOCALE only reaches the around_action in SwitchLocale, which never covers anything
+# rendered from rescue_from. The initializer also feeds I18n.default_locale from it, which is
+# the value those handlers read.
 RSpec.describe 'config/initializers/languages.rb default locale' do
   # Re-runs the initializer against a throwaway config, so the booted app is left alone.
   def default_locale_for(env_value)

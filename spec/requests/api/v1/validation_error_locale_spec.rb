@@ -2,13 +2,10 @@
 
 require 'rails_helper'
 
-# CRM-608: on a pt-BR installation the 422 body was still written in English.
-#
 # The API renders validation failures from rescue_from, and ActionController::Rescue wraps
-# AbstractController::Callbacks — so by the time the handler builds the body, the around_action's
-# I18n.with_locale has already unwound and what is left is I18n.default_locale. That is why the
-# installation language has to reach default_locale (config/initializers/languages.rb) and not
-# only the around_action.
+# AbstractController::Callbacks: by the time the handler builds the body, the around_action's
+# I18n.with_locale has unwound and what is left is I18n.default_locale. That is why the
+# installation language has to reach default_locale and not only the around_action.
 RSpec.describe 'API validation errors on a pt-BR installation', type: :request do
   let(:service_token) { 'spec-service-token' }
   let(:headers) { { 'X-Service-Token' => service_token } }
@@ -19,9 +16,8 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
     # value, so restoring it afterwards would hand pt_BR to every spec that runs after this file.
     previous_locale = I18n.locale
     previous_env = ENV.fetch('DEFAULT_LOCALE', nil)
-    # What config/initializers/languages.rb produces from DEFAULT_LOCALE=pt_BR at boot. The
-    # ambient locale is DERIVED from it and never named on its own, because that is the state a
-    # request thread is in: I18n.locale falls back to default_locale until something pins it.
+    # The ambient locale is DERIVED from default_locale and never named on its own: that is the
+    # state a request thread is in until something pins a value.
     I18n.default_locale = :pt_BR
     I18n.with_locale(I18n.default_locale) { example.run }
   ensure
@@ -62,11 +58,8 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
     end
 
     it 'does not let the locale the action ran under reach the validation body' do
-      # DEFAULT_LOCALE feeds the around_action, so the action body runs in English here. The
-      # validation body is built after that block unwinds, so it comes out in pt-BR instead.
-      # This covers the unwinding, NOT the wiring that puts the installation language into
-      # default_locale in the first place — that is spec/initializers/default_locale_spec.rb,
-      # because the initializer runs at boot and this process booted without the variable.
+      # DEFAULT_LOCALE feeds the around_action, so the action body runs in English here; the
+      # validation body is built after that block unwinds and comes out in pt-BR.
       ENV['DEFAULT_LOCALE'] = 'en'
 
       patch "/api/v1/contacts/#{contact.id}",
@@ -90,8 +83,7 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(detail_for('name')['messages']).to eq(['é muito longo (máximo: 255 caracteres)'])
-      # full_messages prefixes the attribute name, so it is translated too or the line comes out
-      # half in English. The words are the contact form's own labels.
+      # full_messages prefixes the attribute name, so it is translated too.
       expect(detail_for('name')['full_messages']).to eq(['Nome é muito longo (máximo: 255 caracteres)'])
     end
   end
@@ -112,10 +104,8 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
       end
     end
 
-    # These two sat one level too deep, under errors.conversations, so Contact's format
-    # validations resolved to a missing-translation marker in en and pt_BR while es/fr/it/pt
-    # were fine. Asserted on the catalogue rather than on a Contact because contact.rb calls
-    # I18n.t in the class body, which freezes the text at whatever locale first loaded the class.
+    # Asserted on the catalogue rather than on a Contact: contact.rb calls I18n.t in the class
+    # body, which freezes the text at whatever locale first loaded the class.
     it 'resolves the custom format messages Contact declares, in both shipped defaults' do
       %i[en pt_BR].each do |locale|
         expect(I18n.t('errors.contacts.email.invalid', locale: locale)).not_to match(/translation missing/i)
@@ -124,10 +114,8 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
     end
   end
 
-  # The link between spec/initializers/default_locale_spec.rb (the installation language reaches
-  # Rails.configuration) and everything above (a body rendered outside the around_action comes out
-  # in it): a thread that has pinned nothing renders under default_locale. That is the state Puma
-  # hands every request, and it is why feeding default_locale is what fixes the 422.
+  # A thread that has pinned nothing renders under default_locale. That is the state Puma hands
+  # every request, and it is why feeding default_locale is what moves the body's language.
   it 'is the locale a request thread starts in, with nothing pinned' do
     ambient = Thread.new { I18n.locale }.value
 
@@ -161,11 +149,8 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
     end
   end
 
-  # Four of the six enabled languages (es, fr, it, pt) carry no errors.messages and no
-  # errors.api of their own. Feeding default_locale from DEFAULT_LOCALE therefore aims the whole
-  # validation body at a catalogue with a hole in it, and error.message is the field the CRM
-  # puts on screen. The floor under it is the fallback chain in config/application.rb; without
-  # it the body below reads "Translation missing".
+  # es, fr, it and pt carry no errors.messages of their own, so default_locale on one of them
+  # aims the whole validation body at a catalogue with a hole in it.
   describe 'an installation on an enabled language that ships no error catalogue' do
     around do |example|
       previous_default = I18n.default_locale
@@ -195,9 +180,6 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
 
     # The language first, English as the floor. `fallbacks = true` yields neither: its chain
     # ends at I18n.default_locale, the value DEFAULT_LOCALE has just moved to :es.
-    #
-    # NOTE: the hop this file cannot reach from a request is default_locale -> the locale a
-    # request thread starts in; it is asserted on its own above.
     it 'puts the installation language first and ends every chain at :en' do
       expect(I18n.fallbacks[:es]).to eq(%i[es en])
       # No pt hop on the way: the locale symbol is pt_BR and ancestry splits on a hyphen.

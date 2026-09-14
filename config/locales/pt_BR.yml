@@ -37,9 +37,8 @@ pt_BR:
     reset_password_success: Legal! A solicitação de alteração de senha foi bem sucedida. Verifique seu e-mail para obter instruções.
     reset_password_failure: Uh ho! Não conseguimos encontrar nenhum usuário com o e-mail especificado.
     inbox_deletetion_response: Seu pedido de exclusão da caixa de entrada será processado dentro de algum tempo.
-  # The prefix errors.format puts in front of every full_messages entry. At the root, so it
-  # answers for every model, in the contact form's own words. Only names that differ from the
-  # column are here: "Email" and "Website" are already what the product writes.
+  # The prefix errors.format puts in front of every full_messages entry, at the root so it
+  # answers for every model. Only names that differ from the column are here.
   attributes:
     name: Nome
     phone_number: Telefone
@@ -55,8 +54,7 @@ pt_BR:
           has_many: 'Não é possível excluir o registro pois existem %{record} dependentes'
   errors:
     # Standard ActiveModel/ActiveRecord messages. The API builds the validation body from
-    # rescue_from, which ActionController::Rescue runs OUTSIDE the locale around_action, so
-    # these resolve under I18n.default_locale — see config/initializers/languages.rb.
+    # rescue_from, outside the locale around_action, so these resolve under I18n.default_locale.
     format: '%{attribute} %{message}'
     messages:
       model_invalid: 'A validação falhou: %{errors}'
