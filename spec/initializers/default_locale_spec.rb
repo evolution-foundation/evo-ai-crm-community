@@ -23,6 +23,10 @@ RSpec.describe 'config/initializers/languages.rb default locale' do
     expect(default_locale_for('pt_BR')).to eq(:pt_BR)
   end
 
+  it 'accepts the hyphen form a deploy guide writes' do
+    expect(default_locale_for('pt-BR')).to eq(:pt_BR)
+  end
+
   it 'leaves the Rails default in place when DEFAULT_LOCALE is unset' do
     expect(default_locale_for(nil)).to be_nil
   end

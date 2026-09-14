@@ -19,9 +19,11 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
     # value, so restoring it afterwards would hand pt_BR to every spec that runs after this file.
     previous_locale = I18n.locale
     previous_env = ENV.fetch('DEFAULT_LOCALE', nil)
-    # What config/initializers/languages.rb produces from DEFAULT_LOCALE=pt_BR at boot.
+    # What config/initializers/languages.rb produces from DEFAULT_LOCALE=pt_BR at boot. The
+    # ambient locale is DERIVED from it and never named on its own, because that is the state a
+    # request thread is in: I18n.locale falls back to default_locale until something pins it.
     I18n.default_locale = :pt_BR
-    I18n.with_locale(:pt_BR) { example.run }
+    I18n.with_locale(I18n.default_locale) { example.run }
   ensure
     I18n.default_locale = previous_default
     I18n.locale = previous_locale # rubocop:disable Rails/I18nLocaleAssignment
@@ -59,10 +61,12 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
       expect(email['full_messages']).to eq(['Email já está em uso'])
     end
 
-    it 'keeps the body in the installation language even when the request ran under another one' do
+    it 'does not let the locale the action ran under reach the validation body' do
       # DEFAULT_LOCALE feeds the around_action, so the action body runs in English here. The
-      # validation body is built after that block unwinds, so it must still come out in pt-BR —
-      # this is exactly what setting the env alone could not deliver.
+      # validation body is built after that block unwinds, so it comes out in pt-BR instead.
+      # This covers the unwinding, NOT the wiring that puts the installation language into
+      # default_locale in the first place — that is spec/initializers/default_locale_spec.rb,
+      # because the initializer runs at boot and this process booted without the variable.
       ENV['DEFAULT_LOCALE'] = 'en'
 
       patch "/api/v1/contacts/#{contact.id}",
@@ -86,6 +90,9 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(detail_for('name')['messages']).to eq(['é muito longo (máximo: 255 caracteres)'])
+      # full_messages prefixes the attribute name, so it is translated too or the line comes out
+      # half in English. The words are the contact form's own labels.
+      expect(detail_for('name')['full_messages']).to eq(['Nome é muito longo (máximo: 255 caracteres)'])
     end
   end
 
@@ -115,6 +122,17 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
         expect(I18n.t('errors.contacts.phone_number.invalid', locale: locale)).not_to match(/translation missing/i)
       end
     end
+  end
+
+  # The link between spec/initializers/default_locale_spec.rb (the installation language reaches
+  # Rails.configuration) and everything above (a body rendered outside the around_action comes out
+  # in it): a thread that has pinned nothing renders under default_locale. That is the state Puma
+  # hands every request, and it is why feeding default_locale is what fixes the 422.
+  it 'is the locale a request thread starts in, with nothing pinned' do
+    ambient = Thread.new { I18n.locale }.value
+
+    expect(ambient).to eq(:pt_BR)
+    expect(ambient).to eq(I18n.default_locale)
   end
 
   describe 'an installation left on the default language' do
@@ -177,6 +195,9 @@ RSpec.describe 'API validation errors on a pt-BR installation', type: :request d
 
     # The language first, English as the floor. `fallbacks = true` yields neither: its chain
     # ends at I18n.default_locale, the value DEFAULT_LOCALE has just moved to :es.
+    #
+    # NOTE: the hop this file cannot reach from a request is default_locale -> the locale a
+    # request thread starts in; it is asserted on its own above.
     it 'puts the installation language first and ends every chain at :en' do
       expect(I18n.fallbacks[:es]).to eq(%i[es en])
       # No pt hop on the way: the locale symbol is pt_BR and ancestry splits on a hyphen.
