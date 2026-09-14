@@ -6,6 +6,14 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
+  # Net::HTTP defaults to 60s each, so a core that accepts the connection and
+  # never answers would pin a Puma thread for a minute per request.
+  open_timeout ENV.fetch('EVO_AI_CORE_OPEN_TIMEOUT', 5).to_i
+  read_timeout ENV.fetch('EVO_AI_CORE_READ_TIMEOUT', 15).to_i
+  # Net::HTTP silently retries an idempotent request once after a read
+  # timeout, which would double the wait on GET/PUT/DELETE.
+  default_options[:max_retries] = 0
+
   # Failures talking to evo-core surface as these two, never as a bare
   # StandardError (which Api::BaseController turns into a 500).
 
