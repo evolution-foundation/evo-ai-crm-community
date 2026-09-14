@@ -6,13 +6,12 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
-  # A timeout of 0 makes every call fail at once, so a bad value must stop the
-  # boot instead of degrading into a silent 503 on each request.
+  # A bad value would become timeout 0 and fail every call, so refuse it at boot.
   def self.timeout_from_env(name, default)
     raw = ENV.fetch(name, '').strip
     return default if raw.empty?
 
-    # Base 10 explicitly: Integer() reads "010" as octal 8 and rejects "08".
+    # Base 10 explicitly: Integer() would read "010" as octal and reject "08".
     value = Integer(raw, 10, exception: false)
     raise ArgumentError, "#{name} must be a positive number of seconds, got #{raw.inspect}" unless value&.positive?
 
@@ -20,15 +19,12 @@ class EvoAiCoreService
   end
   private_class_method :timeout_from_env
 
-  # Net::HTTP defaults to 60s each, so a core that accepts the connection and
-  # never answers would pin a Puma thread for a minute per request.
+  # Without these, Net::HTTP's 60s default lets one hung core drain the Puma pool.
   open_timeout timeout_from_env('EVO_AI_CORE_OPEN_TIMEOUT', 5)
   read_timeout timeout_from_env('EVO_AI_CORE_READ_TIMEOUT', 15)
-  # A core that stops reading pins the thread just like one that stops answering:
-  # a body past the socket buffer blocks on the write, which read_timeout never covers.
+  # read_timeout does not cover the write: a large body blocks once the buffer fills.
   write_timeout timeout_from_env('EVO_AI_CORE_WRITE_TIMEOUT', 15)
-  # Net::HTTP silently retries an idempotent request once after a read
-  # timeout, which would double the wait on GET/PUT/DELETE.
+  # Net::HTTP retries an idempotent request once after a read timeout, doubling the wait.
   default_options[:max_retries] = 0
 
   # Failures talking to evo-core surface as these two, never as a bare

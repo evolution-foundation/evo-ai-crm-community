@@ -300,9 +300,8 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
-      # CRM-591: the evo-core client's timeouts are four class-body lines. Drop any
-      # of them and Net::HTTP's 60s comes back silently — one hung core then drains
-      # the Puma pool and the whole CRM API stops, not just the agents proxy.
+      # The evo-core client's timeouts are four class-body lines; dropping any brings
+      # back Net::HTTP's 60s, and no other lane runs either spec.
       - 'app/services/evo_ai_core_service.rb'
       - 'spec/services/evo_ai_core_service_spec.rb'
       - 'spec/requests/api/v1/agents_spec.rb'
