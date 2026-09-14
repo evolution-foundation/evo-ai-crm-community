@@ -2,10 +2,8 @@
 
 require 'rails_helper'
 
-# CRM-606: the public CSAT page (`FRONTEND_URL/survey/responses/<conversation.uuid>`)
-# rendered nothing because both actions were bodyless — `format: 'json'` + an action
-# with no template falls through to ImplicitRender's `head :no_content`, so the page
-# got a 204 and never learned what to ask about.
+# Both actions were bodyless: `format: 'json'` + an action with no template falls through to
+# ImplicitRender's `head :no_content`, so the page got a 204 and never learned what to ask.
 RSpec.describe 'Public CSAT Survey API', type: :request do
   include ActiveJob::TestHelper
 
@@ -37,9 +35,8 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
       expect(body).to have_key('inbox_avatar_url')
     end
 
-    # The page hides the rating widget whenever `csat_survey_response.rating` is
-    # merely PRESENT — `rating: null` reads as "already answered" and would lock an
-    # unanswered survey out of being answered.
+    # `rating: null` would read on the page as "already answered" and lock an unanswered
+    # survey out of being answered.
     it 'answers a null csat_survey_response while the survey is unanswered' do
       get "/public/api/v1/csat_survey/#{conversation.uuid}"
 
@@ -58,9 +55,8 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
         .to eq('rating' => 4, 'feedback_message' => 'Rápido e educado')
     end
 
-    # `Message#content` appends the survey link, and Liquidable's before_create
-    # renders that appended string into the column — so echoing the stored message
-    # back would print the page's own URL inside the page.
+    # `Message#content` appends the survey link and Liquidable renders it into the column,
+    # so echoing the stored message back would print the page's own URL inside the page.
     it 'answers the configured prompt without the survey link appended' do
       get "/public/api/v1/csat_survey/#{conversation.uuid}"
 
@@ -69,12 +65,8 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
       expect(body['content']).not_to include('/survey/responses/')
     end
 
-    # No server-side default, so the page can render its own in the READER's
-    # language: this endpoint is anonymous and PublicController does not include
-    # SwitchLocale, so an `I18n.t` here would resolve at I18n.default_locale and
-    # serve one installation-wide language to every contact of every account. With
-    # the key absent the page falls back to `survey.description`, which is where
-    # that phrase has its single owner.
+    # No server-side default: this route has no reader locale, so an `I18n.t` here would
+    # serve one installation-wide language to every contact. The page owns the phrase.
     it 'omits the prompt entirely when the inbox configures no message' do
       inbox.update!(csat_config: { 'display_type' => 'star' })
 
@@ -107,12 +99,9 @@ RSpec.describe 'Public CSAT Survey API', type: :request do
       expect(csat_message.reload.content_attributes.dig('submitted_values', 'csat_survey_response', 'rating')).to eq(5)
     end
 
-    # The acceptance criterion is that the rating lands on the RIGHT conversation,
-    # and the message's content_attributes above is not where that is settled: the
-    # `csat_survey_responses` row every report reads is written by
-    # CsatSurveyListener, which runs inside EventDispatcherJob (AsyncDispatcher).
-    # Query it straight after the PUT and it is still empty, so draining that job is
-    # the only way to see the write. Same harness as
+    # The `csat_survey_responses` row every report reads is written by CsatSurveyListener
+    # inside EventDispatcherJob, so it is still empty right after the PUT — draining that job
+    # is the only way to see the write. Harness from
     # spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb.
     context 'when the MESSAGE_UPDATED fan-out runs' do
       let(:other_contact) { Contact.create!(name: 'Grace Hopper', email: "grace-#{SecureRandom.hex(4)}@test.com") }

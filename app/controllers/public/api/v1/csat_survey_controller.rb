@@ -43,26 +43,16 @@ class Public::Api::V1::CsatSurveyController < PublicController
     @inbox ||= @conversation.inbox
   end
 
-  # The account's OWN prompt, and nothing else. Taken from the inbox config and not
-  # from the record, because `Message#content` appends the survey link for delivery
-  # through the channel and Liquidable's before_create renders that appended string
-  # INTO the column, so echoing the stored value would print this page's own URL
-  # inside it.
-  #
-  # No server-side default. This endpoint is anonymous and PublicController does not
-  # include SwitchLocale, so an `I18n.t` here resolves at I18n.default_locale: one
-  # installation-wide language served to every contact of every account (pt-BR for
-  # all of them once DEFAULT_LOCALE feeds default_locale). It would not even buy
-  # consistency with the channel, which delivers `conversations.survey.response`
-  # ("Please rate this conversation, <link>") and never `csat_input_message_body`.
-  # With the key absent the page renders `survey.description` in the reader's own
-  # language, which is the same reason `locale` is not in this payload.
+  # The inbox config, not the stored message: `Message#content` appends the survey link for
+  # channel delivery and Liquidable renders that into the column, so echoing it would print
+  # this page's own URL. No server-side default either — this route has no reader locale
+  # (PublicController has no SwitchLocale), so the page owns the fallback phrase.
   def survey_prompt
     inbox&.csat_config&.dig('message')
   end
 
-  # nil when nothing was rated yet, never an empty object: the page reads a
-  # present `rating` key as "already answered" and would hide the rating widget.
+  # nil, never an empty object: the page reads a present `rating` key as "already answered"
+  # and would hide the rating widget.
   def csat_survey_response_payload
     response = @message.csat_survey_response
     return nil if response.nil?
