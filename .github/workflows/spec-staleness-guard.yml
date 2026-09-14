@@ -317,6 +317,23 @@ on:
       - 'app/services/evo_ai_core_service.rb'
       - 'spec/services/evo_ai_core_service_spec.rb'
       - 'spec/requests/api/v1/agents_spec.rb'
+      # A validation 422's language is spread across the catalogue, the default-locale wiring,
+      # the fallback chain, the envelope message and the generic length validator; any one of
+      # them reverting alone puts English back on a translated screen.
+      - 'config/application.rb'
+      - 'config/initializers/languages.rb'
+      - 'config/locales/en.yml'
+      - 'config/locales/pt_BR.yml'
+      - 'app/controllers/api/base_controller.rb'
+      - 'app/models/application_record.rb'
+      - 'spec/requests/api/v1/validation_error_locale_spec.rb'
+      - 'spec/initializers/default_locale_spec.rb'
+      # Same variable, one consumer that is not a locale: it reaches an English prompt, so it
+      # has to arrive as a language name.
+      - 'lib/integrations/openai_base_service.rb'
+      - 'lib/integrations/openai/processor_service.rb'
+      - 'lib/integrations/openai/global_processor_service.rb'
+      - 'spec/lib/integrations/openai_language_spec.rb'
 
 permissions:
   contents: read
@@ -467,4 +484,7 @@ jobs:
             spec/requests/public/api/v1/csat_survey_controller_spec.rb \
             spec/services/evo_ai_core_service_spec.rb \
             spec/requests/api/v1/agents_spec.rb \
+            spec/requests/api/v1/validation_error_locale_spec.rb \
+            spec/initializers/default_locale_spec.rb \
+            spec/lib/integrations/openai_language_spec.rb \
             --format progress
