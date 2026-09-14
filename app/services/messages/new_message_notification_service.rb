@@ -70,7 +70,7 @@ class Messages::NewMessageNotificationService
     @notified_member_ids ||= conversation.notifications.where(secondary_actor: message).pluck(:user_id)
   end
 
-  # The user could already have been notified via a mention or via assignment
+  # The user could already have been notified via assignment
   # So we don't need to notify them again
   def already_notified?(user)
     conversation.notifications.exists?(user: user, secondary_actor: message)

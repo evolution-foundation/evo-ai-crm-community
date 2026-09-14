@@ -1,9 +1,10 @@
 module MessageFormatHelper
-  include RegexHelper
-
-  def transform_user_mention_content(message_content)
-    # attachment message without content, message_content is nil
-    message_content.presence ? message_content.gsub(MENTION_REGEX, '\1') : ''
+  # CRM-579: este helper também limpava a marcação `mention://` do conteúdo, e
+  # isso saiu junto com a menção. O que sobra continua em método próprio porque é
+  # load-bearing: mensagem de anexo sem texto chega com `content` nil, e o
+  # renderizador de markdown abaixo não aceita nil.
+  def message_body_content(message_content)
+    message_content.presence || ''
   end
 
   def render_message_content(message_content)

@@ -10,8 +10,6 @@ module RegexHelper
   # must start and end with letter or number (spaces normalized before validation)
   UNICODE_CHARACTER_NUMBER_SPACE_HYPHEN_UNDERSCORE = Regexp.new('\A[\p{L}\p{N}]+([ _-]*[\p{L}\p{N}]+)*\Z')
 
-  MENTION_REGEX = Regexp.new('\[(@[\w_. ]+)\]\(mention://(?:user|team)/\d+/(.*?)+\)')
-
   TWILIO_CHANNEL_SMS_REGEX = Regexp.new('^\+\d{1,15}\z')
   TWILIO_CHANNEL_WHATSAPP_REGEX = Regexp.new('^whatsapp:\+\d{1,15}\z')
   BSUID_REGEX = /\A[A-Z]{2}\.[a-zA-Z0-9]+\z/

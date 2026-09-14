@@ -1,5 +1,4 @@
 class Integrations::Slack::SendOnSlackService < Base::SendOnChannelService
-  include RegexHelper
   pattr_initialize [:message!, :hook!]
 
   def perform
@@ -62,13 +61,7 @@ class Integrations::Slack::SendOnSlackService < Base::SendOnChannelService
   end
 
   def message_text
-    content = message.processed_message_content || message.content
-
-    if content.present?
-      content.gsub(MENTION_REGEX, '\1')
-    else
-      content
-    end
+    message.processed_message_content || message.content
   end
 
   def formatted_inbox_name

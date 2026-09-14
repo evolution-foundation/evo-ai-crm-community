@@ -50,7 +50,6 @@ class NotificationListener < BaseListener
   def message_created(event)
     message = extract_message_and_account(event)[0]
 
-    Messages::MentionService.new(message: message).perform
     Messages::NewMessageNotificationService.new(message: message).perform
   end
 end

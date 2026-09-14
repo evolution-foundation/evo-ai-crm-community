@@ -20,17 +20,6 @@ class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
     send_mail_with_liquid(to: @agent.email, subject: subject) and return
   end
 
-  def conversation_mention(conversation, agent, message)
-    return unless smtp_config_set_or_development?
-
-    @agent = agent
-    @conversation = conversation
-    @message = message
-    subject = "#{@agent.available_name}, You have been mentioned in conversation [ID - #{@conversation.display_id}]"
-    @action_url = app_conversation_url(id: @conversation.display_id)
-    send_mail_with_liquid(to: @agent.email, subject: subject) and return
-  end
-
   def assigned_conversation_new_message(conversation, agent, message)
     return unless smtp_config_set_or_development?
     # Don't spam with email notifications if agent is online

@@ -140,7 +140,6 @@ pt_BR:
       conversation_creation: ''
       conversation_assignment: 'Uma conversa (#%{display_id}) foi atribuída a você'
       assigned_conversation_new_message: 'Uma nova mensagem foi criada na conversa (#%{display_id})'
-      conversation_mention: 'Você foi mencionado em uma conversa (#%{display_id})'
     attachment: 'Anexo'
     no_content: 'Sem conteúdo'
   conversations:
