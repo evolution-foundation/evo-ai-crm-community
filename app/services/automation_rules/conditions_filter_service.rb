@@ -220,6 +220,8 @@ class AutomationRules::ConditionsFilterService < FilterService
     when 'standard'
       if attribute_key == 'labels'
         labels_query_fragment(query_hash, current_index, query_operator)
+      elsif current_filter['data_type'] == 'company'
+        company_query_fragment(query_hash, current_index, query_operator)
       else
         " #{contact_predicate("contacts.#{attribute_key}", filter_operator_value, filter_operator)} #{query_operator} "
       end
@@ -266,6 +268,8 @@ class AutomationRules::ConditionsFilterService < FilterService
     when 'standard'
       if attribute_key == 'labels'
         labels_query_fragment(query_hash, current_index, query_operator)
+      elsif current_filter['data_type'] == 'company'
+        company_query_fragment(query_hash, current_index, query_operator)
       else
         " #{table_name}.#{attribute_key} #{filter_operator_value} #{query_operator} "
       end
@@ -317,6 +321,33 @@ class AutomationRules::ConditionsFilterService < FilterService
     SQL
 
     @filter_values["value_#{current_index}"] = Array(query_hash['values']) unless presence
+
+    " #{existence} (#{subquery}) #{query_operator} "
+  end
+
+  # `company` is the contact_companies association (EVO-1887), not a column:
+  # `contacts.company` does not exist and the bare-column branch used to raise
+  # inside #perform's rescue, so every company condition evaluated false
+  # (CRM-509). Same EXISTS shape as labels; NOT EXISTS makes `not_equal_to`
+  # include contacts with no company at all (parity with the Contacts filter).
+  # Both base relations expose `contacts.id` (the contact-only one directly,
+  # the conversation one through its LEFT JOIN).
+  def company_query_fragment(query_hash, current_index, query_operator)
+    filter_operator = query_hash[:filter_operator] || query_hash['filter_operator']
+    presence = %w[is_present is_not_present].include?(filter_operator)
+    negate = %w[not_equal_to is_not_present].include?(filter_operator)
+    existence = negate ? 'NOT EXISTS' : 'EXISTS'
+    id_clause = presence ? '' : "AND cc.company_id IN (:value_#{current_index})"
+
+    subquery = <<~SQL.squish
+      SELECT 1
+        FROM contact_companies AS cc
+       WHERE cc.contact_id = contacts.id
+         AND cc.deleted_at IS NULL
+         #{id_clause}
+    SQL
+
+    @filter_values["value_#{current_index}"] = Array(query_hash['values']).map(&:to_s) unless presence
 
     " #{existence} (#{subquery}) #{query_operator} "
   end
