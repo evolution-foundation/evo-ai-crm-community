@@ -86,8 +86,8 @@ class EvoAiCoreService
             # Rails request headers (ActionDispatch::Http::Headers)
             headers_hash = request_headers.env
 
-            # Pass through OAuth headers
-            ['Authorization', 'X-User-Id'].each do |header|
+            # A multi-tenant core answers 403 without X-Evo-Tenant-Id.
+            ['Authorization', 'X-User-Id', 'X-Evo-Tenant-Id'].each do |header|
               value = headers_hash[header] || headers_hash[header.upcase] || headers_hash["HTTP_#{header.upcase.gsub('-', '_')}"]
               headers[header] = value if value.present?
             end
@@ -190,6 +190,20 @@ class EvoAiCoreService
       call_core(:post, url, {
         body: agent_data.to_json,
         headers: build_headers(request_headers)
+      })
+    end
+
+    # Multipart: the core reads an uploaded file and checks its extension, so
+    # HTTParty sets the content type and boundary instead of build_headers.
+    def import_agents(file, folder_id = nil, request_headers = nil)
+      url = "/api/v1/agents/import"
+      body = { file: file }
+      body[:folder_id] = folder_id if folder_id.present?
+
+      call_core(:post, url, {
+        body: body,
+        headers: build_headers(request_headers).except('Content-Type'),
+        multipart: true
       })
     end
 
