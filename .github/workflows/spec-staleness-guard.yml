@@ -299,6 +299,19 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # CRM-579: the conversation mention was retired. The specs that prove it
+      # are the only thing standing between a partial revert and a silent one —
+      # nothing else reads NOTIFICATION_TYPES, and the bit positions it declares
+      # are what NotificationSetting stores in every user's saved preference.
+      # The drop migration has no other runner either: db:prepare loads
+      # schema.rb and never executes it.
+      - 'app/models/notification.rb'
+      - 'app/models/notification_setting.rb'
+      - 'app/helpers/message_format_helper.rb'
+      - 'db/migrate/20260914120000_drop_mentions_table.rb'
+      - 'spec/regression/conversation_mention_retirement_spec.rb'
+      - 'spec/helpers/message_format_helper_spec.rb'
+      - 'spec/migrations/20260914120000_drop_mentions_table_spec.rb'
 
 permissions:
   contents: read
@@ -444,4 +457,7 @@ jobs:
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             spec/services/automation_rules/create_pipeline_task_card_spec.rb \
+            spec/regression/conversation_mention_retirement_spec.rb \
+            spec/helpers/message_format_helper_spec.rb \
+            spec/migrations/20260914120000_drop_mentions_table_spec.rb \
             --format progress
