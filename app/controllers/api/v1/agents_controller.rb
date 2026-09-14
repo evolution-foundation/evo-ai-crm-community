@@ -6,9 +6,21 @@ class Api::V1::AgentsController < Api::V1::BaseController
     index: 'ai_agents.read',
     create: 'ai_agents.create',
     bulk_create: 'ai_agents.create',
+    import: 'ai_agents.import',
     update: 'ai_agents.update',
     destroy: 'ai_agents.delete'
   })
+
+  # Forwarded verbatim to evo-core, which owns the schema. Shared by the single
+  # and the batch path so the two cannot drift apart.
+  AGENT_ATTRIBUTES = [
+    :name, :description, :type, :model, :api_key_id, :instruction,
+    :card_url, :folder_id, :role, :goal, { config: {} }
+  ].freeze
+
+  # The core charges quota per agent and caps nothing on the single-create path
+  # this batch fans out to, so the fan-out is bounded here.
+  BULK_CREATE_LIMIT = 50
 
   # Declared here so they win over Api::BaseController's `rescue_from StandardError`.
   rescue_from EvoAiCoreService::UnavailableError, with: :handle_core_unavailable
@@ -21,6 +33,44 @@ class Api::V1::AgentsController < Api::V1::BaseController
 
   def create
     result = EvoAiCoreService.create_agent(agent_params, request.headers)
+    render json: result, status: :created
+  end
+
+  # One core call per entry: the core has no JSON batch route, only the
+  # multipart import below. The batch is therefore NOT atomic, and the response
+  # has to be honest about that.
+  def bulk_create
+    entries = bulk_create_entries
+    return if performed?
+
+    created = []
+
+    entries.each_with_index do |agent_data, index|
+      created << EvoAiCoreService.create_agent(agent_data, request.headers)
+    rescue EvoAiCoreService::UnavailableError, EvoAiCoreService::UpstreamError => e
+      # Nothing was written yet, so the normal handlers can answer and the whole
+      # batch is safe to retry.
+      raise e if index.zero?
+
+      return render_partial_batch(created, index, e)
+    end
+
+    render json: { agents: created, created_count: created.size }, status: :created
+  end
+
+  # Passthrough for the core's own import route: a .json file of exported agent
+  # definitions, optionally landing in a folder. The extension and the payload
+  # shape are validated by the core, whose refusal is relayed as a 4xx.
+  def import
+    if params[:file].blank?
+      return error_response(
+        ApiErrorCodes::MISSING_REQUIRED_FIELD,
+        'file is required',
+        status: :bad_request
+      )
+    end
+
+    result = EvoAiCoreService.import_agents(params[:file], params[:folder_id], request.headers)
     render json: result, status: :created
   end
 
@@ -80,18 +130,52 @@ class Api::V1::AgentsController < Api::V1::BaseController
   end
   
   def agent_params
-    params.permit(
-      :name, 
-      :description, 
-      :type, 
-      :model, 
-      :api_key_id, 
-      :instruction, 
-      :card_url, 
-      :folder_id, 
-      :role,
-      :goal,
-      config: {}
-    )
+    params.permit(*AGENT_ATTRIBUTES)
+  end
+
+  # Half the batch is already written upstream, so the client is told exactly
+  # what exists rather than getting a clean-looking failure.
+  def render_partial_batch(created, index, exception)
+    log_core_failure(exception)
+
+    render json: {
+      agents: created,
+      created_count: created.size,
+      failed_at: index,
+      error: {
+        code: ApiErrorCodes::EXTERNAL_SERVICE_ERROR,
+        message: 'AI core service stopped accepting the batch'
+      }
+    }, status: :multi_status
+  end
+
+  # Renders the rejection itself and returns an empty list; callers check
+  # `performed?` before going on.
+  def bulk_create_entries
+    entries = params[:agents]
+
+    unless batch_of_objects?(entries)
+      return reject_batch(ApiErrorCodes::MISSING_REQUIRED_FIELD,
+                          'agents must be a non-empty array of agent objects')
+    end
+
+    if entries.size > BULK_CREATE_LIMIT
+      return reject_batch(ApiErrorCodes::INVALID_INPUT,
+                          "agents accepts at most #{BULK_CREATE_LIMIT} items per request",
+                          details: { limit: BULK_CREATE_LIMIT, received: entries.size },
+                          status: :unprocessable_entity)
+    end
+
+    params.permit(agents: AGENT_ATTRIBUTES)[:agents]
+  end
+
+  def batch_of_objects?(entries)
+    entries.is_a?(Array) && entries.present? &&
+      entries.all? { |entry| entry.is_a?(ActionController::Parameters) || entry.is_a?(Hash) }
+  end
+
+  def reject_batch(code, message, details: nil, status: :bad_request)
+    error_response(code, message, details: details, status: status)
+    []
   end
 end

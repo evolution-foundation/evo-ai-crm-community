@@ -205,7 +205,10 @@ Rails.application.routes.draw do
       end
 
       resources :agents, only: [:index, :create, :update, :destroy], controller: 'agents' do
-        post :bulk_create, on: :collection
+        collection do
+          post :bulk_create
+          post :import
+        end
       end
 
       resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'agent_bots' do

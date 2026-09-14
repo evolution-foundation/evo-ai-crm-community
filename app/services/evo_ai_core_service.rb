@@ -172,6 +172,23 @@ class EvoAiCoreService
       })
     end
 
+    # The core's import route reads an uploaded .json file plus an optional
+    # folder_id form field, so this is the one agent call that goes out as
+    # multipart: HTTParty writes its own boundary, and the filename it sends
+    # comes from the upload's original name, which the core checks the extension
+    # of. Dropping the JSON content type keeps that override explicit.
+    def import_agents(file, folder_id = nil, request_headers = nil)
+      url = "/api/v1/agents/import"
+      body = { file: file }
+      body[:folder_id] = folder_id if folder_id.present?
+
+      call_core(:post, url, {
+        body: body,
+        headers: build_headers(request_headers).except('Content-Type'),
+        multipart: true
+      })
+    end
+
     def update_agent(agent_id, agent_data, request_headers = nil)
       url = "/api/v1/agents/#{agent_id}"
       call_core(:put, url, {
