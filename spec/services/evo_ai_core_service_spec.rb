@@ -16,7 +16,8 @@ RSpec.describe EvoAiCoreService do
 
       described_class.list_agents
 
-      expect(connections.map { |http| [http.open_timeout, http.read_timeout, http.max_retries] }).to eq([[5, 15, 0]])
+      expect(connections.map { |http| [http.open_timeout, http.read_timeout, http.write_timeout, http.max_retries] })
+        .to eq([[5, 15, 15, 0]])
     end
 
     describe 'reading the timeout from the environment' do
@@ -30,12 +31,12 @@ RSpec.describe EvoAiCoreService do
         expect([timeout_for(nil), timeout_for(''), timeout_for('  ')]).to eq([15, 15, 15])
       end
 
-      it 'uses a positive integer as given' do
-        expect(timeout_for('30')).to eq(30)
+      it 'uses a positive integer as given, and reads a padded one in base 10' do
+        expect([timeout_for('30'), timeout_for('010')]).to eq([30, 10])
       end
 
       it 'refuses a value that would become a zero or negative timeout' do
-        %w[abc 0 -5 1.5].each do |value|
+        %w[abc 0 -5 1.5 0x1e].each do |value|
           expect { timeout_for(value) }.to raise_error(ArgumentError, /EVO_AI_CORE_READ_TIMEOUT/)
         end
       end

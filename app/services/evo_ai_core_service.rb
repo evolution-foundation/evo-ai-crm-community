@@ -12,7 +12,8 @@ class EvoAiCoreService
     raw = ENV.fetch(name, '').strip
     return default if raw.empty?
 
-    value = Integer(raw, exception: false)
+    # Base 10 explicitly: Integer() reads "010" as octal 8 and rejects "08".
+    value = Integer(raw, 10, exception: false)
     raise ArgumentError, "#{name} must be a positive number of seconds, got #{raw.inspect}" unless value&.positive?
 
     value
@@ -23,6 +24,9 @@ class EvoAiCoreService
   # never answers would pin a Puma thread for a minute per request.
   open_timeout timeout_from_env('EVO_AI_CORE_OPEN_TIMEOUT', 5)
   read_timeout timeout_from_env('EVO_AI_CORE_READ_TIMEOUT', 15)
+  # A core that stops reading pins the thread just like one that stops answering:
+  # a body past the socket buffer blocks on the write, which read_timeout never covers.
+  write_timeout timeout_from_env('EVO_AI_CORE_WRITE_TIMEOUT', 15)
   # Net::HTTP silently retries an idempotent request once after a read
   # timeout, which would double the wait on GET/PUT/DELETE.
   default_options[:max_retries] = 0
