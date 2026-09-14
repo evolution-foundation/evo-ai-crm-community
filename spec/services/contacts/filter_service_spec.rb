@@ -68,7 +68,7 @@ RSpec.describe Contacts::FilterService do
       expect(result[:contacts]).not_to include(excluded)
     end
 
-    it 'ignores a soft-deleted link (parity with the automation evaluator, CRM-509)' do
+    it 'ignores a soft-deleted link (parity with the automation evaluator)' do
       gone = person_with_company(company)
       gone.contact_companies.first.update!(deleted_at: Time.current)
       kept = person_with_company(company)

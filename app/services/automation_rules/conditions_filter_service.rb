@@ -268,8 +268,6 @@ class AutomationRules::ConditionsFilterService < FilterService
     when 'standard'
       if attribute_key == 'labels'
         labels_query_fragment(query_hash, current_index, query_operator)
-      elsif current_filter['data_type'] == 'company'
-        company_query_fragment(query_hash, current_index, query_operator)
       else
         " #{table_name}.#{attribute_key} #{filter_operator_value} #{query_operator} "
       end
@@ -325,13 +323,8 @@ class AutomationRules::ConditionsFilterService < FilterService
     " #{existence} (#{subquery}) #{query_operator} "
   end
 
-  # `company` is the contact_companies association (EVO-1887), not a column:
-  # `contacts.company` does not exist and the bare-column branch used to raise
-  # inside #perform's rescue, so every company condition evaluated false
-  # (CRM-509). Same EXISTS shape as labels; NOT EXISTS makes `not_equal_to`
-  # include contacts with no company at all (parity with the Contacts filter).
-  # Both base relations expose `contacts.id` (the contact-only one directly,
-  # the conversation one through its LEFT JOIN).
+  # `company` is the contact_companies association, not a column; `contacts.id` is in
+  # both base relations. NOT EXISTS makes `not_equal_to` include a contact with none.
   def company_query_fragment(query_hash, current_index, query_operator)
     filter_operator = query_hash[:filter_operator] || query_hash['filter_operator']
     presence = %w[is_present is_not_present].include?(filter_operator)

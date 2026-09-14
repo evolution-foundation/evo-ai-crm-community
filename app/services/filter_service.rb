@@ -133,7 +133,7 @@ class FilterService
     query_operator = query_hash[:query_operator]
     @filter_values["value_#{current_index}"] = query_hash['values']
 
-    # Active links only, the way the automation evaluator reads them (CRM-509).
+    # Active links only, the way the automation evaluator reads them.
     base_relation_query =
       "SELECT 1 FROM contact_companies WHERE contact_companies.contact_id = #{table_name}.id " \
       'AND contact_companies.deleted_at IS NULL'

@@ -97,8 +97,8 @@ RSpec.describe AutomationRules::ConditionsFilterService do
     end
   end
 
-  # The conversation base relation LEFT JOINs contacts, so the company condition of a
-  # conversation rule reads the same association the contact-only path does (CRM-509).
+  # The conversation base relation LEFT JOINs contacts, so a conversation rule reads
+  # the same association the contact-only path does.
   describe '#perform with a company condition on the conversation path' do
     let(:acme) { Contact.create!(name: 'Acme', type: 'company') }
     let(:globex) { Contact.create!(name: 'Globex', type: 'company') }

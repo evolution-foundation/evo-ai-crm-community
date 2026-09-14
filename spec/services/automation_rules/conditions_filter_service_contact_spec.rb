@@ -10,8 +10,6 @@ require 'rails_helper'
 # (AutomationRuleListener#rule_has_only_contact_conditions?) using the operator
 # sets in lib/filters/filter_keys.yml, which is what ConditionValidationService
 # enforces at evaluation time regardless of what the frontend lets the user pick.
-# `company` joined the file with CRM-509, when the SQL evaluator learned to read
-# the contact_companies association instead of a column that never existed.
 RSpec.describe AutomationRules::ConditionsFilterService do
   let!(:vip) { Label.create!(title: "vip-#{SecureRandom.hex(3)}", color: '#abcdef') }
   let!(:gold) { Label.create!(title: "gold-#{SecureRandom.hex(3)}", color: '#ffd700') }
@@ -100,9 +98,8 @@ RSpec.describe AutomationRules::ConditionsFilterService do
     end
   end
 
-  # `company` is the contact_companies association (EVO-1887): the value is the
-  # company's id, and "not equal" includes contacts with no company at all, the
-  # way the Contacts filter reads it. Before CRM-509 every operator here was inert.
+  # `company` is an association: the value is the company's id, and "not equal"
+  # includes a contact with no company at all, the way the Contacts filter reads it.
   describe 'company' do
     let(:acme) { Contact.create!(name: 'Acme', type: 'company') }
     let(:globex) { Contact.create!(name: 'Globex', type: 'company') }
