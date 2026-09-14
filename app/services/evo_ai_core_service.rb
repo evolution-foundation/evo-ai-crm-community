@@ -65,8 +65,11 @@ class EvoAiCoreService
             # Rails request headers (ActionDispatch::Http::Headers)
             headers_hash = request_headers.env
 
-            # Pass through OAuth headers
-            ['Authorization', 'X-User-Id'].each do |header|
+            # Pass through the caller's OAuth headers, plus X-Evo-Tenant-Id:
+            # a multi-tenant core scopes every read and write by it and answers
+            # 403 without it. Single-tenant deployments never send it, so the
+            # header is simply absent and nothing changes.
+            ['Authorization', 'X-User-Id', 'X-Evo-Tenant-Id'].each do |header|
               value = headers_hash[header] || headers_hash[header.upcase] || headers_hash["HTTP_#{header.upcase.gsub('-', '_')}"]
               headers[header] = value if value.present?
             end

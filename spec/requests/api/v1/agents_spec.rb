@@ -280,6 +280,36 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(captured.body).to include('folder-9')
     end
 
+    # A multi-tenant core scopes by X-Evo-Tenant-Id and refuses the call
+    # without it, so the caller's tenant has to survive the proxy hop.
+    it "forwards the caller's tenant header to the core" do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [] }.to_json, headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import',
+           params: { file: agents_upload },
+           headers: headers.merge('X-Evo-Tenant-Id' => 'tenant-7')
+
+      expect(response).to have_http_status(:created)
+      expect(captured.headers['X-Evo-Tenant-Id']).to eq('tenant-7')
+    end
+
+    it 'sends no tenant header when the caller did not supply one' do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [] }.to_json, headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
+
+      expect(response).to have_http_status(:created)
+      expect(captured.headers).not_to have_key('X-Evo-Tenant-Id')
+    end
+
     it 'omits folder_id when the client did not send one' do
       captured = nil
       stub_request(:post, core_import_url).to_return do |request|
