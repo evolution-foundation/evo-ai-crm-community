@@ -11,8 +11,10 @@ class Api::V1::AgentsController < Api::V1::BaseController
     destroy: 'ai_agents.delete'
   })
 
-  # Forwarded verbatim to evo-core, which owns the schema. Shared by the single
-  # and the batch path so the two cannot drift apart.
+  # Allowlist, not a passthrough: strong parameters drops anything outside this
+  # list before the call, so an attribute evo-core starts accepting reaches it
+  # only once it is added here. Shared by the single and the batch path so those
+  # two cannot drift apart.
   AGENT_ATTRIBUTES = [
     :name, :description, :type, :model, :api_key_id, :instruction,
     :card_url, :folder_id, :role, :goal, { config: {} }
