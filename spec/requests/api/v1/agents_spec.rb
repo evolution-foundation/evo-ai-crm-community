@@ -68,8 +68,7 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     allow(EvoAiCoreService).to receive(:import_agents).and_return([{ 'id' => 'agent-1' }])
   end
 
-  # Named with a .json extension on purpose: the core refuses anything else, and
-  # what it sees is the upload's own filename.
+  # The core checks the extension, and what it sees is the upload's own filename.
   def agents_upload(filename: 'agents.json', content: [{ name: 'Bot' }].to_json)
     file = Tempfile.new([File.basename(filename, '.*'), File.extname(filename)])
     file.write(content)
@@ -116,8 +115,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(json_response['created_count']).to eq(2)
     end
 
-    # import is gated by ai_agents.import, which this role does not hold — the
-    # create grant must not open it.
     it 'forbids import without ai_agents.import' do
       post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
 
@@ -144,7 +141,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(EvoAiCoreService).not_to have_received(:import_agents)
     end
 
-    # The import grant is not a create grant.
     it 'forbids bulk_create' do
       post '/api/v1/agents/bulk_create', params: { agents: [{ name: 'Bot' }] }, headers: headers, as: :json
 
@@ -192,8 +188,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     end
   end
 
-  # The batch is not atomic: one core call per entry. These pin what the client
-  # is told when the core quits partway through.
   context 'when the core fails partway through bulk_create' do
     before { stub_auth(role_key: 'custom_ai_manager', granted: %w[ai_agents.create]) }
 
@@ -250,8 +244,8 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     end
   end
 
-  # The import proxy is the only agent call that leaves as multipart, so what
-  # actually goes on the wire is pinned here rather than stubbed at the service.
+  # Pinned on the wire rather than stubbed at the service: multipart is the part
+  # that breaks silently.
   context 'when import reaches the wire' do
     let(:core_import_url) { "#{EvoAiCoreService.base_uri}/api/v1/agents/import" }
 
@@ -280,8 +274,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(captured.body).to include('folder-9')
     end
 
-    # A multi-tenant core scopes by X-Evo-Tenant-Id and refuses the call
-    # without it, so the caller's tenant has to survive the proxy hop.
     it "forwards the caller's tenant header to the core" do
       captured = nil
       stub_request(:post, core_import_url).to_return do |request|
@@ -323,8 +315,6 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(captured.body).not_to include('name="folder_id"')
     end
 
-    # The core is what rejects a non-.json upload; the CRM must relay that
-    # refusal as the client's error, not swallow it into a 502.
     it 'relays the core 400 for a rejected file' do
       stub_request(:post, core_import_url).to_return(
         status: 400,

@@ -11,17 +11,13 @@ class Api::V1::AgentsController < Api::V1::BaseController
     destroy: 'ai_agents.delete'
   })
 
-  # Allowlist, not a passthrough: strong parameters drops anything outside this
-  # list before the call, so an attribute evo-core starts accepting reaches it
-  # only once it is added here. Shared by the single and the batch path so those
-  # two cannot drift apart.
+  # Shared by the single and the batch path so the two cannot drift apart.
   AGENT_ATTRIBUTES = [
     :name, :description, :type, :model, :api_key_id, :instruction,
     :card_url, :folder_id, :role, :goal, { config: {} }
   ].freeze
 
-  # The core charges quota per agent and caps nothing on the single-create path
-  # this batch fans out to, so the fan-out is bounded here.
+  # The core caps nothing on the single-create path this fans out to.
   BULK_CREATE_LIMIT = 50
 
   # Declared here so they win over Api::BaseController's `rescue_from StandardError`.
@@ -38,9 +34,8 @@ class Api::V1::AgentsController < Api::V1::BaseController
     render json: result, status: :created
   end
 
-  # One core call per entry: the core has no JSON batch route, only the
-  # multipart import below. The batch is therefore NOT atomic, and the response
-  # has to be honest about that.
+  # One core call per entry — the core has no JSON batch route — so the batch is
+  # not atomic and the response has to say what was written.
   def bulk_create
     entries = bulk_create_entries
     return if performed?
@@ -50,8 +45,6 @@ class Api::V1::AgentsController < Api::V1::BaseController
     entries.each_with_index do |agent_data, index|
       created << EvoAiCoreService.create_agent(agent_data, request.headers)
     rescue EvoAiCoreService::UnavailableError, EvoAiCoreService::UpstreamError => e
-      # Nothing was written yet, so the normal handlers can answer and the whole
-      # batch is safe to retry.
       raise e if index.zero?
 
       return render_partial_batch(created, index, e)
@@ -60,9 +53,6 @@ class Api::V1::AgentsController < Api::V1::BaseController
     render json: { agents: created, created_count: created.size }, status: :created
   end
 
-  # Passthrough for the core's own import route: a .json file of exported agent
-  # definitions, optionally landing in a folder. The extension and the payload
-  # shape are validated by the core, whose refusal is relayed as a 4xx.
   def import
     if params[:file].blank?
       return error_response(
@@ -135,8 +125,6 @@ class Api::V1::AgentsController < Api::V1::BaseController
     params.permit(*AGENT_ATTRIBUTES)
   end
 
-  # Half the batch is already written upstream, so the client is told exactly
-  # what exists rather than getting a clean-looking failure.
   def render_partial_batch(created, index, exception)
     log_core_failure(exception)
 
@@ -151,8 +139,7 @@ class Api::V1::AgentsController < Api::V1::BaseController
     }, status: :multi_status
   end
 
-  # Renders the rejection itself and returns an empty list; callers check
-  # `performed?` before going on.
+  # Renders the rejection itself; callers check `performed?` before going on.
   def bulk_create_entries
     entries = params[:agents]
 

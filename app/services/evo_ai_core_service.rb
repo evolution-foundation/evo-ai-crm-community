@@ -65,10 +65,7 @@ class EvoAiCoreService
             # Rails request headers (ActionDispatch::Http::Headers)
             headers_hash = request_headers.env
 
-            # Pass through the caller's OAuth headers, plus X-Evo-Tenant-Id:
-            # a multi-tenant core scopes every read and write by it and answers
-            # 403 without it. Single-tenant deployments never send it, so the
-            # header is simply absent and nothing changes.
+            # A multi-tenant core answers 403 without X-Evo-Tenant-Id.
             ['Authorization', 'X-User-Id', 'X-Evo-Tenant-Id'].each do |header|
               value = headers_hash[header] || headers_hash[header.upcase] || headers_hash["HTTP_#{header.upcase.gsub('-', '_')}"]
               headers[header] = value if value.present?
@@ -175,11 +172,8 @@ class EvoAiCoreService
       })
     end
 
-    # The core's import route reads an uploaded .json file plus an optional
-    # folder_id form field, so this is the one agent call that goes out as
-    # multipart: HTTParty writes its own boundary, and the filename it sends
-    # comes from the upload's original name, which the core checks the extension
-    # of. Dropping the JSON content type keeps that override explicit.
+    # Multipart: the core reads an uploaded file and checks its extension, so
+    # HTTParty sets the content type and boundary instead of build_headers.
     def import_agents(file, folder_id = nil, request_headers = nil)
       url = "/api/v1/agents/import"
       body = { file: file }
