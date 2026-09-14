@@ -304,11 +304,8 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
-      # CRM-607: what stops two simultaneous creations from picking the same
-      # display_id is the advisory lock in ensure_display_id. Dropping it brings
-      # back a 500 on conversation creation, and on the widget it takes the
-      # visitor's first message down with it. Invisible to every other lane,
-      # because it only shows up under real concurrency.
+      # The advisory lock in ensure_display_id is what keeps two simultaneous
+      # creations off the same display_id, and only a real-concurrency spec sees it.
       - 'spec/models/conversation_display_id_concurrency_spec.rb'
       # Served under `defaults: { format: 'json' }`, where an action that stops rendering
       # answers 204 instead of failing and the public page just goes blank. No other lane

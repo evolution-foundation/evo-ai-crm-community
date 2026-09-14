@@ -57,7 +57,7 @@ class Conversation < ApplicationRecord
   include ConversationMuteHelpers
   include Wisper::Publisher
 
-  # Advisory lock key serializing display_id allocation (see #ensure_display_id).
+  # Advisory lock key for display_id allocation (see #ensure_display_id).
   DISPLAY_ID_LOCK_KEY = 6_070_607
 
   validates :inbox_id, presence: true
@@ -281,13 +281,11 @@ class Conversation < ApplicationRecord
   def ensure_display_id
     return if display_id.present?
 
-    # Serializes the read-modify-write below: without it concurrent creations read the
-    # same maximum under READ COMMITTED and all but one die on the unique index. Must be
-    # `_xact_` — a session lock outlives COMMIT and PgBouncer hands the backend back to
-    # the pool still holding it.
+    # Serializes the read-modify-write below; concurrent callers would otherwise read
+    # the same maximum under READ COMMITTED. Must be `_xact_`: a session lock outlives
+    # COMMIT and PgBouncer returns the backend to the pool still holding it.
     #
-    # The maximum stays a Ruby computation rather than a sequence: under RLS it is what
-    # gives each tenant its own 1,2,3 numbering in the enterprise layer.
+    # Computed in Ruby rather than taken from a sequence so RLS scopes it per tenant.
     self.class.connection.execute("SELECT pg_advisory_xact_lock(#{DISPLAY_ID_LOCK_KEY})")
 
     max_display_id = self.class.maximum(:display_id) || 0
@@ -358,9 +356,9 @@ class Conversation < ApplicationRecord
   end
 
   def load_attributes_created_by_db_triggers
-    # `uuid` comes from a database default, so it only exists after the INSERT, and
-    # reload is not an option: it would clear previous_changes, which the dispatcher
-    # needs. display_id is already set by before_create and is re-read on the same trip.
+    # `uuid` comes from a database default, so it only exists after the INSERT. reload
+    # would clear previous_changes, which the dispatcher needs. display_id is set in
+    # before_create and only re-read here, on the same trip.
     obj_from_db = self.class.find(id)
     self[:display_id] = obj_from_db[:display_id]
     self[:uuid] = obj_from_db[:uuid]

@@ -2,15 +2,14 @@
 
 require 'rails_helper'
 
-# Needs REAL concurrency, hence no transactional fixtures: under them Rails sets
-# `pool.lock_thread = true`, every thread gets the SAME connection and serializes on its
-# own, so this would pass with and without the fix.
-# Same shape as spec/lib/concurrent_index_migration_spec.rb.
+# No transactional fixtures: under them Rails sets `pool.lock_thread = true`, every
+# thread gets the SAME connection and serializes on its own, which would defeat the
+# point. Same shape as spec/lib/concurrent_index_migration_spec.rb.
 RSpec.describe Conversation do
   self.use_transactional_tests = false
 
-  # Asking for more connections than the pool holds hangs in ConnectionTimeoutError and
-  # becomes flake, not proof: leave one for the main thread.
+  # Asking for more connections than the pool holds hangs in ConnectionTimeoutError:
+  # leave one for the main thread.
   let(:concurrency) { [ActiveRecord::Base.connection_pool.size - 1, 4].min }
 
   let!(:channel) { Channel::WebWidget.create!(website_url: "https://crm607-#{SecureRandom.hex(4)}.example.com") }
@@ -32,15 +31,15 @@ RSpec.describe Conversation do
     Channel::WebWidget.where(id: channel.id).delete_all
   end
 
-  # Every thread takes a connection and only then is released. Without the barrier they
-  # start in single file and the spec can pass by accident with the bug present.
+  # Every thread takes a connection and only then is released, so they start together
+  # instead of in single file.
   def create_conversations_concurrently(count)
     ready = Queue.new
     start = Queue.new
     outcomes = Array.new(count)
     threads = Array.new(count) { |index| creator_thread(index, outcomes, ready, start) }
 
-    # A thread that never gets a connection never signals: an unbounded pop would hang
+    # A thread that never gets a connection never signals; an unbounded pop would hang
     # the lane, while join below re-raises the real error.
     count.times { ready.pop(timeout: 30) }
     count.times { start << true }
@@ -61,8 +60,8 @@ RSpec.describe Conversation do
 
   # Returns the stored display_id, or a description of the error that prevented it.
   def create_one_conversation
-    # The outer transaction is what the widget does: conversation and message in one
-    # BEGIN. It is what decides how long the allocation lock is held.
+    # Mirrors the widget: conversation and message in one BEGIN, which is what decides
+    # how long the allocation lock is held.
     ActiveRecord::Base.transaction do
       described_class.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox).display_id
     end
@@ -81,10 +80,8 @@ RSpec.describe Conversation do
       expect(display_ids.uniq.size).to eq(concurrency)
     end
 
-    # Guards the `_xact_` choice specifically: with the session variant the leaked lock
-    # travels on the connection returned to the pool and blocks every later conversation
-    # creation in the process. The example above only shows that as a statement timeout,
-    # which reads as a slow database.
+    # Covers the `_xact_` choice: a session lock would travel on the connection returned
+    # to the pool and block every later conversation creation in the process.
     it 'releases the allocation lock on COMMIT, leaving nothing held on the connection' do
       described_class.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox)
 
