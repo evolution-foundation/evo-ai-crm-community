@@ -321,6 +321,12 @@ on:
       - 'app/models/application_record.rb'
       - 'spec/requests/api/v1/validation_error_locale_spec.rb'
       - 'spec/initializers/default_locale_spec.rb'
+      # Same variable, one consumer that is not a locale: it goes into an English prompt, so it
+      # has to arrive as a language name. Nothing else runs spec/lib/integrations/**.
+      - 'lib/integrations/openai_base_service.rb'
+      - 'lib/integrations/openai/processor_service.rb'
+      - 'lib/integrations/openai/global_processor_service.rb'
+      - 'spec/lib/integrations/openai_language_spec.rb'
 
 permissions:
   contents: read
@@ -470,4 +476,5 @@ jobs:
             spec/requests/public/api/v1/csat_survey_controller_spec.rb \
             spec/requests/api/v1/validation_error_locale_spec.rb \
             spec/initializers/default_locale_spec.rb \
+            spec/lib/integrations/openai_language_spec.rb \
             --format progress
