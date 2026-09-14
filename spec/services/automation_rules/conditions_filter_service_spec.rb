@@ -97,6 +97,30 @@ RSpec.describe AutomationRules::ConditionsFilterService do
     end
   end
 
+  # The conversation base relation LEFT JOINs contacts, so the company condition of a
+  # conversation rule reads the same association the contact-only path does (CRM-509).
+  describe '#perform with a company condition on the conversation path' do
+    let(:acme) { Contact.create!(name: 'Acme', type: 'company') }
+    let(:globex) { Contact.create!(name: 'Globex', type: 'company') }
+
+    before { ContactCompany.create!(contact: contact, company_id: acme.id) }
+
+    def company_rule(operator, values)
+      build_rule(conditions: [{ 'attribute_key' => 'company', 'filter_operator' => operator, 'values' => values, 'query_operator' => nil }])
+    end
+
+    it 'matches the conversation whose contact is linked to the company' do
+      expect(described_class.new(company_rule('equal_to', [acme.id]), conversation).perform).to be(true)
+      expect(described_class.new(company_rule('equal_to', [globex.id]), conversation).perform).to be(false)
+    end
+
+    it 'not_equal_to and is_not_present read the absence of the link' do
+      expect(described_class.new(company_rule('not_equal_to', [globex.id]), conversation).perform).to be(true)
+      expect(described_class.new(company_rule('is_present', []), conversation).perform).to be(true)
+      expect(described_class.new(company_rule('is_not_present', []), conversation).perform).to be(false)
+    end
+  end
+
   describe '#perform with attribute_changed on labels (Pedro pilot path)' do
     let!(:label_atleta) { Label.create!(title: 'atleta', color: '#abcdef') }
 
