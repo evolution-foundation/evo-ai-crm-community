@@ -726,7 +726,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_14_120000) do
     t.datetime "updated_at", precision: nil, null: false
   end
 
-
   create_table "message_templates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "channel_type"
     t.uuid "channel_id"

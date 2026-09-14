@@ -1,8 +1,5 @@
 module MessageFormatHelper
-  # CRM-579: este helper também limpava a marcação `mention://` do conteúdo, e
-  # isso saiu junto com a menção. O que sobra continua em método próprio porque é
-  # load-bearing: mensagem de anexo sem texto chega com `content` nil, e o
-  # renderizador de markdown abaixo não aceita nil.
+  # An attachment-only message carries content nil, and CommonMarker raises on it.
   def message_body_content(message_content)
     message_content.presence || ''
   end

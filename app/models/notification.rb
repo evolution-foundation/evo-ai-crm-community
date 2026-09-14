@@ -23,7 +23,6 @@
 #  uniq_secondary_actor_per_account_notifications  (secondary_actor_type,secondary_actor_id)
 #
 class Notification < ApplicationRecord
-  include MessageFormatHelper
   belongs_to :user
 
   belongs_to :primary_actor, polymorphic: true
