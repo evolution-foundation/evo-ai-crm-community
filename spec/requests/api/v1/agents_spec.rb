@@ -166,13 +166,16 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(EvoAiCoreService).not_to have_received(:create_agent)
     end
 
-    it 'rejects a batch over the limit before calling the core' do
-      oversized = Array.new(Api::V1::AgentsController::BULK_CREATE_LIMIT + 1) { |i| { name: "Bot #{i}" } }
+    # The literal 51, not LIMIT + 1: deriving the payload from the constant makes
+    # the example pass for any cap, including one raised by accident.
+    it 'rejects a 51-entry batch before calling the core' do
+      oversized = Array.new(51) { |i| { name: "Bot #{i}" } }
 
       post '/api/v1/agents/bulk_create', params: { agents: oversized }, headers: headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(json_response['error']['code']).to eq('INVALID_INPUT')
+      expect(json_response['error']['details']).to include('limit' => 50, 'received' => 51)
       expect(EvoAiCoreService).not_to have_received(:create_agent)
     end
 
@@ -216,6 +219,41 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(json_response['created_count']).to eq(2)
       expect(json_response['agents'].map { |a| a['id'] }).to eq(%w[agent-1 agent-2])
       expect(json_response['failed_at']).to eq(2)
+      expect(json_response['error']['code']).to eq('EXTERNAL_SERVICE_ERROR')
+      expect(json_response['error']['details']).to eq('upstream_status' => 500)
+    end
+
+    it 'separates a core that went away from an entry the core refused' do
+      call_count = 0
+      allow(EvoAiCoreService).to receive(:create_agent) do
+        call_count += 1
+        raise EvoAiCoreService::UnavailableError if call_count == 2
+
+        { 'id' => "agent-#{call_count}" }
+      end
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:multi_status)
+      expect(json_response['created_count']).to eq(1)
+      expect(json_response['error']['code']).to eq('SERVICE_UNAVAILABLE')
+      expect(json_response['error']).not_to have_key('details')
+    end
+
+    # rack-timeout kills the request at 15s, and a killed request answers 500
+    # with no list of what the core already wrote.
+    it 'stops on its own time budget and still reports what it wrote' do
+      stub_const('Api::V1::AgentsController::BULK_CREATE_BUDGET_SECONDS', 0)
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:multi_status)
+      expect(json_response['created_count']).to eq(1)
+      expect(json_response['failed_at']).to eq(1)
+      expect(json_response['error']['code']).to eq('TIMEOUT_ERROR')
+      expect(EvoAiCoreService).to have_received(:create_agent).once
     end
   end
 
