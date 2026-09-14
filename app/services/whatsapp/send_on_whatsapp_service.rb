@@ -8,12 +8,29 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def perform_reply
+    # Evolution and Evolution Go have no real HSM/template mechanism (unofficial,
+    # WhatsApp-Web-based providers). Messages::MessageBuilder already rendered the
+    # template into message.content before this job ran, so for these providers we
+    # must send that rendered text as a normal session message. Falling through to
+    # send_template_message here used to hit each provider's send_template, whose
+    # build_template_text fallback builds the outgoing text from the template's
+    # bare NAME (e.g. "lead_abertura") instead of its rendered body/content, so the
+    # literal template name was sent to the customer instead of the real message.
+    return send_session_message if unofficial_template_provider?
+
     should_send_template_message = template_params.present? || !message.conversation.can_reply?
     if should_send_template_message
       send_template_message
     else
       send_session_message
     end
+  end
+
+  # Providers with no true approved-template delivery mechanism. WhatsApp Cloud
+  # and 360dialog still need the send_template_message path (real HSM templates
+  # outside the 24h session window); these two render everything as plain text.
+  def unofficial_template_provider?
+    channel.provider.in?(%w[evolution evolution_go])
   end
 
   def send_template_message

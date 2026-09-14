@@ -519,4 +519,57 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       expect(real_message.is_unsupported).to be(true)
     end
   end
+
+  # Regression: Evolution/Evolution Go have no real HSM template mechanism — MessageBuilder
+  # already renders the template into message.content before this job runs. Routing these
+  # providers through send_template_message hit build_template_text's fallback, which builds
+  # the outgoing text from the template's bare NAME ("lead_abertura") instead of its rendered
+  # content, so the customer received the literal template name instead of the real message.
+  describe '#perform_reply — unofficial (Evolution/Evolution Go) providers always send the rendered content' do
+    let(:contact_inbox_source_id) { '5511999999999' }
+    let(:additional_attributes) { {} }
+    let(:provider_service) do
+      instance_double(Whatsapp::Providers::EvolutionService, send_message: 'wamid.123', last_delivery_error: nil)
+    end
+
+    before do
+      allow(channel).to receive(:provider_service).and_return(provider_service)
+      allow(message).to receive(:update!)
+    end
+
+    %w[evolution evolution_go].each do |unofficial_provider|
+      context "when provider is #{unofficial_provider} and the message carries template_params" do
+        let(:provider) { unofficial_provider }
+        let(:message) do
+          instance_double(Message, conversation: conversation,
+                                    additional_attributes: { 'template_params' => { 'name' => 'lead_abertura' } })
+        end
+
+        it 'sends the already-rendered message content as a session message, never send_template' do
+          expect(provider_service).to receive(:send_message).with(anything, message)
+          expect(provider_service).not_to receive(:send_template)
+
+          service.send(:perform_reply)
+        end
+      end
+    end
+
+    context 'when provider is whatsapp_cloud and the message carries template_params' do
+      let(:provider) { 'whatsapp_cloud' }
+      let(:message) do
+        instance_double(Message, conversation: conversation,
+                                  additional_attributes: { 'template_params' => { 'name' => 'lead_abertura', 'language' => 'pt_BR' } })
+      end
+
+      before do
+        allow(channel).to receive(:message_templates).and_return([])
+      end
+
+      it 'still uses the real HSM send_template path (unaffected by the Evolution carve-out)' do
+        expect(provider_service).to receive(:send_template).and_return('wamid.456')
+
+        service.send(:perform_reply)
+      end
+    end
+  end
 end
