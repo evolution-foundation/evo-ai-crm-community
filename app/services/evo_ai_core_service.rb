@@ -6,6 +6,27 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
+  # A bad value would become timeout 0 and fail every call, so refuse it at boot.
+  def self.timeout_from_env(name, default)
+    raw = ENV.fetch(name, '').strip
+    return default if raw.empty?
+
+    # Base 10 explicitly: Integer() would read "010" as octal and reject "08".
+    value = Integer(raw, 10, exception: false)
+    raise ArgumentError, "#{name} must be a positive number of seconds, got #{raw.inspect}" unless value&.positive?
+
+    value
+  end
+  private_class_method :timeout_from_env
+
+  # Without these, Net::HTTP's 60s default lets one hung core drain the Puma pool.
+  open_timeout timeout_from_env('EVO_AI_CORE_OPEN_TIMEOUT', 5)
+  read_timeout timeout_from_env('EVO_AI_CORE_READ_TIMEOUT', 15)
+  # read_timeout does not cover the write: a large body blocks once the buffer fills.
+  write_timeout timeout_from_env('EVO_AI_CORE_WRITE_TIMEOUT', 15)
+  # Net::HTTP retries an idempotent request once after a read timeout, doubling the wait.
+  default_options[:max_retries] = 0
+
   # Failures talking to evo-core surface as these two, never as a bare
   # StandardError (which Api::BaseController turns into a 500).
 
