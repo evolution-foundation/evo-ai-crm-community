@@ -15,6 +15,10 @@ on:
       - 'app/models/contact.rb'
       - 'app/models/role.rb'
       - 'app/services/automation_rules/**'
+      # The automation evaluator inherits from FilterService and both read the
+      # contact_companies association, so one has to trigger the other's spec.
+      - 'app/services/filter_service.rb'
+      - 'spec/services/contacts/filter_service_spec.rb'
       - 'app/services/pipelines/**'
       - 'app/listeners/automation_rule_listener*.rb'
       - 'app/listeners/pipeline_stage_automation_listener.rb'
@@ -367,6 +371,7 @@ jobs:
             spec/services/automation_rules/pipeline_assignment_multi_pipeline_spec.rb \
             spec/services/automation_rules/conditions_filter_service_spec.rb \
             spec/services/automation_rules/conditions_filter_service_contact_spec.rb \
+            spec/services/contacts/filter_service_spec.rb \
             spec/services/pipelines/stage_automation_service_spec.rb \
             spec/listeners/automation_rule_listener_attribute_changed_spec.rb \
             spec/requests/api/v1/automation_rules_spec.rb \
