@@ -10,9 +10,6 @@ require 'rails_helper'
 # (AutomationRuleListener#rule_has_only_contact_conditions?) using the operator
 # sets in lib/filters/filter_keys.yml, which is what ConditionValidationService
 # enforces at evaluation time regardless of what the frontend lets the user pick.
-# The one whitelisted key with no example is `company`: every operator on it is
-# inert today (see the describe below and CRM-509), so there is no true boolean
-# to assert until that is fixed.
 RSpec.describe AutomationRules::ConditionsFilterService do
   let!(:vip) { Label.create!(title: "vip-#{SecureRandom.hex(3)}", color: '#abcdef') }
   let!(:gold) { Label.create!(title: "gold-#{SecureRandom.hex(3)}", color: '#ffd700') }
@@ -98,6 +95,53 @@ RSpec.describe AutomationRules::ConditionsFilterService do
     it 'is_not_present matches a bare contact, not a labelled one' do
       expect_match([cond('labels', 'is_not_present', [])], expected: true, on: bare_contact)
       expect_match([cond('labels', 'is_not_present', [])], expected: false)
+    end
+  end
+
+  # `company` is an association: the value is the company's id, and "not equal"
+  # includes a contact with no company at all, the way the Contacts filter reads it.
+  describe 'company' do
+    let(:acme) { Contact.create!(name: 'Acme', type: 'company') }
+    let(:globex) { Contact.create!(name: 'Globex', type: 'company') }
+
+    before { ContactCompany.create!(contact: contact, company_id: acme.id) }
+
+    it 'equal_to matches the contact linked to that company, not another' do
+      expect_match([cond('company', 'equal_to', [acme.id])], expected: true)
+      expect_match([cond('company', 'equal_to', [globex.id])], expected: false)
+    end
+
+    it 'equal_to is any-of across the listed companies' do
+      expect_match([cond('company', 'equal_to', [globex.id, acme.id])], expected: true)
+    end
+
+    it 'not_equal_to matches a contact linked elsewhere AND a contact with no company' do
+      expect_match([cond('company', 'not_equal_to', [globex.id])], expected: true)
+      expect_match([cond('company', 'not_equal_to', [acme.id])], expected: false)
+      expect_match([cond('company', 'not_equal_to', [acme.id])], expected: true, on: bare_contact)
+    end
+
+    it 'is_present / is_not_present ask whether the contact has any company' do
+      expect_match([cond('company', 'is_present', [])], expected: true)
+      expect_match([cond('company', 'is_present', [])], expected: false, on: bare_contact)
+      expect_match([cond('company', 'is_not_present', [])], expected: true, on: bare_contact)
+      expect_match([cond('company', 'is_not_present', [])], expected: false)
+    end
+
+    it 'ignores a soft-deleted link' do
+      ContactCompany.find_by!(contact: contact, company_id: acme.id).update!(deleted_at: Time.current)
+      expect_match([cond('company', 'equal_to', [acme.id])], expected: false)
+      expect_match([cond('company', 'is_not_present', [])], expected: true)
+    end
+
+    it 'still refuses the text operators the screen used to offer (validation, not a PG error)' do
+      expect(Rails.logger).not_to receive(:error)
+      expect_match([cond('company', 'contains', ['Acme'])], expected: false)
+    end
+
+    it 'combines with another condition through the query operator' do
+      expect_match([cond('company', 'equal_to', [acme.id], 'AND'), cond('name', 'equal_to', ['Jane'])], expected: true)
+      expect_match([cond('company', 'equal_to', [globex.id], 'AND'), cond('name', 'equal_to', ['Jane'])], expected: false)
     end
   end
 

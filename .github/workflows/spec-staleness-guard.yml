@@ -15,6 +15,10 @@ on:
       - 'app/models/contact.rb'
       - 'app/models/role.rb'
       - 'app/services/automation_rules/**'
+      # The automation evaluator inherits from FilterService and both read the
+      # contact_companies association, so one has to trigger the other's spec.
+      - 'app/services/filter_service.rb'
+      - 'spec/services/contacts/filter_service_spec.rb'
       - 'app/services/pipelines/**'
       - 'app/listeners/automation_rule_listener*.rb'
       - 'app/listeners/pipeline_stage_automation_listener.rb'
@@ -299,6 +303,36 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # The advisory lock in ensure_display_id is what keeps two simultaneous
+      # creations off the same display_id, and only a real-concurrency spec sees it.
+      - 'spec/models/conversation_display_id_concurrency_spec.rb'
+      # Served under `defaults: { format: 'json' }`, where an action that stops rendering
+      # answers 204 instead of failing and the public page just goes blank. No other lane
+      # runs spec/requests/public/**.
+      - 'app/controllers/public/api/v1/csat_survey_controller.rb'
+      - 'spec/requests/public/api/v1/csat_survey_controller_spec.rb'
+      # The evo-core client's timeouts are four class-body lines; dropping any brings
+      # back Net::HTTP's 60s, and no other lane runs either spec.
+      - 'app/services/evo_ai_core_service.rb'
+      - 'spec/services/evo_ai_core_service_spec.rb'
+      - 'spec/requests/api/v1/agents_spec.rb'
+      # A validation 422's language is spread across the catalogue, the default-locale wiring,
+      # the fallback chain, the envelope message and the generic length validator; any one of
+      # them reverting alone puts English back on a translated screen.
+      - 'config/application.rb'
+      - 'config/initializers/languages.rb'
+      - 'config/locales/en.yml'
+      - 'config/locales/pt_BR.yml'
+      - 'app/controllers/api/base_controller.rb'
+      - 'app/models/application_record.rb'
+      - 'spec/requests/api/v1/validation_error_locale_spec.rb'
+      - 'spec/initializers/default_locale_spec.rb'
+      # Same variable, one consumer that is not a locale: it reaches an English prompt, so it
+      # has to arrive as a language name.
+      - 'lib/integrations/openai_base_service.rb'
+      - 'lib/integrations/openai/processor_service.rb'
+      - 'lib/integrations/openai/global_processor_service.rb'
+      - 'spec/lib/integrations/openai_language_spec.rb'
       # Nothing else reads NOTIFICATION_TYPES, whose values are the bit
       # positions NotificationSetting stores; and db:prepare loads schema.rb, so
       # the drop migration has no other runner.
@@ -371,6 +405,7 @@ jobs:
             spec/services/automation_rules/pipeline_assignment_multi_pipeline_spec.rb \
             spec/services/automation_rules/conditions_filter_service_spec.rb \
             spec/services/automation_rules/conditions_filter_service_contact_spec.rb \
+            spec/services/contacts/filter_service_spec.rb \
             spec/services/pipelines/stage_automation_service_spec.rb \
             spec/listeners/automation_rule_listener_attribute_changed_spec.rb \
             spec/requests/api/v1/automation_rules_spec.rb \
@@ -454,6 +489,13 @@ jobs:
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             spec/services/automation_rules/create_pipeline_task_card_spec.rb \
+            spec/models/conversation_display_id_concurrency_spec.rb \
+            spec/requests/public/api/v1/csat_survey_controller_spec.rb \
+            spec/services/evo_ai_core_service_spec.rb \
+            spec/requests/api/v1/agents_spec.rb \
+            spec/requests/api/v1/validation_error_locale_spec.rb \
+            spec/initializers/default_locale_spec.rb \
+            spec/lib/integrations/openai_language_spec.rb \
             spec/regression/conversation_mention_retirement_spec.rb \
             spec/helpers/message_format_helper_spec.rb \
             spec/migrations/20260914120000_drop_mentions_table_spec.rb \

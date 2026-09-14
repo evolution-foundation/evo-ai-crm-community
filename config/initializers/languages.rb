@@ -44,4 +44,17 @@ LANGUAGES_CONFIG = {
   39 => { name: 'Српски (sr)', iso_639_3_code: 'srp', iso_639_1_code: 'sr', enabled: false }
 }.filter { |_key, val| val[:enabled] }.freeze
 
-Rails.configuration.i18n.available_locales = LANGUAGES_CONFIG.map { |_index, lang| lang[:iso_639_1_code].to_sym }
+enabled_locales = LANGUAGES_CONFIG.map { |_index, lang| lang[:iso_639_1_code].to_sym }
+Rails.configuration.i18n.available_locales = enabled_locales
+
+# A body built from rescue_from renders under default_locale, never under the around_action's
+# with_locale: ActionController::Rescue wraps the callbacks and the block has already unwound.
+# Set as config, not with I18n.default_locale=, because the railtie applies it with the
+# available-locales check off. pt-BR is normalised to pt_BR, the form a deploy guide writes.
+configured_locale = ENV.fetch('DEFAULT_LOCALE', nil).presence
+normalized_locale = configured_locale&.tr('-', '_')&.to_sym
+if enabled_locales.include?(normalized_locale)
+  Rails.configuration.i18n.default_locale = normalized_locale
+elsif configured_locale
+  Rails.logger&.warn("DEFAULT_LOCALE=#{configured_locale} is not an enabled language; keeping #{I18n.default_locale}")
+end

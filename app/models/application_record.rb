@@ -40,7 +40,9 @@ class ApplicationRecord < ActiveRecord::Base
     max_length = column.type == :text ? 20_000 : 255
     return if self[column.name].nil? || self[column.name].length <= max_length
 
-    errors.add(column.name.to_sym, "is too long (maximum is #{max_length} characters)")
+    # The symbol, not the sentence: a String is echoed back verbatim by ActiveModel::Error and
+    # would stay in English on every installation, whatever the locale.
+    errors.add(column.name.to_sym, :too_long, count: max_length)
   end
 
   def normalize_empty_string_to_nil(attrs = [])

@@ -8,6 +8,23 @@ class Integrations::OpenaiBaseService
   ALLOWED_EVENT_NAMES = %w[rephrase summarize reply_suggestion fix_spelling_grammar shorten expand make_friendly make_formal simplify generate_prompt review_prompt].freeze
   CACHEABLE_EVENTS = %w[].freeze
 
+  # DEFAULT_LOCALE holds a locale code and this value is interpolated into an English prompt,
+  # so the code has to become a language name first: "respond in pt_BR" is not an instruction.
+  # `en` maps to the 'english' sentinel that keeps the generic, language-adaptive instruction.
+  LANGUAGE_NAMES = {
+    'en' => 'english',
+    'pt_BR' => 'Brazilian Portuguese',
+    'pt' => 'Portuguese',
+    'es' => 'Spanish',
+    'fr' => 'French',
+    'it' => 'Italian'
+  }.freeze
+
+  def self.configured_language
+    configured = GlobalConfigService.load('DEFAULT_LOCALE', 'english')
+    LANGUAGE_NAMES.fetch(configured, configured)
+  end
+
   pattr_initialize [:hook!, :event!]
 
   def perform

@@ -6,6 +6,27 @@ class EvoAiCoreService
   # Use Core AI Service directly
   base_uri ENV.fetch('EVO_AI_CORE_SERVICE_URL', 'http://localhost:5555')
 
+  # A bad value would become timeout 0 and fail every call, so refuse it at boot.
+  def self.timeout_from_env(name, default)
+    raw = ENV.fetch(name, '').strip
+    return default if raw.empty?
+
+    # Base 10 explicitly: Integer() would read "010" as octal and reject "08".
+    value = Integer(raw, 10, exception: false)
+    raise ArgumentError, "#{name} must be a positive number of seconds, got #{raw.inspect}" unless value&.positive?
+
+    value
+  end
+  private_class_method :timeout_from_env
+
+  # Without these, Net::HTTP's 60s default lets one hung core drain the Puma pool.
+  open_timeout timeout_from_env('EVO_AI_CORE_OPEN_TIMEOUT', 5)
+  read_timeout timeout_from_env('EVO_AI_CORE_READ_TIMEOUT', 15)
+  # read_timeout does not cover the write: a large body blocks once the buffer fills.
+  write_timeout timeout_from_env('EVO_AI_CORE_WRITE_TIMEOUT', 15)
+  # Net::HTTP retries an idempotent request once after a read timeout, doubling the wait.
+  default_options[:max_retries] = 0
+
   # Failures talking to evo-core surface as these two, never as a bare
   # StandardError (which Api::BaseController turns into a 500).
 
@@ -65,8 +86,8 @@ class EvoAiCoreService
             # Rails request headers (ActionDispatch::Http::Headers)
             headers_hash = request_headers.env
 
-            # Pass through OAuth headers
-            ['Authorization', 'X-User-Id'].each do |header|
+            # A multi-tenant core answers 403 without X-Evo-Tenant-Id.
+            ['Authorization', 'X-User-Id', 'X-Evo-Tenant-Id'].each do |header|
               value = headers_hash[header] || headers_hash[header.upcase] || headers_hash["HTTP_#{header.upcase.gsub('-', '_')}"]
               headers[header] = value if value.present?
             end
@@ -169,6 +190,20 @@ class EvoAiCoreService
       call_core(:post, url, {
         body: agent_data.to_json,
         headers: build_headers(request_headers)
+      })
+    end
+
+    # Multipart: the core reads an uploaded file and checks its extension, so
+    # HTTParty sets the content type and boundary instead of build_headers.
+    def import_agents(file, folder_id = nil, request_headers = nil)
+      url = "/api/v1/agents/import"
+      body = { file: file }
+      body[:folder_id] = folder_id if folder_id.present?
+
+      call_core(:post, url, {
+        body: body,
+        headers: build_headers(request_headers).except('Content-Type'),
+        multipart: true
       })
     end
 
