@@ -304,6 +304,9 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # The advisory lock in ensure_display_id is what keeps two simultaneous
+      # creations off the same display_id, and only a real-concurrency spec sees it.
+      - 'spec/models/conversation_display_id_concurrency_spec.rb'
       # Served under `defaults: { format: 'json' }`, where an action that stops rendering
       # answers 204 instead of failing and the public page just goes blank. No other lane
       # runs spec/requests/public/**.
@@ -460,6 +463,7 @@ jobs:
             spec/services/super_admin_fossil_spec.rb \
             spec/services/automation_rules/create_pipeline_task_author_spec.rb \
             spec/services/automation_rules/create_pipeline_task_card_spec.rb \
+            spec/models/conversation_display_id_concurrency_spec.rb \
             spec/requests/public/api/v1/csat_survey_controller_spec.rb \
             spec/services/evo_ai_core_service_spec.rb \
             spec/requests/api/v1/agents_spec.rb \
