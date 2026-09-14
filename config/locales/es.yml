@@ -116,7 +116,6 @@ es:
       conversation_creation: 'Una conversación (#%{display_id}) ha sido creada en %{inbox_name}'
       conversation_assignment: 'Una conversación (#%{display_id}) te ha sido asignada'
       assigned_conversation_new_message: 'Un nuevo mensaje fue creado en la conversación (#%{display_id})'
-      conversation_mention: 'Has sido mencionado en la conversación (#%{display_id})'
     attachment: 'Adjunto'
     no_content: 'Sin contenido'
   conversations:

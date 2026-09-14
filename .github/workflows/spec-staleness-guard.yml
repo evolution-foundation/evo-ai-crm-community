@@ -201,7 +201,6 @@ on:
       - 'app/services/whatsapp/evolution_go_handlers/messages_upsert.rb'
       - 'app/jobs/webhooks/whatsapp_events_job.rb'
       - 'app/services/facebook/moderation/action_executor_service.rb'
-      - 'app/services/messages/mention_service.rb'
       - 'spec/services/super_admin_fossil_spec.rb'
       - 'spec/services/whatsapp/incoming_message_base_service_spec.rb'
       - 'spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb'
@@ -334,6 +333,16 @@ on:
       - 'lib/integrations/openai/processor_service.rb'
       - 'lib/integrations/openai/global_processor_service.rb'
       - 'spec/lib/integrations/openai_language_spec.rb'
+      # Nothing else reads NOTIFICATION_TYPES, whose values are the bit
+      # positions NotificationSetting stores; and db:prepare loads schema.rb, so
+      # the drop migration has no other runner.
+      - 'app/models/notification.rb'
+      - 'app/models/notification_setting.rb'
+      - 'app/helpers/message_format_helper.rb'
+      - 'db/migrate/20260914120000_drop_mentions_table.rb'
+      - 'spec/regression/conversation_mention_retirement_spec.rb'
+      - 'spec/helpers/message_format_helper_spec.rb'
+      - 'spec/migrations/20260914120000_drop_mentions_table_spec.rb'
 
 permissions:
   contents: read
@@ -487,4 +496,7 @@ jobs:
             spec/requests/api/v1/validation_error_locale_spec.rb \
             spec/initializers/default_locale_spec.rb \
             spec/lib/integrations/openai_language_spec.rb \
+            spec/regression/conversation_mention_retirement_spec.rb \
+            spec/helpers/message_format_helper_spec.rb \
+            spec/migrations/20260914120000_drop_mentions_table_spec.rb \
             --format progress

@@ -116,7 +116,6 @@ pt:
       conversation_creation: 'A conversa (#%{display_id}) foi criada em %{inbox_name}'
       conversation_assignment: 'A conversa (#%{display_id}) foi-lhe atribuída'
       assigned_conversation_new_message: 'Foi criada uma mensagem nova na conversa (#%{display_id})'
-      conversation_mention: 'Foi mencionado na conversa (#%{display_id})'
     attachment: 'Anexo'
     no_content: 'Sem conteúdo'
   conversations:

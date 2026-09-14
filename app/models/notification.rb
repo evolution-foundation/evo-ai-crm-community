@@ -23,7 +23,6 @@
 #  uniq_secondary_actor_per_account_notifications  (secondary_actor_type,secondary_actor_id)
 #
 class Notification < ApplicationRecord
-  include MessageFormatHelper
   belongs_to :user
 
   belongs_to :primary_actor, polymorphic: true
@@ -33,7 +32,6 @@ class Notification < ApplicationRecord
     conversation_creation: 1,
     conversation_assignment: 2,
     assigned_conversation_new_message: 3,
-    conversation_mention: 4,
     participating_conversation_new_message: 5,
     pipeline_task_assigned: 20,
     pipeline_task_due_soon: 21,
@@ -79,14 +77,12 @@ class Notification < ApplicationRecord
     }
   end
 
-  # rubocop:disable Metrics/MethodLength
   def push_message_title
     notification_title_map = {
       'conversation_creation' => 'notifications.notification_title.conversation_creation',
       'conversation_assignment' => 'notifications.notification_title.conversation_assignment',
       'assigned_conversation_new_message' => 'notifications.notification_title.assigned_conversation_new_message',
-      'participating_conversation_new_message' => 'notifications.notification_title.assigned_conversation_new_message',
-      'conversation_mention' => 'notifications.notification_title.conversation_mention'
+      'participating_conversation_new_message' => 'notifications.notification_title.assigned_conversation_new_message'
     }
 
     i18n_key = notification_title_map[notification_type]
@@ -98,15 +94,14 @@ class Notification < ApplicationRecord
     if notification_type == 'conversation_creation'
       return '' unless primary_actor&.respond_to?(:inbox) && primary_actor.inbox&.respond_to?(:name)
       I18n.t(i18n_key, display_id: conversation.display_id, inbox_name: primary_actor.inbox.name)
-    elsif %w[conversation_assignment assigned_conversation_new_message participating_conversation_new_message
-             conversation_mention].include?(notification_type)
+    elsif %w[conversation_assignment assigned_conversation_new_message
+             participating_conversation_new_message].include?(notification_type)
       I18n.t(i18n_key, display_id: conversation.display_id)
     else
       return '' unless primary_actor&.respond_to?(:display_id)
       I18n.t(i18n_key, display_id: primary_actor.display_id)
     end
   end
-  # rubocop:enable Metrics/MethodLength
 
   # conversation_creation and conversation_assignment use scoped message queries
   # (.incoming, .outgoing) that bypass association caches — known N+1 per those types.
@@ -115,7 +110,7 @@ class Notification < ApplicationRecord
     when 'conversation_creation', 'sla_missed_first_response'
       return '' unless conversation&.respond_to?(:messages)
       message_body(conversation.messages.first)
-    when 'assigned_conversation_new_message', 'participating_conversation_new_message', 'conversation_mention'
+    when 'assigned_conversation_new_message', 'participating_conversation_new_message'
       message_body(secondary_actor)
     when 'conversation_assignment'
       return '' unless conversation&.respond_to?(:messages)
@@ -133,7 +128,7 @@ class Notification < ApplicationRecord
   # Used by both the REST serializer and push_event_data so the logic lives in one place.
   def notification_sender
     case notification_type
-    when 'assigned_conversation_new_message', 'participating_conversation_new_message', 'conversation_mention'
+    when 'assigned_conversation_new_message', 'participating_conversation_new_message'
       secondary_actor.try(:sender)
     when 'conversation_creation'
       conversation&.messages&.first&.sender
@@ -164,7 +159,7 @@ class Notification < ApplicationRecord
     attachments = actor.try(:attachments)
 
     if content.present?
-      transform_user_mention_content(content.truncate(40))
+      content.truncate(40)
     else
       attachments.present? ? I18n.t('notifications.attachment') : I18n.t('notifications.no_content')
     end

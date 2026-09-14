@@ -29,7 +29,7 @@ EVIDENCE_ROOT="${4:-.}"
 # Tables destroyed while deleting a contact/conversation/inbox. A non-cascade FK into
 # any of them breaks the delete unless something removes the child first.
 PARENTS="conversations contacts messages pipeline_items contact_inboxes notes \
-csat_survey_responses mentions conversation_participants reporting_events"
+csat_survey_responses conversation_participants reporting_events"
 
 # Files that are allowed to be the "something removes the child first".
 EVIDENCE_CLEANUPS="app/controllers/api/v1/contacts_controller.rb app/jobs/delete_object_job.rb"

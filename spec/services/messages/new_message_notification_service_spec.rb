@@ -157,7 +157,7 @@ RSpec.describe Messages::NewMessageNotificationService do
       expect(NotificationBuilder).not_to have_received(:new)
     end
 
-    it 'skips an inbox member already notified (e.g. as a participant or mention)' do
+    it 'skips an inbox member already notified (e.g. as a participant)' do
       allow(inbox).to receive(:members).and_return([member])
       allow(notified_relation).to receive(:pluck).with(:user_id).and_return([member.id])
 

@@ -1,9 +1,7 @@
 module MessageFormatHelper
-  include RegexHelper
-
-  def transform_user_mention_content(message_content)
-    # attachment message without content, message_content is nil
-    message_content.presence ? message_content.gsub(MENTION_REGEX, '\1') : ''
+  # An attachment-only message carries content nil, and CommonMarker raises on it.
+  def message_body_content(message_content)
+    message_content.presence || ''
   end
 
   def render_message_content(message_content)

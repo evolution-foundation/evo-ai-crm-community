@@ -58,7 +58,6 @@ class DeleteObjectJob < ApplicationJob
     # be cleared here or conversation.destroy! raises PG::ForeignKeyViolation.
     # Reached by DELETE /api/v1/conversations/:id and by the inbox cleanup above.
     MacroExecution.where(conversation_id: conversation.id).destroy_all
-    conversation.mentions.destroy_all
     conversation.conversation_participants.destroy_all
     conversation.notifications.destroy_all
     conversation.reporting_events.destroy_all
