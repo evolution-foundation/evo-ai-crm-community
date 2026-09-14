@@ -2,20 +2,13 @@
 
 require 'rails_helper'
 
-# CRM-579 — the conversation mention was retired, not disabled.
-#
-# Two jobs here. The first is the removal itself: a partial revert (a leftover
-# listener method, a constant the grep missed) is the failure mode of a feature
-# deleted across 31 files. The second is the claim the retirement rests on —
-# `NotificationSetting` derives its FlagShihTzu flags from the VALUES of
-# NOTIFICATION_TYPES, so those values are bit POSITIONS. Dropping key 4 leaves
-# bit 4 orphaned and inert; renumbering the survivors would silently move every
-# notification preference already saved. The second block is what goes red if
-# someone later "tidies up" the remaining numbers.
+# Pins two things about the retired conversation mention: that no part of it
+# came back, and the VALUES of NOTIFICATION_TYPES — FlagShihTzu reads those as
+# bit positions, so renumbering the survivors would silently move every saved
+# notification preference.
 
-# `type => the flags integer a user with ONLY that type enabled carries`.
-# Bit position N is worth 2**(N-1); these are the numbers sitting in
-# notification_settings.email_flags / push_flags in every live database.
+# Bit position N is worth 2**(N-1). These integers are already stored in
+# notification_settings.email_flags / push_flags.
 SAVED_BIT_VALUES = {
   conversation_creation: 1,
   conversation_assignment: 2,
@@ -27,7 +20,7 @@ SAVED_BIT_VALUES = {
   pipeline_task_completed: 4_194_304
 }.freeze
 
-RSpec.describe 'conversation_mention retirement (CRM-579)' do # rubocop:disable RSpec/DescribeClass
+RSpec.describe 'conversation_mention retirement' do # rubocop:disable RSpec/DescribeClass
   describe 'nothing of the feature is left' do
     it 'drops the notification type' do
       expect(Notification::NOTIFICATION_TYPES).not_to have_key(:conversation_mention)

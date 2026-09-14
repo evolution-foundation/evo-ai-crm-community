@@ -3,10 +3,8 @@
 require 'rails_helper'
 require_relative '../../db/migrate/20260914120000_drop_mentions_table'
 
-# `db:prepare` loads schema.rb and never runs this migration, so without this
-# spec both branches ship unexecuted. The RLS branch matters more than it looks:
-# the enterprise overlay puts FORCE row-level security on `notifications`, and a
-# role that does not bypass it deletes zero rows while reporting success.
+# `db:prepare` loads schema.rb and never runs this migration, so nothing else
+# executes either branch.
 RSpec.describe DropMentionsTable, type: :migration do
   let(:verbose) { false }
   let(:migration) { described_class.new.tap { |m| m.verbose = verbose } }

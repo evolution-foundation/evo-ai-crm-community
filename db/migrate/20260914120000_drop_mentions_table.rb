@@ -1,23 +1,17 @@
-# CRM-579 — the mention never had a producer in this fork.
-#
-# Its only writer was `Conversations::UserMentionJob`, reached from a regex that
-# required a NUMERIC id while `users.id` and `teams.id` have been uuid since the
-# initial migration. The table is empty by construction, and `up` checks that
-# instead of assuming it.
+# The mention feature had no producer, so the table is expected to be empty.
+# `up` verifies that instead of assuming it.
 class DropMentionsTable < ActiveRecord::Migration[7.1]
-  # `conversation_mention`, dropped from Notification::NOTIFICATION_TYPES: a row
-  # left with this value would deserialize to a nil type.
+  # The enum no longer names this value, so it cannot be referenced by name.
   ORPHAN_NOTIFICATION_TYPE = 4
 
   def up
-    # Read before dropping: `row_security_active` is per role and per table, and
-    # it is true exactly when this connection is filtered — which turns every
-    # count below into a lower bound. The enterprise overlay puts RLS on both.
+    # The count and the DELETE below are plain DML, so row-level security makes
+    # them read 0 and delete 0 while still reporting success. Asked before the
+    # drop, reported after it.
     filtered = %i[mentions notifications].select { |table| table_exists?(table) && row_security_active?(table) }
 
     if table_exists?(:mentions)
-      # An installation that imported rows from elsewhere (e.g. a dump of an
-      # upstream with `users.id` bigint) has to be seen, not run over silently.
+      # Non-zero only where rows came from a dump with bigint user ids.
       leftover = select_value('SELECT count(*) FROM mentions').to_i
       say "mentions: #{leftover} row(s) discarded" if leftover.positive?
     end
@@ -30,8 +24,7 @@ class DropMentionsTable < ActiveRecord::Migration[7.1]
     warn_row_security(filtered)
   end
 
-  # Restores the table and its three indexes — not the notification rows `up`
-  # deleted, which carry a type this schema no longer names.
+  # Restores the table and its indexes, not the notifications `up` deleted.
   def down
     create_table :mentions, id: :uuid, default: -> { 'gen_random_uuid()' }, force: :cascade do |t|
       t.uuid :user_id, null: false

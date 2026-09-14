@@ -299,12 +299,9 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
-      # CRM-579: the conversation mention was retired. The specs that prove it
-      # are the only thing standing between a partial revert and a silent one —
-      # nothing else reads NOTIFICATION_TYPES, and the bit positions it declares
-      # are what NotificationSetting stores in every user's saved preference.
-      # The drop migration has no other runner either: db:prepare loads
-      # schema.rb and never executes it.
+      # Nothing else reads NOTIFICATION_TYPES, whose values are the bit
+      # positions NotificationSetting stores; and db:prepare loads schema.rb, so
+      # the drop migration has no other runner.
       - 'app/models/notification.rb'
       - 'app/models/notification_setting.rb'
       - 'app/helpers/message_format_helper.rb'

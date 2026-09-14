@@ -2,10 +2,8 @@
 
 require 'rails_helper'
 
-# CRM-579 split `transform_user_mention_content` in two: the mention stripping
-# went away with the feature, the nil coercion stayed. Only the second half has
-# a caller that breaks without it — `EvolutionMarkdownRenderer` hands the content
-# straight to CommonMarker, which raises on nil.
+# The nil coercion is the load-bearing half: CommonMarker raises on nil, and an
+# attachment-only message reaches the renderer with no content.
 RSpec.describe MessageFormatHelper do
   subject(:helper) { Class.new { include MessageFormatHelper }.new }
 
