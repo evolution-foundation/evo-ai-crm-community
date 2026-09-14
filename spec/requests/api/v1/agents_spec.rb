@@ -65,6 +65,15 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     allow(EvoAiCoreService).to receive(:create_agent).and_return({ 'id' => 'agent-1' })
     allow(EvoAiCoreService).to receive(:update_agent).and_return({ 'id' => 'agent-1' })
     allow(EvoAiCoreService).to receive(:delete_agent).and_return(nil)
+    allow(EvoAiCoreService).to receive(:import_agents).and_return([{ 'id' => 'agent-1' }])
+  end
+
+  # The core checks the extension, and what it sees is the upload's own filename.
+  def agents_upload(filename: 'agents.json', content: [{ name: 'Bot' }].to_json)
+    file = Tempfile.new([File.basename(filename, '.*'), File.extname(filename)])
+    file.write(content)
+    file.rewind
+    Rack::Test::UploadedFile.new(file.path, 'application/json', original_filename: filename)
   end
 
   context 'with a role that holds the ai_agents.* gate' do
@@ -96,6 +105,156 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
       expect(response).to have_http_status(:no_content)
       expect(EvoAiCoreService).to have_received(:delete_agent)
     end
+
+    it 'allows bulk_create (ai_agents.create)' do
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'Bot A' }, { name: 'Bot B' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(EvoAiCoreService).to have_received(:create_agent).twice
+      expect(json_response['created_count']).to eq(2)
+    end
+
+    it 'forbids import without ai_agents.import' do
+      post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
+
+      expect(response).to have_http_status(:forbidden)
+      expect(EvoAiCoreService).not_to have_received(:import_agents)
+    end
+  end
+
+  context 'with a role that holds ai_agents.import' do
+    before { stub_auth(role_key: 'custom_ai_importer', granted: %w[ai_agents.import]) }
+
+    it 'allows import' do
+      post '/api/v1/agents/import', params: { file: agents_upload, folder_id: 'folder-1' }, headers: headers
+
+      expect(response).to have_http_status(:created)
+      expect(EvoAiCoreService).to have_received(:import_agents)
+    end
+
+    it 'rejects a request with no file before calling the core' do
+      post '/api/v1/agents/import', params: {}, headers: headers, as: :json
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response['error']['code']).to eq('MISSING_REQUIRED_FIELD')
+      expect(EvoAiCoreService).not_to have_received(:import_agents)
+    end
+
+    it 'forbids bulk_create' do
+      post '/api/v1/agents/bulk_create', params: { agents: [{ name: 'Bot' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:forbidden)
+      expect(EvoAiCoreService).not_to have_received(:create_agent)
+    end
+  end
+
+  context 'when bulk_create receives a malformed payload' do
+    before { stub_auth(role_key: 'custom_ai_manager', granted: %w[ai_agents.create]) }
+
+    it 'rejects a missing agents list' do
+      post '/api/v1/agents/bulk_create', params: {}, headers: headers, as: :json
+
+      expect(response).to have_http_status(:bad_request)
+      expect(EvoAiCoreService).not_to have_received(:create_agent)
+    end
+
+    it 'rejects an empty agents list' do
+      post '/api/v1/agents/bulk_create', params: { agents: [] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:bad_request)
+      expect(EvoAiCoreService).not_to have_received(:create_agent)
+    end
+
+    # The literal 51, not LIMIT + 1: deriving the payload from the constant makes
+    # the example pass for any cap, including one raised by accident.
+    it 'rejects a 51-entry batch before calling the core' do
+      oversized = Array.new(51) { |i| { name: "Bot #{i}" } }
+
+      post '/api/v1/agents/bulk_create', params: { agents: oversized }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json_response['error']['code']).to eq('INVALID_INPUT')
+      expect(json_response['error']['details']).to include('limit' => 50, 'received' => 51)
+      expect(EvoAiCoreService).not_to have_received(:create_agent)
+    end
+
+    it 'forwards only the permitted agent attributes' do
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'Bot', model: 'gpt-4', not_a_field: 'x' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(EvoAiCoreService).to have_received(:create_agent) do |agent_data, _request_headers|
+        expect(agent_data.to_h).to include('name' => 'Bot', 'model' => 'gpt-4')
+        expect(agent_data.to_h).not_to have_key('not_a_field')
+      end
+    end
+  end
+
+  context 'when the core fails partway through bulk_create' do
+    before { stub_auth(role_key: 'custom_ai_manager', granted: %w[ai_agents.create]) }
+
+    it 'answers 503 when the very first entry fails, having written nothing' do
+      allow(EvoAiCoreService).to receive(:create_agent).and_raise(EvoAiCoreService::UnavailableError)
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:service_unavailable)
+    end
+
+    it 'answers 207 naming what was created when a later entry fails' do
+      call_count = 0
+      allow(EvoAiCoreService).to receive(:create_agent) do
+        call_count += 1
+        raise EvoAiCoreService::UpstreamError.new('boom', status: 500) if call_count == 3
+
+        { 'id' => "agent-#{call_count}" }
+      end
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:multi_status)
+      expect(json_response['created_count']).to eq(2)
+      expect(json_response['agents'].map { |a| a['id'] }).to eq(%w[agent-1 agent-2])
+      expect(json_response['failed_at']).to eq(2)
+      expect(json_response['error']['code']).to eq('EXTERNAL_SERVICE_ERROR')
+      expect(json_response['error']['details']).to eq('upstream_status' => 500)
+    end
+
+    it 'separates a core that went away from an entry the core refused' do
+      call_count = 0
+      allow(EvoAiCoreService).to receive(:create_agent) do
+        call_count += 1
+        raise EvoAiCoreService::UnavailableError if call_count == 2
+
+        { 'id' => "agent-#{call_count}" }
+      end
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:multi_status)
+      expect(json_response['created_count']).to eq(1)
+      expect(json_response['error']['code']).to eq('SERVICE_UNAVAILABLE')
+      expect(json_response['error']).not_to have_key('details')
+    end
+
+    # rack-timeout kills the request at 15s, and a killed request answers 500
+    # with no list of what the core already wrote.
+    it 'stops on its own time budget and still reports what it wrote' do
+      stub_const('Api::V1::AgentsController::BULK_CREATE_BUDGET_SECONDS', 0)
+
+      post '/api/v1/agents/bulk_create',
+           params: { agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:multi_status)
+      expect(json_response['created_count']).to eq(1)
+      expect(json_response['failed_at']).to eq(1)
+      expect(json_response['error']['code']).to eq('TIMEOUT_ERROR')
+      expect(EvoAiCoreService).to have_received(:create_agent).once
+    end
   end
 
   context 'with a role that holds only the stale agents.* gate (proves the repoint)' do
@@ -120,6 +279,100 @@ RSpec.describe 'Api::V1::Agents (ai_agents gate)', type: :request do
     it 'forbids index' do
       get '/api/v1/agents', headers: headers, as: :json
       expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  # Pinned on the wire rather than stubbed at the service: multipart is the part
+  # that breaks silently.
+  context 'when import reaches the wire' do
+    let(:core_import_url) { "#{EvoAiCoreService.base_uri}/api/v1/agents/import" }
+
+    before do
+      stub_auth(role_key: 'custom_ai_importer', granted: %w[ai_agents.import])
+      allow(EvoAiCoreService).to receive(:import_agents).and_call_original
+    end
+
+    it 'sends multipart, keeps the .json filename and carries folder_id' do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [{ id: 'agent-1' }] }.to_json,
+          headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import',
+           params: { file: agents_upload(filename: 'agents.json'), folder_id: 'folder-9' },
+           headers: headers
+
+      expect(response).to have_http_status(:created)
+      expect(captured.headers['Content-Type']).to start_with('multipart/form-data; boundary=')
+      expect(captured.body).to include('name="file"')
+      expect(captured.body).to include('filename="agents.json"')
+      expect(captured.body).to include('name="folder_id"')
+      expect(captured.body).to include('folder-9')
+    end
+
+    it "forwards the caller's tenant header to the core" do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [] }.to_json, headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import',
+           params: { file: agents_upload },
+           headers: headers.merge('X-Evo-Tenant-Id' => 'tenant-7')
+
+      expect(response).to have_http_status(:created)
+      expect(captured.headers['X-Evo-Tenant-Id']).to eq('tenant-7')
+    end
+
+    it 'sends no tenant header when the caller did not supply one' do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [] }.to_json, headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
+
+      expect(response).to have_http_status(:created)
+      expect(captured.headers).not_to have_key('X-Evo-Tenant-Id')
+    end
+
+    it 'omits folder_id when the client did not send one' do
+      captured = nil
+      stub_request(:post, core_import_url).to_return do |request|
+        captured = request
+        { status: 201, body: { data: [] }.to_json, headers: { 'Content-Type' => 'application/json' } }
+      end
+
+      post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
+
+      expect(response).to have_http_status(:created)
+      expect(captured.body).not_to include('name="folder_id"')
+    end
+
+    it 'relays the core 400 for a rejected file' do
+      stub_request(:post, core_import_url).to_return(
+        status: 400,
+        body: { error: 'Invalid file type. Only JSON files are allowed.' }.to_json,
+        headers: { 'Content-Type' => 'application/json' }
+      )
+
+      post '/api/v1/agents/import', params: { file: agents_upload(filename: 'agents.txt') }, headers: headers
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response['error']['code']).to eq('EXTERNAL_SERVICE_ERROR')
+    end
+
+    it 'answers 503 when the core is unreachable' do
+      stub_request(:post, core_import_url).to_raise(Errno::ECONNREFUSED)
+
+      post '/api/v1/agents/import', params: { file: agents_upload }, headers: headers
+
+      expect(response).not_to have_http_status(:internal_server_error)
+      expect(response).to have_http_status(:service_unavailable)
     end
   end
 
