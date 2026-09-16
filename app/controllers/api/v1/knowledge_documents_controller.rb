@@ -3,6 +3,7 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
     index: 'ai_agents.read',
     show: 'ai_agents.read',
     create: 'ai_agents.create',
+    upload: 'ai_agents.create',
     destroy: 'ai_agents.delete'
   })
 
@@ -34,6 +35,30 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
   def destroy
     @document.destroy
     head :no_content
+  end
+
+  def upload
+    @document = @knowledge_base.knowledge_documents.new(
+      title: params[:title].presence || params[:file]&.original_filename,
+      source_type: 'upload',
+      status: 'processing',
+      tags: Array(params[:tags])
+    )
+    @document.source_file.attach(params[:file])
+
+    if @document.save
+      extracted = Knowledge::TextExtractor.new(
+        ActiveStorage::Blob.service.path_for(@document.source_file.blob.key),
+        @document.source_file.blob.content_type
+      ).extract
+      @document.update!(metadata: { 'raw_content' => extracted })
+      success_response(data: KnowledgeDocumentSerializer.serialize(@document), status: :created)
+    else
+      render json: { errors: @document.errors.full_messages }, status: :unprocessable_entity
+    end
+  rescue Knowledge::TextExtractor::UnsupportedFormatError => e
+    @document&.destroy
+    render json: { errors: [e.message] }, status: :unprocessable_entity
   end
 
   private
