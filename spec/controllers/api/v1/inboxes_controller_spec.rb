@@ -69,6 +69,58 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
     end
   end
 
+  describe 'DELETE #destroy' do
+    let(:user) { User.create!(email: "inboxes-destroy-spec-#{SecureRandom.hex(4)}@example.com", name: 'Spec User') }
+    let(:channel) { Channel::Api.create! }
+    let!(:inbox) { Inbox.create!(name: "Destroy Spec Inbox #{SecureRandom.hex(2)}", channel: channel) }
+    let(:contact) { Contact.create!(name: 'Destroy Spec Contact', email: "destroy-spec-#{SecureRandom.hex(4)}@example.com") }
+    let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+    let!(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+    let!(:message) do
+      Message.create!(
+        inbox: inbox,
+        conversation: conversation,
+        message_type: :incoming,
+        content: 'hello before archive'
+      )
+    end
+
+    before do
+      Current.user = user
+      Current.service_authenticated = true
+      Current.authentication_method = 'service_token'
+
+      allow(controller).to receive(:authenticate_request!).and_return(true)
+      allow(controller).to receive(:authorize).and_return(true)
+      allow(controller).to receive(:pundit_user).and_return({ user: user, account_user: nil })
+    end
+
+    after { Current.reset }
+
+    it 'archives the inbox instead of destroying it, keeping conversations and messages' do
+      delete :destroy, params: { id: inbox.id }
+
+      expect(response).to have_http_status(:ok)
+      expect(inbox.reload.archived_at).to be_present
+      expect(Conversation.exists?(conversation.id)).to be true
+      expect(Message.exists?(message.id)).to be true
+    end
+
+    it 'does not enqueue DeleteObjectJob' do
+      expect(DeleteObjectJob).not_to receive(:perform_later)
+
+      delete :destroy, params: { id: inbox.id }
+    end
+
+    it 'keeps the response shape unchanged' do
+      delete :destroy, params: { id: inbox.id }
+
+      body = response.parsed_body
+      expect(body.dig('data', 'id')).to eq(inbox.id)
+      expect(body['message']).to eq(I18n.t('messages.inbox_deletetion_response'))
+    end
+  end
+
   describe '#fetch_agent_bot' do
     let(:agent_bot) { instance_double(AgentBot) }
 

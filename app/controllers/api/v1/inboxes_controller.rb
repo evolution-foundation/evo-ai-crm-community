@@ -418,7 +418,7 @@ module Api
         end
 
         def destroy
-          ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip) if @inbox.present?
+          @inbox.archive! if @inbox.present?
           success_response(
             data: { id: @inbox.id },
             message: I18n.t('messages.inbox_deletetion_response')
@@ -474,10 +474,13 @@ module Api
         # refused, or the discard commits first and the handler no longer finds
         # a channel to activate.
         #
-        # The destroy goes through DeleteObjectJob, the same path as #destroy,
-        # because its before_destroy cleanup is what removes the webhook and the
-        # channel on the Hub and gives the quota back. Synchronous because the
-        # caller has to know whether the discard actually happened.
+        # The discard goes through DeleteObjectJob — unlike #destroy (which now
+        # archives instead of hard-deleting), this path hard-deletes on purpose:
+        # a connection that never finished isn't a real inbox an operator has
+        # used, so there is nothing worth keeping archived, and the job's
+        # before_destroy cleanup is what removes the webhook and the channel on
+        # the Hub and gives the quota back. Synchronous because the caller has
+        # to know whether the discard actually happened.
         def discard_pending_hub_connection(channel)
           discarded = false
 
