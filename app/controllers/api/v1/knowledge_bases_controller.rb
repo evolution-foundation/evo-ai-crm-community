@@ -2,10 +2,11 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
   require_permissions({
     index: 'ai_agents.read',
     create: 'ai_agents.create',
-    destroy: 'ai_agents.delete'
+    destroy: 'ai_agents.delete',
+    search: 'ai_agents.read'
   })
 
-  before_action :knowledge_base, only: [:destroy]
+  before_action :knowledge_base, only: [:destroy, :search]
 
   def index
     @knowledge_bases = KnowledgeBase.order(created_at: :desc)
@@ -24,6 +25,18 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
   def destroy
     @knowledge_base.destroy
     head :no_content
+  end
+
+  def search
+    embedding = Knowledge::EmbeddingService.new.embed(params[:query].to_s)
+    entries = KnowledgeEntry.search(
+      knowledge_base_id: @knowledge_base.id,
+      query_embedding: embedding,
+      tags: params[:tags],
+      limit: (params[:max_results] || 10).to_i
+    )
+
+    render json: { results: entries.map { |e| { content: e.content, tags: e.tags, document_title: e.knowledge_document.title } } }
   end
 
   private
