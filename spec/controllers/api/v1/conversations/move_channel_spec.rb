@@ -30,6 +30,7 @@ RSpec.describe Api::V1::ConversationsController, type: :controller do
     let(:user) { instance_double(User, role: 'agent') }
     let(:conversation) { instance_double(Conversation) }
     let(:target_inbox) { instance_double(Inbox, id: 99) }
+    let(:target_contact_inbox) { instance_double(ContactInbox, id: 77) }
     let(:serialized_payload) { { 'id' => 42, 'inbox_id' => 99 } }
 
     before do
@@ -52,7 +53,8 @@ RSpec.describe Api::V1::ConversationsController, type: :controller do
         allow(conversation).to receive(:moved_from_inbox_id=)
         allow(conversation).to receive(:update!)
         allow(conversation).to receive(:contact).and_return(instance_double(Contact))
-        allow(ContactInboxBuilder).to receive(:new).and_return(instance_double(ContactInboxBuilder, perform: true))
+        allow(ContactInboxBuilder).to receive(:new)
+          .and_return(instance_double(ContactInboxBuilder, perform: target_contact_inbox))
       end
 
       it 'moves the conversation and responds with the serialized payload' do
@@ -62,9 +64,9 @@ RSpec.describe Api::V1::ConversationsController, type: :controller do
         controller.send(:move_channel)
       end
 
-      it 'updates the conversation inbox_id to the target inbox' do
+      it 'updates the conversation inbox_id and contact_inbox_id to the target inbox' do
         allow(controller).to receive(:success_response)
-        expect(conversation).to receive(:update!).with(inbox_id: 99)
+        expect(conversation).to receive(:update!).with(inbox_id: 99, contact_inbox_id: 77)
         controller.send(:move_channel)
       end
 
@@ -74,7 +76,7 @@ RSpec.describe Api::V1::ConversationsController, type: :controller do
         allow(conversation).to receive(:contact).and_return(contact)
         expect(ContactInboxBuilder).to receive(:new)
           .with(contact: contact, inbox: target_inbox)
-          .and_return(instance_double(ContactInboxBuilder, perform: true))
+          .and_return(instance_double(ContactInboxBuilder, perform: target_contact_inbox))
         controller.send(:move_channel)
       end
     end
@@ -162,6 +164,9 @@ RSpec.describe Api::V1::ConversationsController, type: :controller do
       expect(conversation.inbox_id).to eq(inbox_b.id)
       expect(conversation.moved_from_inbox_id).to eq(inbox_a.id)
       expect(ContactInbox.exists?(contact_id: contact.id, inbox_id: inbox_b.id)).to be true
+      # Regression (I4): outgoing delivery and realtime pubsub resolve the
+      # channel via conversation.contact_inbox, so it has to follow the move.
+      expect(conversation.contact_inbox.inbox_id).to eq(inbox_b.id)
     end
 
     it 'keeps the original moved_from_inbox_id on a second move' do
