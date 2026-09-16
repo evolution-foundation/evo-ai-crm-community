@@ -72,6 +72,8 @@ gem 'neighbor'
 gem 'pdf-reader'
 # extract text from DOCX files
 gem 'docx'
+# SSRF protection for user-supplied URL crawling
+gem 'ssrf_filter'
 
 ##--- gems for server & infra configuration ---##
 gem 'dotenv-rails', '>= 3.0.0'

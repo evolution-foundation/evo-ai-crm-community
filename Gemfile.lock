@@ -920,6 +920,7 @@ GEM
       listen (>= 2.7, < 4.0)
       spring (>= 4)
     squasher (0.7.2)
+    ssrf_filter (1.6.0)
     stackprof (0.2.25)
     statsd-ruby (1.5.0)
     telephone_number (1.4.20)
@@ -1113,6 +1114,7 @@ DEPENDENCIES
   spring
   spring-watcher-listen
   squasher
+  ssrf_filter
   stackprof
   telephone_number
   test-prof
