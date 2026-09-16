@@ -29,6 +29,7 @@ module Api
           disconnect_channel_provider: 'inboxes.update',
           sync_whatsapp_subscription: 'inboxes.update',
           reactivate: 'inboxes.update',
+          replace_archived_channel: 'inboxes.create',
           avatar: 'inboxes.update',
           # Template CRUD moved to MessageTemplatesController (EVO-1716); only the
           # per-channel Meta sync remains here, keeping its inbox permission.
@@ -454,6 +455,40 @@ module Api
           success_response(
             data: InboxSerializer.serialize(@inbox),
             message: I18n.t('messages.inbox_reactivated')
+          )
+        end
+
+        # Reconnecting an archived WhatsApp number with a DIFFERENT provider than
+        # it originally had: creates a fresh Channel::Whatsapp with the submitted
+        # provider/config, re-points this inbox at it (conversations/messages stay
+        # put, they belong to the Inbox, not the Channel), and retires the old
+        # channel row. The old channel's phone_number is renamed before the new
+        # one is created so the DB unique index never sees a collision.
+        def replace_archived_channel
+          unless @inbox.whatsapp? && @inbox.archived?
+            return error_response(
+              ApiErrorCodes::VALIDATION_ERROR,
+              I18n.t('messages.inbox_channel_replace_requires_archived_whatsapp'),
+              status: :unprocessable_entity
+            )
+          end
+
+          old_channel = @inbox.channel
+          original_phone_number = old_channel.phone_number
+          channel_params = permitted_params(Channel::Whatsapp::EDITABLE_ATTRS)[:channel]
+                           .except(:type, :phone_number)
+                           .merge(phone_number: original_phone_number)
+
+          ActiveRecord::Base.transaction do
+            old_channel.update_columns(phone_number: "released-#{old_channel.id}")
+            new_channel = Channel::Whatsapp.create!(channel_params)
+            @inbox.update!(channel: new_channel, archived_at: nil)
+            old_channel.destroy!
+          end
+
+          success_response(
+            data: InboxSerializer.serialize(@inbox),
+            message: I18n.t('messages.inbox_channel_replaced')
           )
         end
 
