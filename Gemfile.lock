@@ -422,6 +422,8 @@ GEM
     multi_xml (0.6.0)
     multipart-post (2.3.0)
     mutex_m (0.3.0)
+    neighbor (0.6.0)
+      activerecord (>= 7.1)
     net-http (0.4.1)
       uri
     net-http-persistent (4.0.2)
@@ -666,6 +668,7 @@ GEM
     pg_search (2.3.6)
       activerecord (>= 5.2)
       activesupport (>= 5.2)
+    pgvector (0.3.3)
     prism (1.4.0)
     procore-sift (1.0.0)
       activerecord (>= 6.1)
@@ -1039,6 +1042,7 @@ DEPENDENCIES
   maxminddb
   meta_request (>= 0.8.3)
   mock_redis
+  neighbor
   net-smtp (~> 0.3.4)
   newrelic-sidekiq-metrics (>= 1.6.2)
   newrelic_rpm
@@ -1051,6 +1055,7 @@ DEPENDENCIES
   opentelemetry-sdk (~> 1.10)
   pg
   pg_search
+  pgvector
   procore-sift
   prometheus-client
   pry-rails

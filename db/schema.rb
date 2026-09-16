@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_15_090100) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_15_090300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -698,6 +698,38 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090100) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["default"], name: "index_knowledge_bases_on_default"
+  end
+
+  create_table "knowledge_documents", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "knowledge_base_id", null: false
+    t.string "title", null: false
+    t.text "description"
+    t.string "source_type", default: "manual", null: false
+    t.string "source_url"
+    t.string "status", default: "processing", null: false
+    t.string "last_error"
+    t.jsonb "tags", default: [], null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["knowledge_base_id", "status"], name: "index_knowledge_documents_on_knowledge_base_id_and_status"
+    t.index ["knowledge_base_id"], name: "index_knowledge_documents_on_knowledge_base_id"
+    t.index ["tags"], name: "index_knowledge_documents_on_tags", using: :gin
+  end
+
+  create_table "knowledge_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "knowledge_document_id", null: false
+    t.uuid "knowledge_base_id", null: false
+    t.integer "chunk_index", default: 0, null: false
+    t.text "content", null: false
+    t.jsonb "tags", default: [], null: false
+    t.vector "embedding", limit: 1536
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["embedding"], name: "index_knowledge_entries_on_embedding", opclass: :vector_cosine_ops, using: :ivfflat
+    t.index ["knowledge_base_id"], name: "index_knowledge_entries_on_knowledge_base_id"
+    t.index ["knowledge_document_id"], name: "index_knowledge_entries_on_knowledge_document_id"
+    t.index ["tags"], name: "index_knowledge_entries_on_tags", using: :gin
   end
 
   create_table "labels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1403,6 +1435,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090100) do
   add_foreign_key "data_privacy_consents", "users"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
+  add_foreign_key "knowledge_documents", "knowledge_bases", column: "knowledge_base_id"
+  add_foreign_key "knowledge_entries", "knowledge_bases", column: "knowledge_base_id"
+  add_foreign_key "knowledge_entries", "knowledge_documents"
   add_foreign_key "macro_executions", "conversations"
   add_foreign_key "macro_executions", "macros"
   add_foreign_key "macro_executions", "users"

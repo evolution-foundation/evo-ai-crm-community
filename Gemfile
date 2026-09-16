@@ -59,10 +59,13 @@ gem 'image_processing'
 ##-- gems for database --#
 gem 'groupdate'
 gem 'pg'
+gem 'pgvector'
 gem 'redis'
 gem 'redis-namespace'
 # super fast record imports in bulk
 gem 'activerecord-import'
+# vector similarity search with pgvector
+gem 'neighbor'
 
 ##--- gems for server & infra configuration ---##
 gem 'dotenv-rails', '>= 3.0.0'
