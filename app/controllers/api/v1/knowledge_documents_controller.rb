@@ -1,4 +1,6 @@
 class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
+  class FileTooLargeError < StandardError; end
+
   require_permissions({
     index: 'ai_agents.read',
     show: 'ai_agents.read',
@@ -54,7 +56,7 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
     else
       render json: { errors: @document.errors.full_messages }, status: :unprocessable_entity
     end
-  rescue Knowledge::TextExtractor::UnsupportedFormatError, StandardError => e
+  rescue Knowledge::TextExtractor::UnsupportedFormatError, FileTooLargeError => e
     render json: { errors: [e.message] }, status: :unprocessable_entity
   end
 
@@ -74,11 +76,10 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
 
   def extract_uploaded_text(file)
     if file.size > KnowledgeDocument::MAX_FILE_SIZE
-      raise ActiveRecord::RecordInvalid,
-            "File size must be smaller than #{KnowledgeDocument::MAX_FILE_SIZE / 1.megabyte}MB"
+      raise FileTooLargeError, "File size must be smaller than #{KnowledgeDocument::MAX_FILE_SIZE / 1.megabyte}MB"
     end
 
-    file.tempfile.rewind  # Ensure we're at the beginning of the file
+    file.tempfile.rewind
 
     Tempfile.create(['upload', File.extname(file.original_filename)], binmode: true) do |tmp|
       IO.copy_stream(file.tempfile, tmp)

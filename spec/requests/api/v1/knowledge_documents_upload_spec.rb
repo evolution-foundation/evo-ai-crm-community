@@ -74,6 +74,7 @@ RSpec.describe 'Api::V1::KnowledgeDocuments upload', type: :request do
          headers: headers
 
     expect(response).to have_http_status(:unprocessable_entity)
+    expect(JSON.parse(response.body)['errors'].first).to include('50MB')
   end
 
   it 'enqueues ingestion after a successful upload' do

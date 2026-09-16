@@ -53,6 +53,10 @@ class KnowledgeDocument < ApplicationRecord
   end
 
   def validate_file_size
+    # NOTE: For the upload action, this validation is intercepted earlier by
+    # Api::V1::KnowledgeDocumentsController#extract_uploaded_text, which checks
+    # file size before TextExtractor processing. This validation still applies to
+    # other paths that attach source_file without going through extract_uploaded_text.
     return unless source_file.blob.byte_size > MAX_FILE_SIZE
 
     errors.add(:source_file, "must be smaller than #{MAX_FILE_SIZE / 1.megabyte}MB")
