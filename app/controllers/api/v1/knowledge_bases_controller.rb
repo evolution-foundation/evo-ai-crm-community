@@ -28,7 +28,10 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
   end
 
   def search
-    embedding = Knowledge::EmbeddingService.new.embed(params[:query].to_s)
+    query = params[:query].to_s
+    return render json: { results: [] } if query.blank?
+
+    embedding = Knowledge::EmbeddingService.new.embed(query)
     entries = KnowledgeEntry.search(
       knowledge_base_id: @knowledge_base.id,
       query_embedding: embedding,
@@ -37,6 +40,8 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
     )
 
     render json: { results: entries.map { |e| { content: e.content, tags: e.tags, document_title: e.knowledge_document.title } } }
+  rescue Knowledge::EmbeddingService::Error => e
+    render json: { error: e.message }, status: :bad_gateway
   end
 
   private

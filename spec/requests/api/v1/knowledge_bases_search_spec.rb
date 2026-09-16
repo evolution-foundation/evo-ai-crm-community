@@ -52,4 +52,27 @@ RSpec.describe 'Api::V1::KnowledgeBases search', type: :request do
     expect(response).to have_http_status(:ok)
     expect(JSON.parse(response.body)['results'].first['content']).to eq('resposta de teste')
   end
+
+  it 'returns an empty result set without calling the embedding service for a blank query' do
+    expect_any_instance_of(Knowledge::EmbeddingService).not_to receive(:embed)
+
+    post "/api/v1/knowledge_bases/#{knowledge_base.id}/search",
+         params: { query: '', max_results: 10 }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:ok)
+    expect(JSON.parse(response.body)['results']).to eq([])
+  end
+
+  it 'returns a 502 when the embedding service fails' do
+    allow_any_instance_of(Knowledge::EmbeddingService).to receive(:embed)
+      .and_raise(Knowledge::EmbeddingService::Error, 'embedding provider unavailable')
+
+    post "/api/v1/knowledge_bases/#{knowledge_base.id}/search",
+         params: { query: 'teste', max_results: 10 }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:bad_gateway)
+    expect(JSON.parse(response.body)['error']).to eq('embedding provider unavailable')
+  end
 end
