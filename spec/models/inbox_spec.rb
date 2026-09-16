@@ -8,7 +8,7 @@ RSpec.describe Inbox, type: :model do
     Channel::Whatsapp.new(
       phone_number: '+5511999998888',
       provider: 'whatsapp_cloud',
-      provider_config: { 'api_key' => 'test', 'phone_number_id' => '1', 'business_account_id' => '1' }
+      provider_config: {}
     ).tap { |whatsapp| whatsapp.save(validate: false) }
   end
 
