@@ -24,6 +24,21 @@ RSpec.describe Inbox, type: :model do
       expect(inbox.archived?).to be true
     end
 
+    # Regression (C1): Channel::Whatsapp defines #disconnect_channel_provider
+    # unconditionally, so respond_to? is always true, but the underlying
+    # provider_service only implements it for Evolution/Evolution Go. For every
+    # other provider the call raises NoMethodError. Deliberately NOT stubbed —
+    # stubbing the channel is exactly what masked this bug in the test above.
+    it 'still archives when the provider does not implement disconnect_channel_provider' do
+      inbox = Inbox.create!(name: 'Cloud Inbox', channel: whatsapp_channel)
+
+      expect(whatsapp_channel.provider_service).not_to respond_to(:disconnect_channel_provider)
+      expect { inbox.archive! }.not_to raise_error
+
+      expect(inbox.reload.archived_at).to be_present
+      expect(inbox.archived?).to be true
+    end
+
     it 'does not raise for a channel type with no disconnect_channel_provider method' do
       inbox = Inbox.create!(name: 'API Inbox', channel: api_channel)
 

@@ -112,4 +112,20 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
       service.send(:handle_connection_open, nil)
     end
   end
+  # Regression (C2): this service overrides #perform without calling super, so
+  # the archived-inbox guard in Whatsapp::IncomingMessageBaseService#perform
+  # never ran here — archived Evolution inboxes kept ingesting webhooks.
+  describe '#perform with an archived inbox' do
+    it 'does nothing when the inbox is archived' do
+      archived_inbox = instance_double(Inbox, archived?: true)
+      params = { event: 'messages.upsert', instance: 'inst-1', data: {} }.with_indifferent_access
+
+      service = described_class.new(inbox: archived_inbox, params: params)
+
+      expect(service).not_to receive(:process_messages_upsert)
+      expect(service).not_to receive(:process_messages_update)
+      expect(service).not_to receive(:process_connection_update)
+      service.perform
+    end
+  end
 end

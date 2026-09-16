@@ -5,6 +5,11 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
   include Whatsapp::EvolutionGoHandlers::Helpers
 
   def perform
+    # Mirrors Whatsapp::IncomingMessageBaseService#perform's archived guard.
+    # This method overrides #perform without calling super, so the base class
+    # guard never runs here — keep the two in sync.
+    return if inbox.archived?
+
     Rails.logger.info "Evolution Go API: Service initialized with inbox: #{@inbox.present? ? @inbox.id : 'NIL'}"
 
     # Evolution Go API structure: { event: 'Message', data: { Info: {...}, Message: {...} }, instanceId: '...', instanceToken: '...' }
