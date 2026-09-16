@@ -285,6 +285,13 @@ Rails.application.routes.draw do
         resources :variants, controller: 'products/variants', only: [:index, :create, :update, :destroy]
       end
 
+      # Knowledge Base CRUD (Agent Knowledge Base plan, Task 1.5). Gated behind
+      # the already-cataloged ai_agents.* permission resource — Knowledge Base
+      # management has no consumer in this plan other than AI agents.
+      resources :knowledge_bases, only: [:index, :create, :destroy], controller: 'knowledge_bases' do
+        resources :documents, controller: 'knowledge_documents', only: [:index, :create, :show, :destroy]
+      end
+
       # Lead-capture form builder admin CRUD (B14.01).
       resources :crm_forms, only: [:index, :create, :show, :update, :destroy], controller: 'crm_forms' do
         get :leads, on: :member
