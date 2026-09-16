@@ -290,6 +290,27 @@ Rails.application.routes.draw do
         resources :variants, controller: 'products/variants', only: [:index, :create, :update, :destroy]
       end
 
+      # Knowledge Base CRUD (Agent Knowledge Base plan, Task 1.5). Gated behind
+      # the already-cataloged ai_agents.* permission resource — Knowledge Base
+      # management has no consumer in this plan other than AI agents.
+      resources :knowledge_bases, only: [:index, :create, :destroy], controller: 'knowledge_bases' do
+        post :search, on: :member
+        resources :documents, controller: 'knowledge_documents', only: [:index, :create, :show, :destroy] do
+          post :upload, on: :collection
+          post :from_url, on: :collection
+        end
+      end
+
+      # Internal service-token-protected endpoints (Agent Knowledge Base plan,
+      # Task 1.6). `Api::V1::Internal::ServiceTokensController` and
+      # `Api::V1::Internal::SystemController` already live under this
+      # controller namespace but were left unrouted by the community release
+      # strip; this block only wires the knowledge search route this task
+      # needs, without resurrecting those unrelated routes.
+      namespace :internal do
+        post 'knowledge/search', to: 'knowledge#search'
+      end
+
       # Lead-capture form builder admin CRUD (B14.01).
       resources :crm_forms, only: [:index, :create, :show, :update, :destroy], controller: 'crm_forms' do
         get :leads, on: :member
@@ -320,6 +341,7 @@ Rails.application.routes.draw do
       # Ai::AgentProductSyncService).
       resources :ai_agents, only: [] do
         resources :products, controller: 'ai_agents/products', only: [:index, :create, :destroy]
+        resource :knowledge_base, controller: 'ai_agents/knowledge_bases', only: [:show, :create, :destroy]
       end
 
       resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'macros' do

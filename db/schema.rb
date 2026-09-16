@@ -17,6 +17,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
   enable_extension "uuid-ossp"
+  enable_extension "vector"
 
   # Custom types defined in this database.
   # Note that some types may not work with other database engines. Be careful if changing database.
@@ -121,6 +122,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
     t.decimal "delay_per_character", precision: 8, scale: 2, default: "50.0"
     t.integer "debounce_time", default: 5, null: false
     t.uuid "credential_id"
+  end
+
+  create_table "ai_agent_knowledge_bases", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "ai_agent_id", null: false
+    t.uuid "knowledge_base_id", null: false
+    t.jsonb "knowledge_tags", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ai_agent_id", "knowledge_base_id"], name: "index_ai_agent_knowledge_bases_unique", unique: true
+    t.index ["ai_agent_id"], name: "index_ai_agent_knowledge_bases_on_ai_agent_id"
+    t.index ["knowledge_base_id"], name: "index_ai_agent_knowledge_bases_on_knowledge_base_id"
   end
 
   create_table "ai_agent_products", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -691,6 +703,48 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.jsonb "settings", default: {}
+  end
+
+  create_table "knowledge_bases", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "name", null: false
+    t.boolean "active", default: true, null: false
+    t.boolean "default", default: false, null: false
+    t.string "embedding_model", default: "text-embedding-3-small", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["default"], name: "index_knowledge_bases_on_default"
+  end
+
+  create_table "knowledge_documents", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "knowledge_base_id", null: false
+    t.string "title", null: false
+    t.text "description"
+    t.string "source_type", default: "manual", null: false
+    t.string "source_url"
+    t.string "status", default: "processing", null: false
+    t.string "last_error"
+    t.jsonb "tags", default: [], null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["knowledge_base_id", "status"], name: "index_knowledge_documents_on_knowledge_base_id_and_status"
+    t.index ["knowledge_base_id"], name: "index_knowledge_documents_on_knowledge_base_id"
+    t.index ["tags"], name: "index_knowledge_documents_on_tags", using: :gin
+  end
+
+  create_table "knowledge_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "knowledge_document_id", null: false
+    t.uuid "knowledge_base_id", null: false
+    t.integer "chunk_index", default: 0, null: false
+    t.text "content", null: false
+    t.jsonb "tags", default: [], null: false
+    t.vector "embedding", limit: 1536
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["embedding"], name: "index_knowledge_entries_on_embedding", opclass: :vector_cosine_ops, using: :hnsw
+    t.index ["knowledge_base_id"], name: "index_knowledge_entries_on_knowledge_base_id"
+    t.index ["knowledge_document_id"], name: "index_knowledge_entries_on_knowledge_document_id"
+    t.index ["tags"], name: "index_knowledge_entries_on_tags", using: :gin
   end
 
   create_table "labels", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1387,6 +1441,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "agent_bot_inboxes", "agent_bots", column: "facebook_comment_agent_bot_id", on_delete: :nullify
+  add_foreign_key "ai_agent_knowledge_bases", "knowledge_bases", on_delete: :cascade
   add_foreign_key "ai_agent_products", "products", on_delete: :cascade
   add_foreign_key "automation_rule_runs", "automation_rules", on_delete: :cascade
   add_foreign_key "contact_companies", "contacts"
@@ -1397,6 +1452,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
   add_foreign_key "data_privacy_consents", "users"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
+  add_foreign_key "knowledge_documents", "knowledge_bases"
+  add_foreign_key "knowledge_entries", "knowledge_bases"
+  add_foreign_key "knowledge_entries", "knowledge_documents"
   add_foreign_key "macro_executions", "conversations"
   add_foreign_key "macro_executions", "macros"
   add_foreign_key "macro_executions", "users"

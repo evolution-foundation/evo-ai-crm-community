@@ -14,3 +14,12 @@
 # ActiveSupport::Inflector.inflections(:en) do |inflect|
 #   inflect.acronym 'RESTful'
 # end
+
+# Rails' default inflector singularizes "bases" to "basis" (as in "knowledge
+# basis"), which would make the nested `resources :knowledge_bases` route
+# derive the foreign key param as `:knowledge_basis_id` instead of the
+# `:knowledge_base_id` the KnowledgeDocumentsController expects. Force the
+# correct singular so routing, param names and controller code all agree.
+ActiveSupport::Inflector.inflections(:en) do |inflect|
+  inflect.irregular 'knowledge_base', 'knowledge_bases'
+end

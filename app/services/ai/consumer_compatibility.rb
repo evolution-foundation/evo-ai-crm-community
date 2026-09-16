@@ -15,7 +15,8 @@ class Ai::ConsumerCompatibility
     inbox_assist: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     audio_transcription: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     label_suggestion: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
-    moderation: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS
+    moderation: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
+    knowledge_embedding: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS
   }.freeze
 
   class << self
