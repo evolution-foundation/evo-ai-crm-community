@@ -38,26 +38,23 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
   end
 
   def upload
+    extracted = extract_uploaded_text(params[:file])
+
     @document = @knowledge_base.knowledge_documents.new(
       title: params[:title].presence || params[:file]&.original_filename,
       source_type: 'upload',
       status: 'processing',
-      tags: Array(params[:tags])
+      tags: Array(params[:tags]),
+      metadata: { 'raw_content' => extracted }
     )
     @document.source_file.attach(params[:file])
 
     if @document.save
-      extracted = Knowledge::TextExtractor.new(
-        ActiveStorage::Blob.service.path_for(@document.source_file.blob.key),
-        @document.source_file.blob.content_type
-      ).extract
-      @document.update!(metadata: { 'raw_content' => extracted })
       success_response(data: KnowledgeDocumentSerializer.serialize(@document), status: :created)
     else
       render json: { errors: @document.errors.full_messages }, status: :unprocessable_entity
     end
-  rescue Knowledge::TextExtractor::UnsupportedFormatError => e
-    @document&.destroy
+  rescue Knowledge::TextExtractor::UnsupportedFormatError, StandardError => e
     render json: { errors: [e.message] }, status: :unprocessable_entity
   end
 
@@ -73,5 +70,20 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
 
   def document_params
     params.require(:knowledge_document).permit(:title, :description, :content, tags: [])
+  end
+
+  def extract_uploaded_text(file)
+    if file.size > KnowledgeDocument::MAX_FILE_SIZE
+      raise ActiveRecord::RecordInvalid,
+            "File size must be smaller than #{KnowledgeDocument::MAX_FILE_SIZE / 1.megabyte}MB"
+    end
+
+    file.tempfile.rewind  # Ensure we're at the beginning of the file
+
+    Tempfile.create(['upload', File.extname(file.original_filename)], binmode: true) do |tmp|
+      IO.copy_stream(file.tempfile, tmp)
+      tmp.flush
+      Knowledge::TextExtractor.new(tmp.path, file.content_type).extract
+    end
   end
 end

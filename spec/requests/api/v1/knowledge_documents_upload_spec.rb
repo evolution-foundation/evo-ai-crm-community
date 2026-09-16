@@ -6,6 +6,8 @@ require 'webmock/rspec'
 # sign_in). Permission key reused from the ai_agents.* catalog resource, same
 # ruling as Task 1.5.
 RSpec.describe 'Api::V1::KnowledgeDocuments upload', type: :request do
+  include ActiveJob::TestHelper
+
   let(:base_url) { 'http://auth.test' }
   let(:validate_url) { "#{base_url}/api/v1/auth/validate" }
   let(:token) { 'test-bearer-token' }
@@ -72,5 +74,15 @@ RSpec.describe 'Api::V1::KnowledgeDocuments upload', type: :request do
          headers: headers
 
     expect(response).to have_http_status(:unprocessable_entity)
+  end
+
+  it 'enqueues ingestion after a successful upload' do
+    file = fixture_file_upload(Rails.root.join('spec/fixtures/files/sample.pdf'), 'application/pdf')
+
+    expect do
+      post "/api/v1/knowledge_bases/#{knowledge_base.id}/documents/upload",
+           params: { file: file, title: 'Doc via upload' },
+           headers: headers
+    end.to have_enqueued_job(Knowledge::IngestJob)
   end
 end
