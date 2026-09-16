@@ -41,6 +41,7 @@ module InboxSerializer
     # Timestamps
     result['created_at'] = inbox.created_at.to_i
     result['updated_at'] = inbox.updated_at.to_i
+    result['archived_at'] = inbox.archived_at&.iso8601
 
     # Include channel-specific fields
     if inbox.channel.present?
