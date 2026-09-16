@@ -13,6 +13,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     destroy: 'conversations.delete',
     toggle_status: 'conversations.toggle_status',
     return_to_bot: 'conversations.toggle_status',
+    move_channel: 'conversations.update',
     toggle_priority: 'conversations.toggle_priority',
     custom_attributes: 'conversations.custom_attributes',
     pin: 'conversations.update',
@@ -390,6 +391,31 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     )
   rescue Conversations::InvalidHandoffError => e
     error_response(ApiErrorCodes::VALIDATION_ERROR, e.message, status: :unprocessable_entity)
+  end
+
+  def move_channel
+    target_inbox = Inbox.find(params[:inbox_id])
+
+    unless @conversation.eligible_move_target?(target_inbox)
+      return error_response(
+        ApiErrorCodes::VALIDATION_ERROR,
+        'Conversation cannot be moved to this channel',
+        status: :unprocessable_entity
+      )
+    end
+
+    ActiveRecord::Base.transaction do
+      @conversation.moved_from_inbox_id ||= @conversation.inbox_id
+      @conversation.update!(inbox_id: target_inbox.id)
+      ContactInboxBuilder.new(contact: @conversation.contact, inbox: target_inbox).perform
+    end
+
+    success_response(
+      data: ConversationSerializer.serialize(@conversation, include_messages: false),
+      message: 'Conversation moved successfully'
+    )
+  rescue ActiveRecord::RecordNotFound
+    error_response(ApiErrorCodes::RESOURCE_NOT_FOUND, 'Target inbox not found', status: :not_found)
   end
 
   def pending_to_open_by_bot?

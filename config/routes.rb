@@ -144,6 +144,7 @@ Rails.application.routes.draw do
           post :email_team
           post :toggle_status
           post :return_to_bot
+          post :move_channel
           post :toggle_priority
           post :toggle_typing_status
           post :update_last_seen
