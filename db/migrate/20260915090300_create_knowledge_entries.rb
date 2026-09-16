@@ -13,9 +13,12 @@ class CreateKnowledgeEntries < ActiveRecord::Migration[7.0]
     end
 
     add_index :knowledge_entries, :tags, using: :gin
-    # ivfflat requires an approximate row-count estimate at creation time;
-    # for a fresh table this is fine — Postgres will use a sequential scan
-    # until enough rows exist, then the planner picks the index up.
-    add_index :knowledge_entries, :embedding, using: :ivfflat, opclass: :vector_cosine_ops
+    # HNSW (not ivfflat) is chosen deliberately: ivfflat trains its list
+    # centroids from the rows present at index-build time, so building it on
+    # this table (empty on a fresh deploy) produces a degenerate index with
+    # no real clustering once data is inserted later — it does NOT gracefully
+    # fall back to a sequential scan. HNSW needs no representative data at
+    # build time, so it stays correct regardless of when rows are added.
+    add_index :knowledge_entries, :embedding, using: :hnsw, opclass: :vector_cosine_ops
   end
 end

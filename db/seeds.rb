@@ -5,6 +5,16 @@ ConfigLoader.new.process
 # NOTE: the CRM has no onboarding flow of its own (EVO-2014). The first admin is
 # created by the evo-auth-service /setup wizard and synced here on login.
 
+# Agent Knowledge Base: without this, nothing anywhere (no other seed, no UI)
+# ever creates a KnowledgeBase row, so on a fresh deployment the feature is
+# completely unusable — the frontend's KnowledgePage has nothing to select.
+# Runs in every environment (including production), unlike the block below,
+# and is idempotent so it's safe to re-run on every deploy.
+KnowledgeBase.find_or_create_by!(name: 'Default') do |kb|
+  kb.active = true
+  kb.default = true
+end
+
 ## Seeds for Local Development
 unless Rails.env.production?
 

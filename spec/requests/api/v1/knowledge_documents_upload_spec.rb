@@ -56,6 +56,15 @@ RSpec.describe 'Api::V1::KnowledgeDocuments upload', type: :request do
     expect(JSON.parse(response.body)['data']['status']).to eq('processing')
   end
 
+  it 'returns 422 instead of 500 when no file param is given' do
+    post "/api/v1/knowledge_bases/#{knowledge_base.id}/documents/upload",
+         params: { title: 'No file' },
+         headers: headers
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(JSON.parse(response.body)['errors']).to include('file is required')
+  end
+
   it 'rejects a file over 50MB' do
     # A plain double stubbed with `size: 51.megabytes` never reaches the
     # controller with that size: Rack::Test only builds a multipart request

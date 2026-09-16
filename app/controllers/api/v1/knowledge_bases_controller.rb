@@ -1,4 +1,6 @@
 class Api::V1::KnowledgeBasesController < Api::V1::BaseController
+  include KnowledgeSearchParams
+
   require_permissions({
     index: 'ai_agents.read',
     create: 'ai_agents.create',
@@ -36,7 +38,7 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
       knowledge_base_id: @knowledge_base.id,
       query_embedding: embedding,
       tags: params[:tags],
-      limit: (params[:max_results] || 10).to_i
+      limit: clamped_max_results(default: 10)
     )
 
     render json: { results: entries.map { |e| { content: e.content, tags: e.tags, document_title: e.knowledge_document.title } } }
@@ -51,6 +53,11 @@ class Api::V1::KnowledgeBasesController < Api::V1::BaseController
   end
 
   def knowledge_base_params
-    params.require(:knowledge_base).permit(:name, :active, :default, :embedding_model)
+    # embedding_model is intentionally not permitted here: the column exists
+    # and defaults to the fixed value Knowledge::EmbeddingService hardcodes
+    # (text-embedding-3-small, vector(1536)), but the API does not honor a
+    # caller-supplied model/dimension, so exposing it as writable would
+    # silently ignore whatever the caller sets.
+    params.require(:knowledge_base).permit(:name, :active, :default)
   end
 end

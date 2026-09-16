@@ -70,6 +70,22 @@ RSpec.describe 'Api::V1::AiAgents::KnowledgeBases', type: :request do
     expect(response).to have_http_status(:not_found)
   end
 
+  it 'keeps the previous attachment when the new create fails (atomic)' do
+    previous = AiAgentKnowledgeBase.create!(ai_agent_id: ai_agent_id, knowledge_base: knowledge_base, knowledge_tags: ['old'])
+    allow(AiAgentKnowledgeBase).to receive(:create!).and_raise(ActiveRecord::RecordInvalid.new(previous))
+
+    post "/api/v1/ai_agents/#{ai_agent_id}/knowledge_base",
+         params: { knowledge_base_id: SecureRandom.uuid, knowledge_tags: ['vendas'] }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    attachment = AiAgentKnowledgeBase.find_by(ai_agent_id: ai_agent_id)
+    expect(attachment).to be_present
+    expect(attachment.knowledge_base_id).to eq(knowledge_base.id)
+    expect(attachment.knowledge_tags).to eq(['old'])
+    expect(EvoAiCoreService).not_to have_received(:update_agent)
+  end
+
   it 'detaches a knowledge base from an agent' do
     AiAgentKnowledgeBase.create!(ai_agent_id: ai_agent_id, knowledge_base: knowledge_base, knowledge_tags: [])
 

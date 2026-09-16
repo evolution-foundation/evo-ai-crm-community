@@ -64,6 +64,24 @@ RSpec.describe 'Api::V1::KnowledgeBases search', type: :request do
     expect(JSON.parse(response.body)['results']).to eq([])
   end
 
+  it 'clamps a negative max_results instead of erroring on LIMIT' do
+    post "/api/v1/knowledge_bases/#{knowledge_base.id}/search",
+         params: { query: 'teste', max_results: -5 }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:ok)
+    expect(JSON.parse(response.body)['results'].first['content']).to eq('resposta de teste')
+  end
+
+  it 'clamps a zero max_results up to at least 1' do
+    post "/api/v1/knowledge_bases/#{knowledge_base.id}/search",
+         params: { query: 'teste', max_results: 0 }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:ok)
+    expect(JSON.parse(response.body)['results'].size).to eq(1)
+  end
+
   it 'returns a 502 when the embedding service fails' do
     allow_any_instance_of(Knowledge::EmbeddingService).to receive(:embed)
       .and_raise(Knowledge::EmbeddingService::Error, 'embedding provider unavailable')

@@ -33,6 +33,15 @@ RSpec.describe 'Api::V1::Internal::Knowledge', type: :request do
     expect(body['results'].first['content']).to eq('A resposta certa')
   end
 
+  it 'clamps a negative max_results instead of erroring on LIMIT' do
+    post '/api/v1/internal/knowledge/search',
+         params: { knowledge_base_id: knowledge_base.id, query: 'qual a resposta', max_results: -1 }.to_json,
+         headers: headers
+
+    expect(response).to have_http_status(:ok)
+    expect(JSON.parse(response.body)['results'].first['content']).to eq('A resposta certa')
+  end
+
   it 'rejects requests without a valid service token' do
     post '/api/v1/internal/knowledge/search',
          params: { knowledge_base_id: knowledge_base.id, query: 'qual a resposta' }.to_json,

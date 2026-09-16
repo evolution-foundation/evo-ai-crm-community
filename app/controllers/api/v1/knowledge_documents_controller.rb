@@ -41,6 +41,10 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
   end
 
   def upload
+    unless params[:file].respond_to?(:original_filename)
+      return render json: { errors: ['file is required'] }, status: :unprocessable_entity
+    end
+
     extracted = extract_uploaded_text(params[:file])
 
     @document = @knowledge_base.knowledge_documents.new(

@@ -16,6 +16,7 @@ RSpec.describe Knowledge::TextExtractor do
   it 'extracts text from HTML, stripping tags' do
     text = described_class.new(fixture('sample.html'), 'text/html').extract
     expect(text).not_to include('<')
+    expect(text).to include('Sample HTML Fixture')
   end
 
   it 'passes through plain text and markdown unchanged' do

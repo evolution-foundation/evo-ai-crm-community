@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_15_090400) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_16_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -737,7 +737,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090400) do
     t.vector "embedding", limit: 1536
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["embedding"], name: "index_knowledge_entries_on_embedding", opclass: :vector_cosine_ops, using: :ivfflat
+    t.index ["embedding"], name: "index_knowledge_entries_on_embedding", opclass: :vector_cosine_ops, using: :hnsw
     t.index ["knowledge_base_id"], name: "index_knowledge_entries_on_knowledge_base_id"
     t.index ["knowledge_document_id"], name: "index_knowledge_entries_on_knowledge_document_id"
     t.index ["tags"], name: "index_knowledge_entries_on_tags", using: :gin
@@ -1437,7 +1437,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090400) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "agent_bot_inboxes", "agent_bots", column: "facebook_comment_agent_bot_id", on_delete: :nullify
-  add_foreign_key "ai_agent_knowledge_bases", "knowledge_bases"
+  add_foreign_key "ai_agent_knowledge_bases", "knowledge_bases", on_delete: :cascade
   add_foreign_key "ai_agent_products", "products", on_delete: :cascade
   add_foreign_key "automation_rule_runs", "automation_rules", on_delete: :cascade
   add_foreign_key "contact_companies", "contacts"
