@@ -29,6 +29,16 @@ class KnowledgeDocument < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
   validates :source_type, inclusion: { in: SOURCE_TYPES }
 
+  after_create_commit :enqueue_ingestion
+
   scope :for_knowledge_base, ->(id) { where(knowledge_base_id: id) }
   scope :ordered, -> { order(created_at: :desc) }
+
+  private
+
+  def enqueue_ingestion
+    return unless status == 'processing'
+
+    Knowledge::IngestJob.perform_later(self)
+  end
 end
