@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_15_090300) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_15_090400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -122,6 +122,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090300) do
     t.decimal "delay_per_character", precision: 8, scale: 2, default: "50.0"
     t.integer "debounce_time", default: 5, null: false
     t.uuid "credential_id"
+  end
+
+  create_table "ai_agent_knowledge_bases", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "ai_agent_id", null: false
+    t.uuid "knowledge_base_id", null: false
+    t.jsonb "knowledge_tags", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ai_agent_id", "knowledge_base_id"], name: "index_ai_agent_knowledge_bases_unique", unique: true
+    t.index ["ai_agent_id"], name: "index_ai_agent_knowledge_bases_on_ai_agent_id"
+    t.index ["knowledge_base_id"], name: "index_ai_agent_knowledge_bases_on_knowledge_base_id"
   end
 
   create_table "ai_agent_products", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1426,6 +1437,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090300) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "agent_bot_inboxes", "agent_bots", column: "facebook_comment_agent_bot_id", on_delete: :nullify
+  add_foreign_key "ai_agent_knowledge_bases", "knowledge_bases"
   add_foreign_key "ai_agent_products", "products", on_delete: :cascade
   add_foreign_key "automation_rule_runs", "automation_rules", on_delete: :cascade
   add_foreign_key "contact_companies", "contacts"
@@ -1435,8 +1447,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_15_090300) do
   add_foreign_key "data_privacy_consents", "users"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
-  add_foreign_key "knowledge_documents", "knowledge_bases", column: "knowledge_base_id"
-  add_foreign_key "knowledge_entries", "knowledge_bases", column: "knowledge_base_id"
+  add_foreign_key "knowledge_documents", "knowledge_bases"
+  add_foreign_key "knowledge_entries", "knowledge_bases"
   add_foreign_key "knowledge_entries", "knowledge_documents"
   add_foreign_key "macro_executions", "conversations"
   add_foreign_key "macro_executions", "macros"

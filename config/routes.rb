@@ -335,6 +335,7 @@ Rails.application.routes.draw do
       # Ai::AgentProductSyncService).
       resources :ai_agents, only: [] do
         resources :products, controller: 'ai_agents/products', only: [:index, :create, :destroy]
+        resource :knowledge_base, controller: 'ai_agents/knowledge_bases', only: [:show, :create, :destroy]
       end
 
       resources :macros, only: [:index, :create, :show, :update, :destroy], controller: 'macros' do
