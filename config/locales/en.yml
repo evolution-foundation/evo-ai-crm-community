@@ -50,6 +50,11 @@ en:
     reset_password_success: Woot! Request for password reset is successful. Check your mail for instructions.
     reset_password_failure: Uh ho! We could not find any user with the specified email.
     inbox_deletetion_response: Your inbox deletion request will be processed in some time.
+    inbox_not_archived: Inbox is not archived
+    inbox_reactivated: Inbox reactivated successfully
+    archived_match_lookup_completed: Archived match lookup completed
+    conversation_move_ineligible: Conversation cannot be moved to this channel
+    conversation_moved: Conversation moved successfully
 
   errors:
     validations:
