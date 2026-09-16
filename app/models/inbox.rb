@@ -4,6 +4,7 @@
 #
 #  id                                :uuid             not null, primary key
 #  allow_messages_after_resolved     :boolean          default(TRUE)
+#  archived_at                       :datetime
 #  auto_assignment_config            :jsonb
 #  business_name                     :string
 #  channel_type                      :string
@@ -30,6 +31,7 @@
 #
 # Indexes
 #
+#  index_inboxes_on_archived_at                  (archived_at)
 #  index_inboxes_on_channel_id_and_channel_type  (channel_id,channel_type)
 #  index_inboxes_on_default_conversation_status  (default_conversation_status)
 #
@@ -148,6 +150,19 @@ class Inbox < ApplicationRecord
 
   def active_bot?
     agent_bot_inbox&.active?
+  end
+
+  def archived?
+    archived_at.present?
+  end
+
+  def archive!
+    channel.disconnect_channel_provider if channel.respond_to?(:disconnect_channel_provider)
+    update!(archived_at: Time.current)
+  end
+
+  def reactivate!
+    update!(archived_at: nil)
   end
 
   def inbox_type
