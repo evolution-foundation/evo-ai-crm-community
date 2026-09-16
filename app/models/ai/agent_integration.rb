@@ -1,5 +1,26 @@
 # frozen_string_literal: true
 
+# == Schema Information
+#
+# Table name: evo_core_agent_integrations
+#
+#  id         :uuid             not null, primary key
+#  config     :jsonb
+#  provider   :string(100)      not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  agent_id   :uuid             not null
+#
+# Indexes
+#
+#  idx_evo_core_agent_integrations_agent     (agent_id)
+#  idx_evo_core_agent_integrations_provider  (provider)
+#  unique_agent_integration                  (agent_id,provider) UNIQUE
+#
+# Foreign Keys
+#
+#  evo_core_agent_integrations_agent_id_fkey  (agent_id => evo_core_agents.id) ON DELETE => cascade
+#
 # Read-only view over `evo_core_agent_integrations`.
 #
 # ⚠️ The table holds TWO different things: the static platform credentials of

@@ -20,8 +20,10 @@
 #  idx_pipeline_items_active_conversation_per_pipeline  (conversation_id,pipeline_id) UNIQUE WHERE ((conversation_id IS NOT NULL) AND (completed_at IS NULL))
 #  index_pipeline_items_on_contact_id                   (contact_id)
 #  index_pipeline_items_on_custom_fields                (custom_fields) USING gin
+#  index_pipeline_items_on_lead_form_slug               ((((custom_fields -> 'lead_metadata'::text) ->> 'form_slug'::text))) WHERE (((custom_fields -> 'lead_metadata'::text) ->> 'form_slug'::text) IS NOT NULL)
 #  index_pipeline_items_on_pipeline_id                  (pipeline_id)
 #  index_pipeline_items_on_pipeline_stage_id            (pipeline_stage_id)
+#  index_pipeline_items_on_purchase_identity            (pipeline_id, (((custom_fields -> 'purchase'::text) ->> 'provider'::text)), (((custom_fields -> 'purchase'::text) ->> 'purchase_id'::text))) UNIQUE WHERE (((custom_fields -> 'purchase'::text) ->> 'purchase_id'::text) IS NOT NULL)
 #
 # Foreign Keys
 #

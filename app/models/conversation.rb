@@ -14,6 +14,7 @@
 #  last_activity_at       :datetime         not null
 #  priority               :integer
 #  snoozed_until          :datetime
+#  source                 :integer          default("live"), not null
 #  status                 :integer          default("open"), not null
 #  uuid                   :uuid             not null
 #  waiting_since          :datetime
@@ -24,6 +25,7 @@
 #  contact_inbox_id       :uuid
 #  display_id             :integer          not null
 #  inbox_id               :uuid             not null
+#  moved_from_inbox_id    :uuid
 #  team_id                :uuid
 #
 # Indexes
@@ -37,6 +39,7 @@
 #  index_conversations_on_first_reply_created_at         (first_reply_created_at)
 #  index_conversations_on_inbox_id                       (inbox_id)
 #  index_conversations_on_inbox_status_last_activity     (inbox_id,status,last_activity_at DESC NULLS LAST)
+#  index_conversations_on_moved_from_inbox_id            (moved_from_inbox_id)
 #  index_conversations_on_priority                       (priority)
 #  index_conversations_on_status                         (status)
 #  index_conversations_on_status_and_priority            (status,priority)
@@ -44,6 +47,10 @@
 #  index_conversations_on_team_id                        (team_id)
 #  index_conversations_on_uuid                           (uuid) UNIQUE
 #  index_conversations_on_waiting_since                  (waiting_since)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (moved_from_inbox_id => inboxes.id)
 #
 class Conversation < ApplicationRecord
   include Labelable

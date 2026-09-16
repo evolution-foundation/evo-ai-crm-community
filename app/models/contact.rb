@@ -30,6 +30,7 @@
 #  idx_contacts_name_type_resolved                       (name,type,id) WHERE (((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))
 #  idx_contacts_with_identity                            (id) WHERE (((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))
 #  index_contacts_on_blocked                             (blocked)
+#  index_contacts_on_custom_attributes                   (custom_attributes) USING gin
 #  index_contacts_on_last_activity_at                    (last_activity_at)
 #  index_contacts_on_name_email_phone_number_identifier  (name,email,phone_number,identifier) USING gin
 #  index_contacts_on_phone_number                        (phone_number)

@@ -18,6 +18,7 @@
 #  text_segmentation_min_size :integer          default(50)
 #  created_at                 :datetime         not null
 #  updated_at                 :datetime         not null
+#  credential_id              :uuid
 #
 class AgentBot < ApplicationRecord
   include AccessTokenable
