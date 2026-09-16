@@ -95,6 +95,9 @@ Rails.application.routes.draw do
       end
 
       resources :inboxes, only: [:index, :show, :create, :update, :destroy], controller: 'inboxes' do
+        collection do
+          get :archived_whatsapp_match
+        end
         get :assignable_agents, on: :member
         get :agent_bot, on: :member
         post :set_agent_bot, on: :member

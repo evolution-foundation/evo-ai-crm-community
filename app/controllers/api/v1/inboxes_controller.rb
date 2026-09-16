@@ -9,7 +9,7 @@ module Api
         rescue_from Sendgrid::InvalidApiKeyError, with: :handle_sendgrid_invalid_key
         rescue_from Sendgrid::ServiceUnavailableError, with: :handle_sendgrid_unavailable
 
-        before_action :fetch_inbox, except: %i[index create]
+        before_action :fetch_inbox, except: %i[index create archived_whatsapp_match]
         before_action :validate_limit, only: [:create]
         before_action :validate_channel_limit_for_creation, only: [:create]
         # we are already handling the authorization in fetch inbox
@@ -17,6 +17,7 @@ module Api
         require_permissions({
           index: 'inboxes.read',
           show: 'inboxes.read',
+          archived_whatsapp_match: 'inboxes.create',
           create: 'inboxes.create',
           update: 'inboxes.update',
           destroy: 'inboxes.delete',
@@ -56,6 +57,20 @@ module Api
           success_response(
             data: InboxSerializer.serialize(@inbox),
             message: 'Inbox retrieved successfully'
+          )
+        end
+
+        # Looks up an existing (possibly archived) WhatsApp channel by phone
+        # number, so the frontend can offer to reactivate it instead of
+        # creating a duplicate inbox for a number that's already known.
+        def archived_whatsapp_match
+          phone_number = params[:phone_number].to_s
+          channel = Channel::Whatsapp.find_by(phone_number: phone_number)
+          inbox = channel&.inbox
+
+          success_response(
+            data: (inbox&.archived? ? { inbox_id: inbox.id } : nil),
+            message: 'Archived match lookup completed'
           )
         end
 

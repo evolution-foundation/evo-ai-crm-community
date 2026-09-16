@@ -152,6 +152,52 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
     end
   end
 
+  describe 'GET #archived_whatsapp_match' do
+    include_context 'with a service-authenticated user'
+
+    # hub_managed? (provider_config['evolution_hub'] present) short-circuits the
+    # credential probe in #validate_provider_config, so create! doesn't need a
+    # real Meta/Evolution API to succeed (mirrors evolution_hub_channel_cleanup_spec.rb).
+    let(:channel) do
+      Channel::Whatsapp.create!(
+        phone_number: '+5511999999999',
+        provider: 'whatsapp_cloud',
+        provider_config: { 'api_key' => '', 'phone_number_id' => '', 'evolution_hub' => { 'status' => 'active' } }
+      )
+    end
+    let!(:inbox) { Inbox.create!(name: "Archived Match Spec Inbox #{SecureRandom.hex(2)}", channel: channel) }
+
+    context 'when an archived channel matches the phone number' do
+      before { inbox.update!(archived_at: Time.current) }
+
+      it 'returns the archived inbox id' do
+        get :archived_whatsapp_match, params: { phone_number: '+5511999999999' }
+
+        expect(response).to have_http_status(:ok)
+        body = response.parsed_body
+        expect(body.dig('data', 'inbox_id')).to eq(inbox.id)
+      end
+    end
+
+    context 'when the matching channel is not archived' do
+      it 'returns null data' do
+        get :archived_whatsapp_match, params: { phone_number: '+5511999999999' }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['data']).to be_nil
+      end
+    end
+
+    context 'when no channel matches the phone number' do
+      it 'returns null data' do
+        get :archived_whatsapp_match, params: { phone_number: '+5599888887777' }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['data']).to be_nil
+      end
+    end
+  end
+
   describe '#fetch_agent_bot' do
     let(:agent_bot) { instance_double(AgentBot) }
 
