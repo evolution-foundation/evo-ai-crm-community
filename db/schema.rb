@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -465,6 +465,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.datetime "waiting_since", precision: nil
     t.text "cached_label_list"
     t.integer "source", default: 0, null: false
+    t.uuid "moved_from_inbox_id"
     t.index ["assignee_id", "status", "last_activity_at"], name: "index_conversations_on_assignee_status_last_activity", order: { last_activity_at: "DESC NULLS LAST" }
     t.index ["assignee_id"], name: "index_conversations_on_assignee_id"
     t.index ["contact_id"], name: "index_conversations_on_contact_id"
@@ -474,6 +475,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.index ["inbox_id", "status", "assignee_id"], name: "conv_inbid_stat_asgnid_idx"
     t.index ["inbox_id", "status", "last_activity_at"], name: "index_conversations_on_inbox_status_last_activity", order: { last_activity_at: "DESC NULLS LAST" }
     t.index ["inbox_id"], name: "index_conversations_on_inbox_id"
+    t.index ["moved_from_inbox_id"], name: "index_conversations_on_moved_from_inbox_id"
     t.index ["priority"], name: "index_conversations_on_priority"
     t.index ["status", "last_activity_at"], name: "index_conversations_on_status_last_activity", order: { last_activity_at: "DESC NULLS LAST" }
     t.index ["status", "priority"], name: "index_conversations_on_status_and_priority"
@@ -663,6 +665,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.string "default_conversation_status"
     t.uuid "greeting_message_template_id"
     t.uuid "out_of_office_message_template_id"
+    t.datetime "archived_at"
+    t.index ["archived_at"], name: "index_inboxes_on_archived_at"
     t.index ["channel_id", "channel_type"], name: "index_inboxes_on_channel_id_and_channel_type"
     t.index ["default_conversation_status"], name: "index_inboxes_on_default_conversation_status"
   end
@@ -1387,6 +1391,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
   add_foreign_key "automation_rule_runs", "automation_rules", on_delete: :cascade
   add_foreign_key "contact_companies", "contacts"
   add_foreign_key "contact_companies", "contacts", column: "company_id"
+  add_foreign_key "conversations", "inboxes", column: "moved_from_inbox_id"
   add_foreign_key "crm_forms", "pipeline_stages", column: "default_stage_id"
   add_foreign_key "crm_forms", "pipelines", column: "default_pipeline_id"
   add_foreign_key "data_privacy_consents", "users"
