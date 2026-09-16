@@ -292,6 +292,16 @@ Rails.application.routes.draw do
         resources :documents, controller: 'knowledge_documents', only: [:index, :create, :show, :destroy]
       end
 
+      # Internal service-token-protected endpoints (Agent Knowledge Base plan,
+      # Task 1.6). `Api::V1::Internal::ServiceTokensController` and
+      # `Api::V1::Internal::SystemController` already live under this
+      # controller namespace but were left unrouted by the community release
+      # strip; this block only wires the knowledge search route this task
+      # needs, without resurrecting those unrelated routes.
+      namespace :internal do
+        post 'knowledge/search', to: 'knowledge#search'
+      end
+
       # Lead-capture form builder admin CRUD (B14.01).
       resources :crm_forms, only: [:index, :create, :show, :update, :destroy], controller: 'crm_forms' do
         get :leads, on: :member
