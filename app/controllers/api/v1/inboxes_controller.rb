@@ -70,7 +70,7 @@ module Api
 
           success_response(
             data: (inbox&.archived? ? { inbox_id: inbox.id } : nil),
-            message: 'Archived match lookup completed'
+            message: I18n.t('messages.archived_match_lookup_completed')
           )
         end
 
@@ -445,7 +445,7 @@ module Api
           unless @inbox.archived?
             return error_response(
               ApiErrorCodes::VALIDATION_ERROR,
-              'Inbox is not archived',
+              I18n.t('messages.inbox_not_archived'),
               status: :unprocessable_entity
             )
           end
@@ -453,7 +453,7 @@ module Api
           @inbox.reactivate!
           success_response(
             data: InboxSerializer.serialize(@inbox),
-            message: 'Inbox reactivated successfully'
+            message: I18n.t('messages.inbox_reactivated')
           )
         end
 
