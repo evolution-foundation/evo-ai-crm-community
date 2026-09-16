@@ -19,6 +19,17 @@ RSpec.describe ConversationChannelMove do
     Channel::Email.create!(email: "channel-#{SecureRandom.hex(4)}@example.com")
   end
 
+  # Telegram's create callbacks call the Telegram HTTP API (token validation and
+  # webhook registration), neither of which eligible_move_target? cares about —
+  # it only reads channel_type and the Inbox predicates. Skip validation and
+  # neutralize the webhook callback so no network call happens in the spec.
+  def build_telegram_channel
+    channel = Channel::Telegram.new(bot_token: "bot-#{SecureRandom.hex(4)}", bot_name: 'Test Bot')
+    channel.define_singleton_method(:setup_telegram_webhook) { true }
+    channel.save(validate: false)
+    channel
+  end
+
   def build_web_widget_channel
     Channel::WebWidget.create!(website_url: 'https://widget.example.com')
   end
@@ -75,6 +86,18 @@ RSpec.describe ConversationChannelMove do
       conversation = build_conversation(inbox: whatsapp_inbox, contact: contact)
 
       expect(conversation.eligible_move_target?(email_inbox)).to be false
+    end
+
+    # Regression (I5): same-type used to return true unconditionally, but
+    # ContactInboxBuilder cannot derive a source_id for Telegram — the move
+    # blew up mid-transaction as an unhandled 500 instead of a clean 422.
+    it 'is not eligible for a same-type target ContactInboxBuilder cannot build a source_id for' do
+      telegram_inbox_a = build_inbox(build_telegram_channel)
+      telegram_inbox_b = build_inbox(build_telegram_channel)
+      contact = build_contact(phone_number: '+5511999999999')
+      conversation = build_conversation(inbox: telegram_inbox_a, contact: contact)
+
+      expect(conversation.eligible_move_target?(telegram_inbox_b)).to be false
     end
 
     it 'is not eligible for a Chat Widget target, ever' do

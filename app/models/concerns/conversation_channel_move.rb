@@ -9,7 +9,12 @@ module ConversationChannelMove
   def eligible_move_target?(target_inbox)
     return false if target_inbox.archived?
     return false if target_inbox.web_widget?
-    return true if target_inbox.channel_type == inbox.channel_type
+    # A move always runs ContactInboxBuilder against the target, and that
+    # builder can only derive a source_id for the channel types listed in its
+    # own #allowed_channels? (email/sms/twilio/whatsapp). For anything else
+    # (Telegram, Line, TwitterProfile, Instagram) it raises mid-transaction,
+    # which move_channel does not rescue — a 500 instead of a clean 422.
+    return builder_supported_target?(target_inbox) if target_inbox.channel_type == inbox.channel_type
 
     case target_inbox.channel_type
     when 'Channel::Whatsapp'
@@ -19,5 +24,13 @@ module ConversationChannelMove
     else
       false
     end
+  end
+
+  private
+
+  # Mirrors ContactInboxBuilder#allowed_channels? — the set of channel types
+  # that builder can generate a source_id for without an explicit one.
+  def builder_supported_target?(target_inbox)
+    target_inbox.email? || target_inbox.sms? || target_inbox.twilio? || target_inbox.whatsapp?
   end
 end
