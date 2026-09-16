@@ -2,6 +2,22 @@
 
 require 'rails_helper'
 
+RSpec.shared_context 'with a service-authenticated user' do
+  let(:user) { User.create!(email: "inboxes-spec-#{SecureRandom.hex(4)}@example.com", name: 'Spec User') }
+
+  before do
+    Current.user = user
+    Current.service_authenticated = true
+    Current.authentication_method = 'service_token'
+
+    allow(controller).to receive(:authenticate_request!).and_return(true)
+    allow(controller).to receive(:authorize).and_return(true)
+    allow(controller).to receive(:pundit_user).and_return({ user: user, account_user: nil })
+  end
+
+  after { Current.reset }
+end
+
 RSpec.describe Api::V1::InboxesController, type: :controller do
   describe '#create' do
     it 'returns 422 when channel creation raises RecordNotSaved' do
@@ -70,7 +86,8 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
   end
 
   describe 'DELETE #destroy' do
-    let(:user) { User.create!(email: "inboxes-destroy-spec-#{SecureRandom.hex(4)}@example.com", name: 'Spec User') }
+    include_context 'with a service-authenticated user'
+
     let(:channel) { Channel::Api.create! }
     let!(:inbox) { Inbox.create!(name: "Destroy Spec Inbox #{SecureRandom.hex(2)}", channel: channel) }
     let(:contact) { Contact.create!(name: 'Destroy Spec Contact', email: "destroy-spec-#{SecureRandom.hex(4)}@example.com") }
@@ -84,18 +101,6 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
         content: 'hello before archive'
       )
     end
-
-    before do
-      Current.user = user
-      Current.service_authenticated = true
-      Current.authentication_method = 'service_token'
-
-      allow(controller).to receive(:authenticate_request!).and_return(true)
-      allow(controller).to receive(:authorize).and_return(true)
-      allow(controller).to receive(:pundit_user).and_return({ user: user, account_user: nil })
-    end
-
-    after { Current.reset }
 
     it 'archives the inbox instead of destroying it, keeping conversations and messages' do
       delete :destroy, params: { id: inbox.id }
@@ -118,6 +123,32 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
       body = response.parsed_body
       expect(body.dig('data', 'id')).to eq(inbox.id)
       expect(body['message']).to eq(I18n.t('messages.inbox_deletetion_response'))
+    end
+  end
+
+  describe 'POST #reactivate' do
+    include_context 'with a service-authenticated user'
+
+    let(:channel) { Channel::Api.create! }
+    let!(:inbox) { Inbox.create!(name: "Reactivate Spec Inbox #{SecureRandom.hex(2)}", channel: channel) }
+
+    context 'when the inbox is archived' do
+      before { inbox.update!(archived_at: Time.current) }
+
+      it 'clears archived_at and returns 200' do
+        post :reactivate, params: { id: inbox.id }
+
+        expect(response).to have_http_status(:ok)
+        expect(inbox.reload.archived_at).to be_nil
+      end
+    end
+
+    context 'when the inbox is not archived' do
+      it 'returns 422' do
+        post :reactivate, params: { id: inbox.id }
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
     end
   end
 

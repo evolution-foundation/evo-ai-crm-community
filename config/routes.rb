@@ -102,6 +102,7 @@ Rails.application.routes.draw do
         post :setup_channel_provider, on: :member
         post :disconnect_channel_provider, on: :member
         post :sync_whatsapp_subscription, on: :member
+        post :reactivate, on: :member
         # Discards a Hub connection that never completed. A separate door from
         # destroy because only this one refuses an already-connected channel.
         delete 'hub_connection', action: :abort_hub_connection, on: :member

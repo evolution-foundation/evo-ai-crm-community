@@ -27,6 +27,7 @@ module Api
           setup_channel_provider: 'inboxes.update',
           disconnect_channel_provider: 'inboxes.update',
           sync_whatsapp_subscription: 'inboxes.update',
+          reactivate: 'inboxes.update',
           avatar: 'inboxes.update',
           # Template CRUD moved to MessageTemplatesController (EVO-1716); only the
           # per-channel Meta sync remains here, keeping its inbox permission.
@@ -422,6 +423,22 @@ module Api
           success_response(
             data: { id: @inbox.id },
             message: I18n.t('messages.inbox_deletetion_response')
+          )
+        end
+
+        def reactivate
+          unless @inbox.archived?
+            return error_response(
+              ApiErrorCodes::VALIDATION_ERROR,
+              'Inbox is not archived',
+              status: :unprocessable_entity
+            )
+          end
+
+          @inbox.reactivate!
+          success_response(
+            data: InboxSerializer.serialize(@inbox),
+            message: 'Inbox reactivated successfully'
           )
         end
 
