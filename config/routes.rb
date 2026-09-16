@@ -291,6 +291,7 @@ Rails.application.routes.draw do
       resources :knowledge_bases, only: [:index, :create, :destroy], controller: 'knowledge_bases' do
         resources :documents, controller: 'knowledge_documents', only: [:index, :create, :show, :destroy] do
           post :upload, on: :collection
+          post :from_url, on: :collection
         end
       end
 

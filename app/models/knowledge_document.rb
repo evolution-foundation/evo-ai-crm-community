@@ -18,7 +18,7 @@
 #
 
 class KnowledgeDocument < ApplicationRecord
-  STATUSES = %w[processing active failed].freeze
+  STATUSES = %w[crawling processing active failed].freeze
   SOURCE_TYPES = %w[manual upload url].freeze
   MAX_FILE_SIZE = 50.megabytes
   SUPPORTED_UPLOAD_TYPES = %w[

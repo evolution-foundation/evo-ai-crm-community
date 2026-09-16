@@ -6,6 +6,7 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
     show: 'ai_agents.read',
     create: 'ai_agents.create',
     upload: 'ai_agents.create',
+    from_url: 'ai_agents.create',
     destroy: 'ai_agents.delete'
   })
 
@@ -58,6 +59,27 @@ class Api::V1::KnowledgeDocumentsController < Api::V1::BaseController
     end
   rescue Knowledge::TextExtractor::UnsupportedFormatError, FileTooLargeError => e
     render json: { errors: [e.message] }, status: :unprocessable_entity
+  end
+
+  def from_url
+    @document = @knowledge_base.knowledge_documents.new(
+      title: params[:url],
+      source_type: 'url',
+      source_url: params[:url],
+      status: 'crawling',
+      tags: Array(params[:tags])
+    )
+
+    if @document.save
+      Knowledge::UrlIngestJob.perform_later(
+        @document,
+        include_subpages: ActiveModel::Type::Boolean.new.cast(params[:include_subpages]),
+        max_pages: (params[:max_pages] || 1).to_i
+      )
+      success_response(data: KnowledgeDocumentSerializer.serialize(@document), status: :created)
+    else
+      render json: { errors: @document.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   private
