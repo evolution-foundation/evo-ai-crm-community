@@ -67,6 +67,12 @@ gem 'activerecord-import'
 # vector similarity search with pgvector
 gem 'neighbor'
 
+##-- gems for knowledge base document ingestion --##
+# extract text from PDF files
+gem 'pdf-reader'
+# extract text from DOCX files
+gem 'docx'
+
 ##--- gems for server & infra configuration ---##
 gem 'dotenv-rails', '>= 3.0.0'
 gem 'foreman'

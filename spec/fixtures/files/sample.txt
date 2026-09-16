@@ -1,0 +1,2 @@
+This is a sample plain text fixture used to test Knowledge::TextExtractor.
+It contains multiple lines of text so extraction can be verified end to end.

@@ -6,3 +6,7 @@ docker/entrypoints/*.sh   text eol=lf
 # bin/ scripts have no extension, so the rules above never match them; without
 # this a Windows checkout puts CRLF in their shebangs (EVO-2011).
 bin/*                     text eol=lf
+# Binary test fixtures must never be line-ending normalized — a PDF's xref
+# byte offsets (and a DOCX's zip structure) break silently if CRLF creeps in.
+*.pdf                     binary
+*.docx                    binary
