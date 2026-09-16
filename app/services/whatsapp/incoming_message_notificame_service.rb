@@ -23,6 +23,11 @@ class Whatsapp::IncomingMessageNotificameService
   }.freeze
 
   def perform
+    # Mirrors Whatsapp::IncomingMessageBaseService#perform's archived guard.
+    # This service does not inherit from that base class, so the guard is
+    # duplicated here — keep the two in sync.
+    return if inbox.archived?
+
     case params[:type]
     when 'MESSAGE_STATUS'
       process_status_update

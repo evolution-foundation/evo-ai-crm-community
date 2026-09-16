@@ -4,6 +4,11 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
   include Whatsapp::EvolutionHandlers::Helpers
 
   def perform
+    # Mirrors Whatsapp::IncomingMessageBaseService#perform's archived guard.
+    # This method overrides #perform without calling super, so the base class
+    # guard never runs here — keep the two in sync.
+    return if inbox.archived?
+
     # Evolution API v2.3.1 structure: { event: 'messages.upsert', data: {...}, instance: '...' }
     event_type = processed_params[:event]
 

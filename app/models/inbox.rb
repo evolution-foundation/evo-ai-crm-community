@@ -157,7 +157,7 @@ class Inbox < ApplicationRecord
   end
 
   def archive!
-    channel.disconnect_channel_provider if channel.respond_to?(:disconnect_channel_provider)
+    disconnect_channel_provider_safely
     update!(archived_at: Time.current)
   end
 
@@ -216,6 +216,21 @@ class Inbox < ApplicationRecord
   end
 
   private
+
+  # Archiving must never be blocked by the remote side. `respond_to?` is not a
+  # sufficient guard for Channel::Whatsapp: it defines
+  # #disconnect_channel_provider unconditionally and delegates to
+  # provider_service, but not every provider service implements it — the ones
+  # that don't raise NoMethodError. Same rescue-and-log posture as
+  # EvolutionHubChannelCleanup: losing the remote disconnect is recoverable,
+  # refusing to archive the inbox is not.
+  def disconnect_channel_provider_safely
+    return unless channel.respond_to?(:disconnect_channel_provider)
+
+    channel.disconnect_channel_provider
+  rescue StandardError => e
+    Rails.logger.warn("Inbox#disconnect_channel_provider_safely: failed for Inbox##{id} (#{channel_type}) — #{e.class}: #{e.message}")
+  end
 
   def default_name_for_blank_name
     email? ? display_name_from_email : ''
