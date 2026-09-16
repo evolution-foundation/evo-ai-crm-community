@@ -7,6 +7,8 @@ class Whatsapp::IncomingMessageBaseService
   pattr_initialize [:inbox!, :params!]
 
   def perform
+    return if inbox.archived?
+
     processed_params
 
     if processed_params.try(:[], :statuses).present?

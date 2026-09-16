@@ -198,4 +198,17 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
       service.send(:update_bsuid_fields, contact_inbox, 'abc123', nil)
     end
   end
+
+  describe '#perform' do
+    it 'does nothing when the inbox is archived' do
+      archived_inbox = instance_double(Inbox, archived?: true)
+      params = { messages: [{ id: 'wamid.1', from: '5511999999999' }] }.with_indifferent_access
+
+      service = described_class.new(inbox: archived_inbox, params: params)
+
+      expect(service).not_to receive(:process_messages)
+      expect(service).not_to receive(:process_statuses)
+      service.perform
+    end
+  end
 end
