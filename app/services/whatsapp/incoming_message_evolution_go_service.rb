@@ -25,6 +25,14 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
       process_read_receipt
     when 'PairSuccess'
       process_pair_success
+    when 'Connected'
+      process_connected
+    when 'Disconnected'
+      process_disconnected
+    when 'ConnectFailure'
+      process_connect_failure
+    when 'TemporaryBan'
+      process_temporary_ban
     when 'LoggedOut'
       process_logged_out
     else
@@ -162,6 +170,60 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
   rescue StandardError => e
     Rails.logger.error "Evolution Go API: Failed to process PairSuccess: #{e.message}"
     Rails.logger.error "Evolution Go API: Backtrace: #{e.backtrace.first(5).join("\n")}"
+  end
+
+  # A normal reconnect (not a fresh QR pairing) — the real fix for the "shows
+  # deslogado even when connected" bug: previously only PairSuccess cleared a
+  # stale close/logged_out snapshot, but an ordinary reconnect emits Connected,
+  # not PairSuccess, so the banner stayed stuck until someone re-paired.
+  def process_connected
+    instance_id = processed_params[:instanceId]
+    Rails.logger.info "Evolution Go API: Connected event - instanceId: #{instance_id}"
+
+    inbox.channel.mark_connected!
+  end
+
+  # whatsmeow's own comment on this event: "Disconnected emitted because the
+  # websocket is closed by the server" — it reconnects on its own. Reflect the
+  # drop (so agents SEE it instead of assuming all is fine) without demanding
+  # reauthorization for what is normally a transient blip.
+  def process_disconnected
+    instance_id = processed_params[:instanceId]
+    Rails.logger.warn "Evolution Go API: Disconnected event - instanceId: #{instance_id}"
+
+    inbox.channel.update_provider_connection!({
+      'connection' => 'close',
+      'error' => 'Disconnected — awaiting automatic reconnect'
+    })
+  end
+
+  # A reconnect attempt failed (whatsmeow retries internally regardless).
+  # Same transient treatment as Disconnected — visible, not reauth-demanding.
+  def process_connect_failure
+    instance_id = processed_params[:instanceId]
+    data = processed_params[:data] || {}
+    reason = data[:reason] || data[:Reason]
+
+    Rails.logger.warn "Evolution Go API: ConnectFailure event - instanceId: #{instance_id}, reason: #{reason}"
+
+    inbox.channel.update_provider_connection!({
+      'connection' => 'close',
+      'error' => "Connection failed: #{reason}"
+    })
+  end
+
+  # WhatsApp itself banned the number — same severity as LoggedOut, needs the
+  # operator's attention, not a self-healing reconnect.
+  def process_temporary_ban
+    instance_id = processed_params[:instanceId]
+    Rails.logger.error "Evolution Go API: TemporaryBan event - instanceId: #{instance_id}"
+
+    channel = inbox.channel
+    channel.prompt_reauthorization!
+    channel.update_provider_connection!({
+      'connection' => 'close',
+      'error' => 'WhatsApp temporarily banned this number'
+    })
   end
 
   def process_logged_out
