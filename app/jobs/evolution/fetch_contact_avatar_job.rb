@@ -30,6 +30,7 @@ class Evolution::FetchContactAvatarJob < ApplicationJob
       Avatar::AvatarFromUrlJob.perform_later(contact, profile_picture_url)
     else
       Rails.logger.debug { "Evolution API: No profile picture available for contact #{contact.id}" }
+      Whatsapp::EvolutionHandlers::AvatarEnqueueGuard.release_avatar_enqueue_lock(contact_id)
     end
   end
 end
