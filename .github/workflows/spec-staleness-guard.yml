@@ -212,7 +212,7 @@ on:
       - 'spec/services/super_admin_fossil_spec.rb'
       - 'spec/services/whatsapp/incoming_message_base_service_spec.rb'
       - 'spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb'
-      # CRM-650: an outgoing echo arrives with no identity, so it is stored with no sender
+      # An outgoing echo arrives with no identity, so it is stored with no sender
       # and only a sent_from_device marker. Every consumer of authorship then has to read the
       # marker instead of the sender type, and each half fails silently on its own: drop the
       # marker and a stranger is credited again, drop the reader and the panel reports that a
