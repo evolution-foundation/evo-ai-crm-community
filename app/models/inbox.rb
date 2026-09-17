@@ -225,6 +225,8 @@ class Inbox < ApplicationRecord
   # EvolutionHubChannelCleanup: losing the remote disconnect is recoverable,
   # refusing to archive the inbox is not.
   def disconnect_channel_provider_safely
+    channel.evolution_hub_disconnect_webhook if channel.respond_to?(:evolution_hub_disconnect_webhook)
+
     return unless channel.respond_to?(:disconnect_channel_provider)
 
     channel.disconnect_channel_provider

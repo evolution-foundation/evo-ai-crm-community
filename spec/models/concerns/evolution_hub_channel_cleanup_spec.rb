@@ -65,6 +65,33 @@ RSpec.describe EvolutionHubChannelCleanup do
     end
   end
 
+  describe '#evolution_hub_disconnect_webhook' do
+    it 'deletes only the webhook, keeping the Hub channel so reconnecting stays a fresh QR scan' do
+      channel = whatsapp_channel('channel_id' => 'hub-ch-5', 'webhook_id' => 'hub-wh-5', 'status' => 'active')
+
+      channel.evolution_hub_disconnect_webhook
+
+      expect(client).to have_received(:delete_webhook).with('hub-wh-5')
+      expect(client).not_to have_received(:delete_channel)
+    end
+
+    it 'does nothing when there is no Hub webhook to remove' do
+      channel = whatsapp_channel('channel_id' => 'hub-ch-6')
+
+      expect { channel.evolution_hub_disconnect_webhook }.not_to raise_error
+      expect(client).not_to have_received(:delete_webhook)
+    end
+
+    it 'logs and swallows Hub errors instead of raising' do
+      channel = whatsapp_channel('channel_id' => 'hub-ch-7', 'webhook_id' => 'hub-wh-7')
+      allow(client).to receive(:delete_webhook).and_raise(
+        EvolutionHub::Client::RequestError.new('boom', status: 500, body: '{}')
+      )
+
+      expect { channel.evolution_hub_disconnect_webhook }.not_to raise_error
+    end
+  end
+
   describe 'metadata readers' do
     it 'reads status and channel id from the WhatsApp provider_config shape' do
       channel = whatsapp_channel('channel_id' => 'hub-ch-4', 'status' => 'pending')
