@@ -17,7 +17,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def send_template_message
-    name, namespace, lang_code, processed_parameters = processable_channel_message_template
+    name, namespace, lang_code, processed_parameters, button_components = processable_channel_message_template
 
     return if name.blank?
 
@@ -33,7 +33,8 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
                                           name: name,
                                           namespace: namespace,
                                           lang_code: lang_code,
-                                          parameters: processed_parameters
+                                          parameters: processed_parameters,
+                                          button_components: button_components || []
                                         })
 
     handle_send_result(message_id, provider, 'Template delivery failed: provider returned an error response')
@@ -41,11 +42,13 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
 
   def processable_channel_message_template
     if template_params.present?
+      body_params, button_components = Whatsapp::TemplateButtonParams.split(template_params['processed_params'])
       return [
         template_params['name'],
         template_params['namespace'],
         template_params['language'],
-        processed_templates_params(template_params)
+        processed_templates_params(template_params, body_params),
+        button_components
       ]
     end
 
@@ -97,16 +100,18 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     end
   end
 
-  def processed_templates_params(template_params)
+  # Body parameters only: button parameters are split off before this runs and
+  # travel as their own components (Meta numbers them per button).
+  def processed_templates_params(template_params, body_params)
     template = template(template_params)
     return if template.blank?
 
     parameter_format = template['parameter_format']
 
     if parameter_format == 'NAMED'
-      template_params['processed_params']&.map { |key, value| { type: 'text', parameter_name: key, text: value } }
+      body_params.map { |key, value| { type: 'text', parameter_name: key, text: value } }
     else
-      template_params['processed_params']&.map { |_, value| { type: 'text', text: value } }
+      body_params.map { |_, value| { type: 'text', text: value } }
     end
   end
 
