@@ -1,4 +1,5 @@
 class Api::V1::Widget::MessagesController < Api::V1::Widget::BaseController
+  before_action :reject_if_inbox_archived, only: [:create]
   before_action :set_conversation, only: [:create]
   before_action :set_message, only: [:update]
 
