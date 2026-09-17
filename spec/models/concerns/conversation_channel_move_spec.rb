@@ -34,6 +34,10 @@ RSpec.describe ConversationChannelMove do
     Channel::WebWidget.create!(website_url: 'https://widget.example.com')
   end
 
+  def build_api_channel
+    Channel::Api.create!
+  end
+
   def build_inbox(channel)
     Inbox.create!(name: "Inbox #{SecureRandom.hex(4)}", channel: channel)
   end
@@ -98,6 +102,43 @@ RSpec.describe ConversationChannelMove do
       conversation = build_conversation(inbox: telegram_inbox_a, contact: contact)
 
       expect(conversation.eligible_move_target?(telegram_inbox_b)).to be false
+    end
+
+    # Sourcery finding (bug_risk, PR #373): same-type eligibility didn't check
+    # whether the contact has the identifier the target channel needs, so
+    # ContactInboxBuilder#generate_source_id raised ActionController::ParameterMissing
+    # (an unhandled 500) instead of the move being reported as ineligible.
+    it 'is not eligible for a same-type Email target when the contact has no email' do
+      email_inbox_a = build_inbox(build_email_channel)
+      email_inbox_b = build_inbox(build_email_channel)
+      contact = build_contact(email: nil)
+      contact_inbox = ContactInbox.create!(contact: contact, inbox: email_inbox_a, source_id: 'external-bsuid')
+      conversation = Conversation.create!(inbox: email_inbox_a, contact: contact, contact_inbox: contact_inbox)
+
+      expect(conversation.eligible_move_target?(email_inbox_b)).to be false
+    end
+
+    it 'is eligible for a same-type Email target when the contact has an email' do
+      email_inbox_a = build_inbox(build_email_channel)
+      email_inbox_b = build_inbox(build_email_channel)
+      contact = build_contact(email: 'a@example.com')
+      conversation = build_conversation(inbox: email_inbox_a, contact: contact)
+
+      expect(conversation.eligible_move_target?(email_inbox_b)).to be true
+    end
+
+    # Sourcery finding (bug_risk, PR #373): Channel::Api and Channel::FacebookPage
+    # are both supported by ContactInboxBuilder (it generates a random UUID
+    # source_id for them, no contact identifier needed), but builder_supported_target?
+    # didn't list them, so same-type Api/FacebookPage moves were always rejected.
+    it 'is eligible for a same-type Api target, which needs no contact identifier' do
+      api_inbox_a = build_inbox(build_api_channel)
+      api_inbox_b = build_inbox(build_api_channel)
+      contact = build_contact
+      contact_inbox = ContactInbox.create!(contact: contact, inbox: api_inbox_a, source_id: SecureRandom.uuid)
+      conversation = Conversation.create!(inbox: api_inbox_a, contact: contact, contact_inbox: contact_inbox)
+
+      expect(conversation.eligible_move_target?(api_inbox_b)).to be true
     end
 
     it 'is not eligible for a Chat Widget target, ever' do
