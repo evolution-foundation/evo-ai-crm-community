@@ -45,6 +45,20 @@ RSpec.describe Inbox, type: :model do
       expect { inbox.archive! }.not_to raise_error
       expect(inbox.reload.archived_at).to be_present
     end
+
+    # I8: archiving must stop the Hub from forwarding events, but must NOT
+    # delete the Hub channel itself — that would turn reactivation into a
+    # fresh Hub onboarding instead of a plain QR re-scan.
+    it 'disconnects the Hub webhook but preserves the Hub channel' do
+      inbox = Inbox.create!(name: 'WhatsApp Hub Inbox', channel: whatsapp_channel)
+
+      expect(whatsapp_channel).to receive(:evolution_hub_disconnect_webhook)
+      expect(whatsapp_channel).not_to receive(:evolution_hub_cleanup)
+
+      inbox.archive!
+
+      expect(inbox.reload.archived_at).to be_present
+    end
   end
 
   describe '#reactivate!' do
