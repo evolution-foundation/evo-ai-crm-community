@@ -310,6 +310,12 @@ Rails.application.routes.draw do
       # needs, without resurrecting those unrelated routes.
       namespace :internal do
         post 'knowledge/search', to: 'knowledge#search'
+
+        post 'memory/event', to: 'memory#event'
+        post 'memory/search', to: 'memory#search'
+        get 'memory/load', to: 'memory#load'
+        post 'memory/compress', to: 'memory#compress'
+        delete 'memory/:app_name/:user_id', to: 'memory#clear'
       end
 
       # Lead-capture form builder admin CRUD (B14.01).
