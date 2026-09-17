@@ -258,8 +258,8 @@ RSpec.describe Whatsapp::Providers::WhatsappCloudService do
       expect(service.last_delivery_error).to eq('<html>502 Bad Gateway</html>')
     end
 
-    # CRM-359: the dynamic URL button rides as its own component after the body,
-    # in Meta's shape; without one the payload is byte for byte what it was.
+    # CRM-359: the dynamic URL button rides as its own component after the body, in
+    # Meta's shape; without one the body stays the only component, as before.
     it 'appends the button components after the body component' do
       ok_response = instance_double(HTTParty::Response, success?: true,
                                                         parsed_response: { 'messages' => [{ 'id' => 'wamid.1' }] })

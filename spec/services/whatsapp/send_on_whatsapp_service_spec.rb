@@ -389,6 +389,26 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       end
     end
 
+    # A missing envelope key normalises to {}, so the body component carries [] where it
+    # used to carry nil — pinned here because no in-repo caller produces that envelope.
+    context 'when the envelope carries no processed_params at all' do
+      let(:message) do
+        instance_double(Message, conversation: conversation, additional_attributes: {
+                          'template_params' => {
+                            'name' => 'evo_lanc_reenvio_do_convite_de_grupo',
+                            'language' => 'pt_BR', 'namespace' => 'ns'
+                          }
+                        })
+      end
+
+      it 'sends an empty body parameter list and no button component' do
+        _name, _ns, _lang, parameters, button_components = service.send(:processable_channel_message_template)
+
+        expect(parameters).to eq([])
+        expect(button_components).to eq([])
+      end
+    end
+
     it 'hands the button components to the provider alongside the body parameters' do
       provider_service = instance_double(Whatsapp::Providers::WhatsappCloudService, last_delivery_error: nil)
       allow(channel).to receive(:provider_service).and_return(provider_service)
