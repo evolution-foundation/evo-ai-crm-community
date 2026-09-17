@@ -99,16 +99,54 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
   end
 
   describe '#handle_connection_open (reconnect resets provider_connection)' do
-    let(:channel) { instance_double(Channel::Whatsapp, id: 1) }
-    let(:inbox) { instance_double(Inbox, channel: channel) }
+    let(:channel) { instance_double(Channel::Whatsapp, id: 1, phone_number: '+5511999999999') }
+    let(:avatar_double) { instance_double(ActiveStorage::Attached::One, attached?: false) }
+    let(:inbox) { instance_double(Inbox, id: 'inbox-1', channel: channel, avatar: avatar_double) }
     let(:service) { described_class.new(inbox: inbox, params: { instance: 'vendedor-2' }) }
+    let(:provider_service) { instance_double(Whatsapp::Providers::EvolutionService) }
 
     before do
       allow(service).to receive(:processed_params).and_return({ instance: 'vendedor-2' })
+      allow(channel).to receive(:mark_connected!)
+      allow(Whatsapp::Providers::EvolutionService).to receive(:new)
+        .with(whatsapp_channel: channel)
+        .and_return(provider_service)
+      allow(provider_service).to receive(:fetch_profile_picture_url).and_return(nil)
     end
 
     it 'marks the channel connected on state=open (clears reauth flag + resets provider_connection)' do
       expect(channel).to receive(:mark_connected!)
+      service.send(:handle_connection_open, nil)
+    end
+
+    it 'uses the profilePictureUrl straight from the webhook payload when present, no extra API call' do
+      expect(Whatsapp::Providers::EvolutionService).not_to receive(:new)
+      expect(service).to receive(:update_inbox_avatar).with('https://cdn.example.com/from-webhook.jpg')
+
+      service.send(:handle_connection_open, 'https://cdn.example.com/from-webhook.jpg')
+    end
+
+    it 'actively fetches the channel\'s own profile picture when the webhook payload has none (the real-world case)' do
+      allow(provider_service).to receive(:fetch_profile_picture_url).with('+5511999999999')
+                                                                    .and_return('https://cdn.example.com/fetched.jpg')
+
+      expect(service).to receive(:update_inbox_avatar).with('https://cdn.example.com/fetched.jpg')
+
+      service.send(:handle_connection_open, nil)
+    end
+
+    it 'does not attempt a fetch when the inbox already has an avatar' do
+      allow(avatar_double).to receive(:attached?).and_return(true)
+
+      expect(Whatsapp::Providers::EvolutionService).not_to receive(:new)
+      expect(service).not_to receive(:update_inbox_avatar)
+
+      service.send(:handle_connection_open, nil)
+    end
+
+    it 'does nothing when neither the webhook nor the active fetch find a picture' do
+      expect(service).not_to receive(:update_inbox_avatar)
+
       service.send(:handle_connection_open, nil)
     end
   end

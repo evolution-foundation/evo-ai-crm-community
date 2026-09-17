@@ -114,8 +114,16 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
     channel = inbox.channel
     channel.mark_connected!
 
-    # Update inbox avatar if profile picture URL is present
-    return unless profile_picture_url.present?
+    return if inbox.avatar.attached?
+
+    # The connection.update webhook payload does not actually carry a
+    # profilePictureUrl field in practice (this param has always been nil in
+    # production, silently disabling this whole path) — actively fetch the
+    # channel's own picture instead of only trusting the webhook to supply it.
+    profile_picture_url = profile_picture_url.presence ||
+                           Whatsapp::Providers::EvolutionService.new(whatsapp_channel: channel)
+                                                               .fetch_profile_picture_url(channel.phone_number)
+    return if profile_picture_url.blank?
 
     Rails.logger.info "Evolution API: Updating inbox avatar with profile picture from CONNECTION_UPDATE: #{profile_picture_url}"
 

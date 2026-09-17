@@ -36,6 +36,23 @@ RSpec.describe Evolution::FetchContactAvatarJob do
     described_class.new.perform(contact_id, phone_number, channel_id)
   end
 
+  it 'releases the enqueue debounce lock when no URL is found, so a later message can retry the fetch' do
+    allow(provider_service).to receive(:fetch_profile_picture_url).and_return(nil)
+
+    expect(Whatsapp::EvolutionHandlers::AvatarEnqueueGuard).to receive(:release_avatar_enqueue_lock).with(contact_id)
+
+    described_class.new.perform(contact_id, phone_number, channel_id)
+  end
+
+  it 'does not release the debounce lock when a URL was found and a download was scheduled' do
+    allow(provider_service).to receive(:fetch_profile_picture_url).and_return('https://cdn.example.com/profile.jpg')
+    allow(Avatar::AvatarFromUrlJob).to receive(:perform_later)
+
+    expect(Whatsapp::EvolutionHandlers::AvatarEnqueueGuard).not_to receive(:release_avatar_enqueue_lock)
+
+    described_class.new.perform(contact_id, phone_number, channel_id)
+  end
+
   it 'short-circuits when the contact already has an avatar attached' do
     allow(avatar_double).to receive(:attached?).and_return(true)
 
