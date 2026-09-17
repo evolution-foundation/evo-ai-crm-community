@@ -55,6 +55,52 @@ RSpec.describe MessageTemplate, type: :model do
 
   # EVO-1231 [6.2]: templates can exist as global (channel-less) records;
   # WhatsApp Cloud templates still require a channel.
+  # CRM-359: the pickers that read `variables` (journey, automation) must ask for the
+  # dynamic URL button parameter too; the callback used to keep body tokens only.
+  describe '#extract_variables_from_content — dynamic URL button' do
+    let(:body) { { 'type' => 'BODY', 'text' => 'Olá {{1}}' } }
+    let(:url_button) { { 'type' => 'URL', 'text' => 'Entrar', 'url' => 'https://bms-link.test/{{1}}' } }
+
+    def names_for(content:, components:)
+      template = described_class.new(name: "t-#{SecureRandom.hex(4)}", content: content, components: components)
+      template.send(:extract_variables_from_content)
+      template.variables.map { |v| v['name'] }
+    end
+
+    it 'body only: declares exactly the body variable' do
+      expect(names_for(content: 'Olá {{1}}', components: [body])).to eq(['1'])
+    end
+
+    it 'button only: declares the button parameter named after its button' do
+      expect(names_for(content: 'Sem variável', components: [{ 'type' => 'BUTTONS', 'buttons' => [url_button] }]))
+        .to eq(['button_0_1'])
+    end
+
+    it 'body and button: both, never collapsed into one {{1}}' do
+      components = [body, { 'type' => 'BUTTONS', 'buttons' => [url_button] }]
+      expect(names_for(content: 'Olá {{1}}', components: components)).to eq(%w[1 button_0_1])
+    end
+
+    it 'indexes the URL button among all buttons and ignores the other kinds' do
+      components = [{ 'type' => 'BUTTONS', 'buttons' => [{ 'type' => 'QUICK_REPLY', 'text' => 'Sim' }, url_button] }]
+      expect(names_for(content: '', components: components)).to eq(['button_1_1'])
+    end
+
+    it 'reads the Hash form of components the Meta sync stores' do
+      components = { 'buttons' => { 'type' => 'BUTTONS', 'buttons' => [url_button] } }
+      expect(names_for(content: '', components: components)).to eq(['button_0_1'])
+    end
+
+    it 'drops a declared button variable once the button loses its {{n}}' do
+      template = described_class.new(name: "t-#{SecureRandom.hex(4)}", content: 'x',
+                                     components: [{ 'type' => 'BUTTONS', 'buttons' => [url_button] }],
+                                     variables: [{ 'name' => 'button_0_1', 'type' => 'text', 'required' => false }])
+      template.components = [{ 'type' => 'BUTTONS', 'buttons' => [url_button.merge('url' => 'https://bms-link.test/planos')] }]
+      template.send(:extract_variables_from_content)
+      expect(template.variables).to eq([])
+    end
+  end
+
   describe 'channel decoupling' do
     def whatsapp_channel(provider:)
       channel = Channel::Whatsapp.new(provider: provider, phone_number: "+1555#{SecureRandom.hex(3)}")
