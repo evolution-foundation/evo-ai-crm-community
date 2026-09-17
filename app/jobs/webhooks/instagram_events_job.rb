@@ -36,6 +36,13 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
       return
     end
 
+    # A `changes` entry that is not the test event carries a field this job does not
+    # handle (DMs come in `messaging`/`standby`); it is skipped, not routed as a test.
+    if entry[:changes].present?
+      Rails.logger.info("Instagram Events Job: Skipping unsupported change fields #{change_fields(entry).inspect} from entry: #{entry[:id]}")
+      return
+    end
+
     process_messages(entry)
   end
 
@@ -113,8 +120,14 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
     unsupported_keys.any? { |key| messaging_indifferent.key?(key) }
   end
 
+  # Every non-DM notification (comments, mentions, …) also arrives as `changes`, so
+  # the presence of the key says nothing: only the fixed test pair is the test event.
   def test_event?(entry)
-    entry[:changes].present?
+    Instagram::TestEventService.test_event?(extract_messaging_from_test_event(entry))
+  end
+
+  def change_fields(entry)
+    Array(entry[:changes]).filter_map { |change| change.is_a?(Hash) ? change.with_indifferent_access[:field] : nil }.uniq
   end
 
   def process_test_event(entry)
