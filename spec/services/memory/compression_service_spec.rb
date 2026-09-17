@@ -3,36 +3,87 @@ require 'rails_helper'
 RSpec.describe Memory::CompressionService do
   subject(:service) { described_class.new }
 
+  let(:app_name) { 'agent-1' }
+  let(:user_id) { 'user-1' }
+
+  def create_events(count, role: 'user')
+    count.times { |i| MemoryEvent.create!(app_name: app_name, user_id: user_id, role: role, content: "msg #{i}") }
+  end
+
+  def compress!(**overrides)
+    service.compress!(app_name: app_name, user_id: user_id, force: false, interval: 10, **overrides)
+  end
+
   describe '#compress!' do
     it 'returns nil when there are no events to compress' do
-      expect(service.compress!(app_name: 'agent-1', user_id: 'user-1', force: false, interval: 10)).to be_nil
+      expect(compress!).to be_nil
     end
 
     it 'returns nil when under the interval and not forced' do
-      5.times { |i| MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: 'user', content: "msg #{i}") }
+      create_events(5)
 
-      expect(service.compress!(app_name: 'agent-1', user_id: 'user-1', force: false, interval: 10)).to be_nil
+      expect(compress!).to be_nil
     end
 
     it 'compresses events into a summary and clears the compressed events when the interval is reached' do
-      10.times { |i| MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: i.even? ? 'user' : 'agent', content: "msg #{i}") }
+      create_events(10)
       allow_any_instance_of(described_class).to receive(:call_llm).and_return('Concise summary of the conversation.')
 
-      summary = service.compress!(app_name: 'agent-1', user_id: 'user-1', force: false, interval: 10)
+      summary = compress!
 
       expect(summary).to be_a(MemorySummary)
       expect(summary.content).to eq('Concise summary of the conversation.')
       expect(summary.source_event_count).to eq(10)
-      expect(MemoryEvent.for(app_name: 'agent-1', user_id: 'user-1').count).to eq(0)
+      expect(MemoryEvent.for(app_name: app_name, user_id: user_id).count).to eq(0)
     end
 
     it 'forces compression below the interval when force is true' do
-      3.times { |i| MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: 'user', content: "msg #{i}") }
+      create_events(3)
       allow_any_instance_of(described_class).to receive(:call_llm).and_return('Short summary.')
 
-      summary = service.compress!(app_name: 'agent-1', user_id: 'user-1', force: true, interval: 10)
+      summary = compress!(force: true)
 
       expect(summary.source_event_count).to eq(3)
+    end
+
+    it 'holds a postgres advisory lock for the (app_name, user_id) pair while compressing' do
+      create_events(10)
+
+      held_advisory_locks = nil
+      allow_any_instance_of(described_class).to receive(:call_llm) do
+        held_advisory_locks = ActiveRecord::Base.connection.select_value(
+          "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()"
+        ).to_i
+        'Concise summary of the conversation.'
+      end
+
+      compress!
+
+      expect(held_advisory_locks).to eq(1)
+    end
+
+    it 'does not produce duplicate summaries when compress! is invoked again immediately after' do
+      create_events(10)
+      allow_any_instance_of(described_class).to receive(:call_llm).and_return('Concise summary of the conversation.')
+
+      first = compress!
+      second = compress!
+
+      expect(first).to be_a(MemorySummary)
+      expect(second).to be_nil
+      expect(MemorySummary.where(app_name: app_name, user_id: user_id).count).to eq(1)
+    end
+
+    it 'raises a Memory::CompressionService::Error when the LLM response body is not valid JSON' do
+      create_events(10)
+
+      response = instance_double(Net::HTTPOK, code: '200', body: 'not json')
+      allow(response).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
+      allow_any_instance_of(Net::HTTP).to receive(:request).and_return(response)
+      allow(Ai::CredentialResolver).to receive(:resolve_endpoint).with(for_consumer: :memory_compression)
+        .and_return(Ai::CredentialResolver::Endpoint.new(key: 'test-key', base_url: nil))
+
+      expect { compress! }.to raise_error(Memory::CompressionService::Error, /unparseable JSON/)
     end
   end
 end
