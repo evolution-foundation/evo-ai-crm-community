@@ -55,8 +55,8 @@ RSpec.describe MessageTemplate, type: :model do
 
   # EVO-1231 [6.2]: templates can exist as global (channel-less) records;
   # WhatsApp Cloud templates still require a channel.
-  # CRM-359: the pickers that read `variables` (journey, automation) must ask for the
-  # dynamic URL button parameter too; the callback used to keep body tokens only.
+  # The pickers (journey, automation) read `variables`, so the callback has to declare
+  # the button parameter there too — it used to keep body tokens only.
   describe '#extract_variables_from_content — dynamic URL button' do
     let(:body) { { 'type' => 'BODY', 'text' => 'Olá {{1}}' } }
     let(:url_button) { { 'type' => 'URL', 'text' => 'Entrar', 'url' => 'https://bms-link.test/{{1}}' } }

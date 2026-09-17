@@ -330,9 +330,8 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
     end
   end
 
-  # CRM-359: a dynamic URL button carries its own {{n}}, numbered by Meta per
-  # button. The frontend names it button_<index>_<n>; the service must keep it
-  # out of the body parameters and ship it as its own component.
+  # Meta numbers a URL button's {{n}} per button: the service must keep it out of the
+  # body parameters and ship it as its own component.
   describe '#processable_channel_message_template — dynamic URL button' do
     let(:provider) { 'whatsapp_cloud' }
     let(:contact_inbox_source_id) { '5511999999999' }

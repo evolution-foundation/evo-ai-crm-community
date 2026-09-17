@@ -256,11 +256,8 @@ class MessageTemplate < ApplicationRecord
 
   # Extract automated variables automatically from content
   # Format: {{variable_name}}
-  #
-  # A dynamic URL button carries its own {{n}}, numbered by Meta per button, so it is
-  # declared as `button_<index>_<n>` next to the body variables: every picker that
-  # reads `variables` (journey, automation) asks for it, and the send splits it off
-  # into the button component.
+  # A URL button's {{n}} is declared as `button_<index>_<n>`, so the pickers that read
+  # `variables` ask for it and the send can split it off.
   def extract_variables_from_content
     return unless content.present? || components.present?
 
@@ -282,10 +279,8 @@ class MessageTemplate < ApplicationRecord
     self.variables.reject! { |v| !extracted_vars.include?(v['name']) }
   end
 
-  # `button_<index>_<n>` for every {{n}} in a URL button; index counts ALL buttons of
-  # the BUTTONS component, the way Meta indexes them. Components arrive as a Hash keyed
-  # by lower-cased type (the Meta sync, extract_components_hash) or as an Array (the
-  # local editor), with string or symbol keys.
+  # Index counts ALL buttons of the component, the way Meta indexes them. `components`
+  # is a Hash keyed by lower-cased type (Meta sync) or an Array (local editor).
   def button_variable_names
     list = components.is_a?(Hash) ? components.values : Array(components)
     list.flat_map { |component| component_buttons(component).each_with_index.flat_map { |b, i| url_button_names(b, i) } }

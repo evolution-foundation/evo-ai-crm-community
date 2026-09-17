@@ -2,10 +2,8 @@
 
 # Splits a template's processed_params into body parameters and button components.
 #
-# A dynamic URL button carries its own {{n}} that Meta numbers per button, not with
-# the body: the frontend names it `button_<index>_<n>` (index = position among all
-# buttons of the template), so the two scopes never collide in the flat params hash.
-# Everything else is a body parameter, positional or named as before.
+# Meta numbers a URL button's {{n}} per button, not with the body, so the frontend
+# names it `button_<index>_<n>`: the two scopes never collide in the flat params hash.
 module Whatsapp::TemplateButtonParams
   BUTTON_KEY = /\Abutton_(\d+)_(\d+)\z/
 

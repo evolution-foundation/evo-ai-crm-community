@@ -58,7 +58,7 @@ RSpec.describe Whatsapp::Providers::Whatsapp360DialogService do
     end
   end
 
-  # CRM-359: same component shape as the Cloud provider — the button rides after the body.
+  # Same component shape as the Cloud provider — the button rides after the body.
   describe '#send_template' do
     let(:messages_url) { 'https://waba.360dialog.io/v1/messages' }
     let(:template_info) do
