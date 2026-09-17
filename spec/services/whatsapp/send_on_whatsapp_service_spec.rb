@@ -330,6 +330,102 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
     end
   end
 
+  # Meta numbers a URL button's {{n}} per button: the service must keep it out of the
+  # body parameters and ship it as its own component.
+  describe '#processable_channel_message_template — dynamic URL button' do
+    let(:provider) { 'whatsapp_cloud' }
+    let(:contact_inbox_source_id) { '5511999999999' }
+    let(:additional_attributes) { nil }
+    let(:parameter_format) { 'POSITIONAL' }
+    let(:processed_params) { { '1' => 'João', 'button_0_1' => 'abc123' } }
+    let(:message) do
+      instance_double(Message, conversation: conversation, additional_attributes: {
+                        'template_params' => {
+                          'name' => 'evo_lanc_reenvio_do_convite_de_grupo', 'language' => 'pt_BR',
+                          'namespace' => 'ns', 'processed_params' => processed_params
+                        }
+                      })
+    end
+
+    before do
+      allow(channel).to receive(:message_templates).and_return([
+                                                                 { 'name' => 'evo_lanc_reenvio_do_convite_de_grupo', 'language' => 'pt_BR',
+                                                                   'status' => 'approved', 'parameter_format' => parameter_format,
+                                                                   'components' => [{ 'type' => 'BODY', 'text' => 'Olá {{1}}' }] }
+                                                               ])
+    end
+
+    it 'keeps the button parameter out of the body and returns it as a url button component' do
+      _name, _ns, _lang, parameters, button_components = service.send(:processable_channel_message_template)
+
+      expect(parameters).to eq([{ type: 'text', text: 'João' }])
+      expect(button_components).to eq([
+                                        { type: 'button', sub_type: 'url', index: '0',
+                                          parameters: [{ type: 'text', text: 'abc123' }] }
+                                      ])
+    end
+
+    context 'when the template uses NAMED parameters' do
+      let(:parameter_format) { 'NAMED' }
+      let(:processed_params) { { 'nome' => 'João', 'button_0_1' => 'abc123' } }
+
+      it 'names the body parameter and still keeps the button positional (Meta rule)' do
+        _name, _ns, _lang, parameters, button_components = service.send(:processable_channel_message_template)
+
+        expect(parameters).to eq([{ type: 'text', parameter_name: 'nome', text: 'João' }])
+        expect(button_components.first[:parameters]).to eq([{ type: 'text', text: 'abc123' }])
+      end
+    end
+
+    context 'when the template has no dynamic button' do
+      let(:processed_params) { { '1' => 'João' } }
+
+      it 'returns no button component and the body parameters exactly as before' do
+        _name, _ns, _lang, parameters, button_components = service.send(:processable_channel_message_template)
+
+        expect(parameters).to eq([{ type: 'text', text: 'João' }])
+        expect(button_components).to eq([])
+      end
+    end
+
+    # A missing envelope key normalises to {}, so the body component carries [] where it
+    # used to carry nil — pinned here because no in-repo caller produces that envelope.
+    context 'when the envelope carries no processed_params at all' do
+      let(:message) do
+        instance_double(Message, conversation: conversation, additional_attributes: {
+                          'template_params' => {
+                            'name' => 'evo_lanc_reenvio_do_convite_de_grupo',
+                            'language' => 'pt_BR', 'namespace' => 'ns'
+                          }
+                        })
+      end
+
+      it 'sends an empty body parameter list and no button component' do
+        _name, _ns, _lang, parameters, button_components = service.send(:processable_channel_message_template)
+
+        expect(parameters).to eq([])
+        expect(button_components).to eq([])
+      end
+    end
+
+    it 'hands the button components to the provider alongside the body parameters' do
+      provider_service = instance_double(Whatsapp::Providers::WhatsappCloudService, last_delivery_error: nil)
+      allow(channel).to receive(:provider_service).and_return(provider_service)
+      allow(channel).to receive(:provider).and_return('whatsapp_cloud')
+      allow(provider_service).to receive(:send_template).and_return('wamid.1')
+      allow(message).to receive(:update!)
+
+      service.send(:send_template_message)
+
+      expect(provider_service).to have_received(:send_template).with(
+        '5511999999999',
+        hash_including(parameters: [{ type: 'text', text: 'João' }],
+                       button_components: [hash_including(sub_type: 'url', index: '0')])
+      )
+      expect(message).to have_received(:update!).with(source_id: 'wamid.1')
+    end
+  end
+
   describe '#send_template_message — failure routes through StatusUpdateService' do
     let(:provider) { 'evolution_go' }
     let(:contact_inbox_source_id) { '5511999999999' }

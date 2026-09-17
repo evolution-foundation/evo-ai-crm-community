@@ -128,10 +128,10 @@ class Whatsapp::Providers::Whatsapp360DialogService < Whatsapp::Providers::BaseS
         policy: 'deterministic',
         code: template_info[:lang_code]
       },
-      components: [{
-        type: 'body',
-        parameters: template_info[:parameters]
-      }]
+      components: [
+        { type: 'body', parameters: template_info[:parameters] },
+        *Array(template_info[:button_components])
+      ]
     }
   end
 

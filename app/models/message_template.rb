@@ -256,10 +256,12 @@ class MessageTemplate < ApplicationRecord
 
   # Extract automated variables automatically from content
   # Format: {{variable_name}}
+  # A URL button's {{n}} is declared as `button_<index>_<n>`, so the pickers that read
+  # `variables` ask for it and the send can split it off.
   def extract_variables_from_content
-    return unless content.present?
+    return unless content.present? || components.present?
 
-    extracted_vars = content.scan(/\{\{(\w+)\}\}/).flatten.uniq
+    extracted_vars = (content.to_s.scan(/\{\{(\w+)\}\}/).flatten + button_variable_names).uniq
 
     # Included new variables
     existing_var_names = variables.map { |v| v['name'] }
@@ -275,5 +277,28 @@ class MessageTemplate < ApplicationRecord
 
     # Remove variables that are no longer in the content
     self.variables.reject! { |v| !extracted_vars.include?(v['name']) }
+  end
+
+  # Index counts ALL buttons of the component, the way Meta indexes them. `components`
+  # is a Hash keyed by lower-cased type (Meta sync) or an Array (local editor).
+  def button_variable_names
+    list = components.is_a?(Hash) ? components.values : Array(components)
+    list.flat_map { |component| component_buttons(component).each_with_index.flat_map { |b, i| url_button_names(b, i) } }
+  end
+
+  def component_buttons(component)
+    return [] unless component.is_a?(Hash) && hash_value(component, :type).to_s == 'BUTTONS'
+
+    Array(hash_value(component, :buttons))
+  end
+
+  def url_button_names(button, index)
+    return [] unless button.is_a?(Hash) && hash_value(button, :type).to_s == 'URL'
+
+    hash_value(button, :url).to_s.scan(/\{\{(\d+)\}\}/).flatten.map { |n| "button_#{index}_#{n}" }
+  end
+
+  def hash_value(hash, key)
+    hash[key.to_s] || hash[key.to_sym]
   end
 end
