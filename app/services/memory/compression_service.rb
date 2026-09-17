@@ -15,7 +15,13 @@ class Memory::CompressionService
 
     ActiveRecord::Base.transaction do
       lock_key = Zlib.crc32("#{app_name}:#{user_id}")
-      ActiveRecord::Base.connection.execute("SELECT pg_advisory_xact_lock(#{lock_key})")
+      # Non-blocking: this transaction wraps an LLM call that can take
+      # OPEN_TIMEOUT + READ_TIMEOUT seconds, and a blocking lock would pin a
+      # second pooled connection idle for that whole window. A lost race means
+      # someone else is already compressing these events, so bail out exactly
+      # like "nothing to compress" — nil, no LLM call, no summary, no deletion.
+      acquired = ActiveRecord::Base.connection.select_value("SELECT pg_try_advisory_xact_lock(#{lock_key})")
+      next unless ActiveModel::Type::Boolean.new.cast(acquired)
 
       events = MemoryEvent.for(app_name: app_name, user_id: user_id).to_a
       count = events.size

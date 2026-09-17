@@ -315,7 +315,12 @@ Rails.application.routes.draw do
         post 'memory/search', to: 'memory#search'
         get 'memory/load', to: 'memory#load'
         post 'memory/compress', to: 'memory#compress'
-        delete 'memory/:app_name/:user_id', to: 'memory#clear'
+        # format: false (same idiom as the journeys passthrough above) plus
+        # explicit segment constraints: Rails' default segment regex excludes
+        # dots, so without both an email-shaped user_id would 404 or be
+        # truncated as a format extension.
+        delete 'memory/:app_name/:user_id', to: 'memory#clear', format: false,
+               constraints: { app_name: %r{[^/]+}, user_id: %r{[^/]+} }
       end
 
       # Lead-capture form builder admin CRUD (B14.01).

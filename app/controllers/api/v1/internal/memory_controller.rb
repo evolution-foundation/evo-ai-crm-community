@@ -6,6 +6,11 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
   def event
     memory_event = MemoryEvent.create!(app_name: app_name, user_id: user_id, role: params[:role].to_s, content: params[:content].to_s)
 
+    # Compression runs before the FIFO trim so that events about to be trimmed
+    # still get a chance to land in a MemorySummary first; without this the
+    # medium-term tier never populates and trim_to! silently drops history.
+    maybe_compress
+
     if params[:max_messages].present?
       MemoryEvent.trim_to!(app_name: app_name, user_id: user_id, max_messages: params[:max_messages].to_i)
     end
@@ -66,16 +71,39 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
     render json: { error: 'app_name and user_id are required' }, status: :bad_request if app_name.blank? || user_id.blank?
   end
 
+  # The processor sends compression_interval on every add_event call; when the
+  # post-insert event count for this pair reaches it, roll the events up into a
+  # MemorySummary. Only fires when the param is actually present, mirroring the
+  # max_messages conditional.
+  def maybe_compress
+    return if params[:compression_interval].blank?
+
+    interval = params[:compression_interval].to_i
+    return unless interval.positive?
+    return unless MemoryEvent.for(app_name: app_name, user_id: user_id).count >= interval
+
+    Memory::CompressionService.new.compress!(app_name: app_name, user_id: user_id, force: false, interval: interval)
+  end
+
   def matching_memories(app_name:, user_id:, query:, limit:)
     summaries = MemorySummary.for(app_name: app_name, user_id: user_id)
-    events = MemoryEvent.for(app_name: app_name, user_id: user_id)
+    # MemoryEvent.for is oldest-first (correct for transcript replay); recall
+    # wants the most recent matches, so flip it for this consumer only.
+    events = MemoryEvent.for(app_name: app_name, user_id: user_id).reorder(created_at: :desc, id: :desc)
 
     if query.present?
-      summaries = summaries.where('content ILIKE ?', "%#{query}%")
-      events = events.where('content ILIKE ?', "%#{query}%")
+      # Escape %/_ so a literal wildcard in the query does not match broadly.
+      pattern = "%#{ActiveRecord::Base.sanitize_sql_like(query)}%"
+      summaries = summaries.where('content ILIKE ?', pattern)
+      events = events.where('content ILIKE ?', pattern)
     end
 
-    (summaries.limit(limit).map { |s| serialize_summary(s) } + events.limit(limit).map { |e| serialize_event(e) }).first(limit)
+    # Take up to `limit` of each tier, then merge newest-first, so a full page
+    # of summaries can never starve events out of the truncation window.
+    candidates = summaries.limit(limit).to_a + events.limit(limit).to_a
+    candidates.sort_by { |record| [-record.created_at.to_f, -record.id] }
+              .first(limit)
+              .map { |record| record.is_a?(MemorySummary) ? serialize_summary(record) : serialize_event(record) }
   end
 
   def serialize_summary(summary)

@@ -62,6 +62,22 @@ RSpec.describe Memory::CompressionService do
       expect(held_advisory_locks).to eq(1)
     end
 
+    it 'returns nil without calling the LLM when the advisory lock cannot be acquired' do
+      create_events(10)
+
+      connection = ActiveRecord::Base.connection
+      allow(ActiveRecord::Base).to receive(:connection).and_return(connection)
+      allow(connection).to receive(:select_value).and_wrap_original do |original, sql, *args|
+        sql.to_s.include?('pg_try_advisory_xact_lock') ? false : original.call(sql, *args)
+      end
+
+      expect_any_instance_of(described_class).not_to receive(:call_llm)
+
+      expect(compress!).to be_nil
+      expect(MemorySummary.where(app_name: app_name, user_id: user_id).count).to eq(0)
+      expect(MemoryEvent.for(app_name: app_name, user_id: user_id).count).to eq(10)
+    end
+
     it 'does not produce duplicate summaries when compress! is invoked again immediately after' do
       create_events(10)
       allow_any_instance_of(described_class).to receive(:call_llm).and_return('Concise summary of the conversation.')
