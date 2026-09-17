@@ -26,6 +26,12 @@ RSpec.describe Instagram::TestEventService do
       expect(described_class.test_event?(nil)).to be(false)
       expect(described_class.test_event?('oops')).to be(false)
     end
+
+    it 'is false when sender/recipient is present but not a hash' do
+      expect(described_class.test_event?('sender' => 'abc', 'recipient' => { 'id' => '23245' })).to be(false)
+      expect(described_class.test_event?('sender' => { 'id' => '12334' }, 'recipient' => ['23245'])).to be(false)
+      expect(described_class.test_event?('sender' => nil, 'recipient' => nil)).to be(false)
+    end
   end
 
   describe '#perform' do

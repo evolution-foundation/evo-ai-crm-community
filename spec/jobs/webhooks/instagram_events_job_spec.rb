@@ -2,10 +2,8 @@
 
 require 'rails_helper'
 
-# Every non-DM notification (comments, mentions) arrives as `changes`, the same
-# envelope Meta's dashboard uses for its test event. Routing by the envelope sent
-# every comment into the test path, which reads sender/recipient the comment does
-# not have — NoMethodError, dead queue, comment lost.
+# The routing predicate is the only thing separating a real notification from
+# Meta's test event: both arrive in the same `changes` envelope.
 RSpec.describe Webhooks::InstagramEventsJob, type: :job do
   subject(:job) { described_class.new }
 
@@ -69,5 +67,15 @@ RSpec.describe Webhooks::InstagramEventsJob, type: :job do
     expect(Instagram::TestEventService).not_to receive(:new)
 
     expect { process(entry) }.not_to raise_error
+  end
+
+  it 'skips a changes value whose sender is not a hash instead of dying on it' do
+    entry = comment_entry.deep_dup
+    entry['changes'][0]['value']['sender'] = '12334'
+    allow(Rails.logger).to receive(:info)
+
+    expect { process(entry) }.not_to raise_error
+
+    expect(Rails.logger).to have_received(:info).with(/Skipping unsupported change fields/)
   end
 end
