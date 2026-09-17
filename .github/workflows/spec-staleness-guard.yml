@@ -190,9 +190,9 @@ on:
       - 'app/controllers/webhooks/instagram_controller.rb'
       - 'config/initializers/facebook_messenger.rb'
       - 'spec/requests/webhooks/meta_token_verify_spec.rb'
-      # CRM-349: a comment and Meta's dashboard test event arrive in the SAME
-      # `changes` envelope, so the predicate that tells them apart is all that keeps
-      # real notifications out of the test path - and it is the shape of an external
+      # A comment and Meta's dashboard test event arrive in the SAME `changes`
+      # envelope, so the predicate that tells them apart is all that keeps real
+      # notifications out of the test path - and it reads the shape of an external
       # payload, which no other lane in this repo exercises.
       - 'app/jobs/webhooks/instagram_events_job.rb'
       - 'app/services/instagram/test_event_service.rb'
