@@ -45,6 +45,7 @@ module Whatsapp::EvolutionHandlers::ContentHandlers
 
     content_attributes[:sender_name] = participant_push_name if jid_type == 'group' && participant_push_name.present?
     content_attributes[:media_type] = message_type if media_attachment?
+    content_attributes[:sent_from_device] = true unless incoming?
 
     content_attributes
   end

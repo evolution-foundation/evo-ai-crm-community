@@ -260,8 +260,10 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       content: message_content || '',
       source_id: raw_message_id,
       created_at: Time.zone.at(message_timestamp),
-      sender: incoming? ? @contact : (User.where(type: 'SuperAdmin').first || User.first),
-      sender_type: incoming? ? 'Contact' : 'User',
+      # An echo is a message the agent typed on the phone: the webhook carries no identity,
+      # so there is nobody to credit it to. message_content_attributes flags it instead.
+      sender: incoming? ? @contact : nil,
+      sender_type: incoming? ? 'Contact' : nil,
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: content_attrs
     }
@@ -453,6 +455,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     attrs = { external_created_at: message_timestamp }
     attrs[:sender_name] = participant_push_name if group_message? && participant_push_name.present?
     attrs[:media_type] = evolution_go_media_type if evolution_go_media_type.present?
+    attrs[:sent_from_device] = true unless incoming?
     attrs
   end
 

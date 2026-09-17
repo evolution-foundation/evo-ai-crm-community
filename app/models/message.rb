@@ -107,12 +107,14 @@ class Message < ApplicationRecord
   # [:external_error : Can specify if the message creation failed due to an error at external API
   # [:is_reaction] : Used to denote if the message is a reaction and differentiate it from a simple reply message
   # [:is_edited, :previous_content] : Used to indicated edited message and previous content (before edit)
+  # [:sent_from_device] : Outgoing echo of a message the agent typed on the phone; it has no sender
 
   store :content_attributes, accessors: [:submitted_email, :items, :submitted_values, :email, :in_reply_to, :deleted,
                                          :revoked_by_contact, :revoke_propagated,
                                          :external_created_at, :story_sender, :story_id, :external_error,
                                          :translations, :in_reply_to_external_id, :is_unsupported,
-                                         :is_reaction, :is_edited, :previous_content], coder: JSON
+                                         :is_reaction, :is_edited, :previous_content,
+                                         :sent_from_device], coder: JSON
 
   store :external_source_ids, accessors: [:slack], coder: JSON, prefix: :external_source_id
 
@@ -120,6 +122,14 @@ class Message < ApplicationRecord
   scope :chat, -> { where.not(message_type: :activity).where(private: false) }
   scope :non_activity_messages, -> { where.not(message_type: :activity).reorder('id desc') }
   scope :today, -> { where("date_trunc('day', created_at) = ?", Date.current) }
+  # content_attributes is a json column behind a JSON store coder, so it holds a *string* of
+  # JSON: unwrap it with #>> before any key lookup, or the operator silently returns null.
+  DEVICE_ECHO_SQL = "(content_attributes #>> '{}')::json ->> 'sent_from_device' = 'true'".freeze
+
+  scope :sent_from_device, -> { where(DEVICE_ECHO_SQL) }
+  # An agent answering from the phone is a human reply with nobody to credit it to, so the
+  # sender is null. Anything counting agent replies has to look at both shapes.
+  scope :human_outgoing, -> { outgoing.where("sender_type = 'User' OR #{DEVICE_ECHO_SQL}") }
 
   # TODO: Get rid of default scope
   # https://stackoverflow.com/a/1834250/939299
@@ -255,8 +265,9 @@ class Message < ApplicationRecord
   def valid_first_reply?
     return false unless human_response? && !private?
     return false if conversation.first_reply_created_at.present?
+    # sender_type is null on a device echo, and `where.not` would drop those rows.
     return false if conversation.messages.outgoing
-                                .where.not(sender_type: ['AgentBot'])
+                                .where("sender_type IS DISTINCT FROM 'AgentBot'")
                                 .where.not(private: true)
                                 .where("(additional_attributes->'campaign_id') is null").count > 1
 
@@ -382,6 +393,10 @@ class Message < ApplicationRecord
     conversation.update!(waiting_since: created_at) if incoming? && conversation.waiting_since.blank?
   end
 
+  def sent_from_device?
+    content_attributes['sent_from_device'].present?
+  end
+
   def human_response?
     # if the sender is not a user, it's not a human response
     # if automation rule id is present, it's not a human response
@@ -389,7 +404,7 @@ class Message < ApplicationRecord
     outgoing? &&
       content_attributes['automation_rule_id'].blank? &&
       additional_attributes['campaign_id'].blank? &&
-      sender.is_a?(User)
+      (sender.is_a?(User) || sent_from_device?)
   end
 
   def dispatch_create_events

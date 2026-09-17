@@ -360,22 +360,30 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       content: content,
       inbox_id: channel.inbox.id,
       source_id: message_id,
-      sender: from_me ? User.where(type: 'SuperAdmin').first || User.first : conversation.contact,
-      sender_type: from_me ? 'User' : 'Contact',
+      # A synced outgoing message was typed on the phone: the history carries no identity,
+      # so there is nobody to credit it to. The flag keeps it readable as a human reply.
+      sender: from_me ? nil : conversation.contact,
+      sender_type: from_me ? nil : 'Contact',
       message_type: from_me ? :outgoing : :incoming,
       created_at: created_at,  # 🎯 Data real da mensagem!
       updated_at: created_at,  # Manter consistência
-      content_attributes: {
-        external_created_at: message_timestamp,
-        evolution_synced: true,
-        evolution_message_type: message_data['messageType'],
-        evolution_status: message_data['status']
-      }
+      content_attributes: evolution_sync_content_attributes(message_data, message_timestamp, from_me)
     )
 
     Rails.logger.info "[EVOLUTION] Sync message created: #{message.id} - #{content.truncate(50)}"
   rescue StandardError => e
     Rails.logger.error "[EVOLUTION] Sync message failed for #{message_id}: #{e.message}"
+  end
+
+  def evolution_sync_content_attributes(message_data, message_timestamp, from_me)
+    attrs = {
+      external_created_at: message_timestamp,
+      evolution_synced: true,
+      evolution_message_type: message_data['messageType'],
+      evolution_status: message_data['status']
+    }
+    attrs[:sent_from_device] = true if from_me
+    attrs
   end
 
   def extract_evolution_sync_message_content(message_data)

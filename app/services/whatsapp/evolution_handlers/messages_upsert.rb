@@ -161,8 +161,10 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       content: message_content || '',
       inbox_id: @inbox.id,
       source_id: raw_message_id,
-      sender: incoming? ? @contact : User.where(type: 'SuperAdmin').first || User.first,
-      sender_type: incoming? ? 'Contact' : 'User',
+      # An echo is a message the agent typed on the phone: the webhook carries no identity,
+      # so there is nobody to credit it to. message_content_attributes flags it instead.
+      sender: incoming? ? @contact : nil,
+      sender_type: incoming? ? 'Contact' : nil,
       message_type: incoming? ? :incoming : :outgoing,
       content_attributes: message_content_attributes
     )
