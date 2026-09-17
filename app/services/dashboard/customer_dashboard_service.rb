@@ -94,7 +94,9 @@ module Dashboard
     end
 
     # A reply typed on the phone in an unassigned conversation leaves user_id null; it is
-    # still a human reply, so it must not land in the AI average.
+    # still a human reply, so it must not land in the AI average. The reclassification is by
+    # conversation, not by the message behind the event: a bot-answered conversation that later
+    # got a phone reply counts as human here.
     def first_response_averages
       events = scoped_reporting_events.where(name: 'first_response')
       device_conversations = scoped_messages.reorder(nil).sent_from_device.select(:conversation_id)

@@ -39,6 +39,18 @@ RSpec.describe Message do
   describe 'a reply typed on the phone' do
     before { conversation.update!(waiting_since: 1.hour.ago) }
 
+    # The prior-outgoing guard in valid_first_reply? filters with IS DISTINCT FROM because a
+    # device echo has a null sender_type, and `where.not` drops null rows: with the echo
+    # invisible the guard undercounts and a later reply is still taken for the first one.
+    it 'is counted among the replies that already went out' do
+      2.times { device_echo }
+      conversation.update!(first_reply_created_at: nil)
+      later = conversation.messages.build(inbox: inbox, message_type: :outgoing, content: 'de novo',
+                                          content_attributes: { sent_from_device: true })
+
+      expect(later.send(:valid_first_reply?)).to be(false)
+    end
+
     it 'stops the clock the customer is waiting on' do
       device_echo
 

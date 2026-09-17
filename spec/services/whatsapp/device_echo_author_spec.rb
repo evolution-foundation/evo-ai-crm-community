@@ -8,7 +8,7 @@ require 'rails_helper'
 #
 # The inbox here is a web widget on purpose: these handlers only read `inbox.id`, and a real
 # Channel::Whatsapp would drag webhook subscription into a spec about authorship.
-RSpec.describe 'Outgoing echo author' do
+RSpec.describe 'Outgoing echo author' do # rubocop:disable RSpec/DescribeClass
   let!(:stranger) { User.create!(name: 'Stranger', email: "stranger-#{SecureRandom.hex(4)}@test.com") }
   let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
   let(:inbox) { Inbox.create!(name: "Inbox #{SecureRandom.hex(3)}", channel: channel) }
@@ -123,11 +123,14 @@ RSpec.describe 'Outgoing echo author' do
     end
   end
 
-  describe 'the idiom is gone from live code' do
+  # Narrow on purpose: it guards the literal `User.first`, not every way of reaching for an
+  # arbitrary user. The deliberate `User.order(:created_at).first` task-creator fallback in
+  # pipeline_tasks_controller is out of scope and must keep passing.
+  describe 'the literal User.first is gone from live code' do
     it 'no longer hands User.first to a message as its author' do
       root = Rails.root
       offenders = Dir.glob(root.join('{app,lib}/**/*.rb')).select do |path|
-        File.read(path).match?(/User\.first/)
+        File.read(path).include?('User.first')
       end
 
       expect(offenders).to be_empty,
