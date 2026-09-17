@@ -1,4 +1,19 @@
 class Instagram::TestEventService
+  # The fixed pair Meta's developer dashboard sends when it tests the webhook
+  # (see the payload notes at the end of Webhooks::InstagramEventsJob).
+  TEST_SENDER_ID = '12334'.freeze
+  TEST_RECIPIENT_ID = '23245'.freeze
+
+  # Only the fixed sender/recipient pair is the test event. A `changes` value with
+  # no sender/recipient at all (a comment, a mention, …) is a real event of a kind
+  # this service does not handle, never a reason to raise.
+  def self.test_event?(messaging)
+    return false unless messaging.is_a?(Hash)
+
+    value = messaging.with_indifferent_access
+    value.dig(:sender, :id).to_s == TEST_SENDER_ID && value.dig(:recipient, :id).to_s == TEST_RECIPIENT_ID
+  end
+
   def initialize(messaging)
     @messaging = messaging
   end
@@ -14,7 +29,7 @@ class Instagram::TestEventService
   private
 
   def test_webhook_event?
-    @messaging[:sender][:id] == '12334' && @messaging[:recipient][:id] == '23245'
+    self.class.test_event?(@messaging)
   end
 
   def create_test_text

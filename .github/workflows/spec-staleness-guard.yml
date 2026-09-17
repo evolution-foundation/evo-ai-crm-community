@@ -188,6 +188,10 @@ on:
       - 'app/controllers/concerns/meta_token_verify_concern.rb'
       - 'app/controllers/webhooks/whatsapp_controller.rb'
       - 'app/controllers/webhooks/instagram_controller.rb'
+      - 'app/jobs/webhooks/instagram_events_job.rb'
+      - 'app/services/instagram/test_event_service.rb'
+      - 'spec/jobs/webhooks/instagram_events_job_spec.rb'
+      - 'spec/services/instagram/test_event_service_spec.rb'
       - 'config/initializers/facebook_messenger.rb'
       - 'spec/requests/webhooks/meta_token_verify_spec.rb'
       # CRM-285: the WhatsApp dedup guard is written to Redis before the message is
@@ -473,6 +477,8 @@ jobs:
             spec/lib/evolution_hub/client_public_connect_spec.rb \
             spec/listeners/action_cable_listener_hub_channel_spec.rb \
             spec/lib/meta_base_url_spec.rb \
+            spec/jobs/webhooks/instagram_events_job_spec.rb \
+            spec/services/instagram/test_event_service_spec.rb \
             spec/services/whatsapp/send_on_whatsapp_service_spec.rb \
             spec/services/whatsapp/template_button_params_spec.rb \
             spec/models/message_template_spec.rb \
