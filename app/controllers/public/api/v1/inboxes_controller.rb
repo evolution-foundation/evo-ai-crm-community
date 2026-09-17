@@ -1,4 +1,6 @@
 class Public::Api::V1::InboxesController < PublicController
+  include ArchivedInboxGuard
+
   before_action :set_inbox_channel
   before_action :set_contact_inbox
   before_action :set_conversation
@@ -25,5 +27,9 @@ class Public::Api::V1::InboxesController < PublicController
     return if params[:conversation_id].blank?
 
     @conversation = @contact_inbox.contact.conversations.find_by!(display_id: params[:conversation_id])
+  end
+
+  def archived_inbox_guard_target
+    @inbox_channel&.inbox
   end
 end

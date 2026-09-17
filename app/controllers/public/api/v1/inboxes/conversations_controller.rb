@@ -2,6 +2,7 @@ class Public::Api::V1::Inboxes::ConversationsController < Public::Api::V1::Inbox
   include Events::Types
   include ConversationResolver
   before_action :set_conversation, only: [:toggle_typing, :update_last_seen, :show, :toggle_status]
+  before_action :reject_if_inbox_archived, only: [:create]
 
   def index
     @conversations = @contact_inbox.hmac_verified? ? @contact.conversations : @contact_inbox.conversations

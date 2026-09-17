@@ -57,6 +57,7 @@ en:
     inbox_channel_replace_requires_archived_whatsapp: This action is only available for an archived WhatsApp inbox
     inbox_channel_replaced: Channel replaced and inbox reactivated successfully
     conversation_moved: Conversation moved successfully
+    inbox_archived_rejects_new_content: This inbox is archived and cannot accept new conversations or messages
 
   errors:
     validations:
