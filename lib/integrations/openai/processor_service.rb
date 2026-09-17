@@ -1,6 +1,5 @@
 class Integrations::Openai::ProcessorService < Integrations::OpenaiBaseService
   AGENT_INSTRUCTION = 'You are a helpful support agent.'.freeze
-  LANGUAGE_INSTRUCTION = 'Ensure that the reply should be in user language.'.freeze
   def reply_suggestion_message
     return nil unless conversation
 
@@ -50,18 +49,6 @@ class Integrations::Openai::ProcessorService < Integrations::OpenaiBaseService
   end
 
   private
-
-  def account_language
-    @account_language ||= GlobalConfigService.load('DEFAULT_LOCALE', 'english')
-  end
-
-  def language_instruction
-    if account_language && account_language != 'english'
-      "Please respond in #{account_language}. If you're unsure about the language, use #{account_language} as the default."
-    else
-      LANGUAGE_INSTRUCTION
-    end
-  end
 
   def prompt_from_file(file_name)
     # Use dynamic prompts from GlobalConfigService instead of files

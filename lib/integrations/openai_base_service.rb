@@ -108,6 +108,17 @@ class Integrations::OpenaiBaseService
     @credential_endpoint ||= Ai::CredentialResolver.resolve_endpoint(for_consumer: :inbox_assist, legacy_hook: hook)
   end
 
+  # Default reply language for compose-box AI actions (rephrase, fix grammar, etc).
+  # Falls back to pt-BR; the instruction below still switches language when the
+  # text being worked on is clearly written in another language.
+  def account_language
+    @account_language ||= GlobalConfigService.load('DEFAULT_LOCALE', 'pt-BR')
+  end
+
+  def language_instruction
+    "Always reply in #{account_language} unless the text you are working with is clearly written in a different language, in which case reply in that same language. Never translate the text into a different language than the one it was written in."
+  end
+
   # Get dynamic prompts from global configuration
   def get_prompt(prompt_type)
     case prompt_type.to_s
@@ -119,25 +130,25 @@ class Integrations::OpenaiBaseService
                                'Please summarize the key points from the following conversation between support agents and customer as bullet points for the next support agent looking into the conversation. Reply in the user\'s language.')
     when 'rephrase'
       GlobalConfigService.load('OPENAI_PROMPT_REPHRASE',
-                               'You are a helpful support agent. Please rephrase the following response. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please rephrase the following response. #{language_instruction}")
     when 'fix_spelling_grammar'
       GlobalConfigService.load('OPENAI_PROMPT_FIX_GRAMMAR',
-                               'You are a helpful support agent. Please fix the spelling and grammar of the following response. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please fix the spelling and grammar of the following response. #{language_instruction}")
     when 'shorten'
       GlobalConfigService.load('OPENAI_PROMPT_SHORTEN',
-                               'You are a helpful support agent. Please shorten the following response. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please shorten the following response. #{language_instruction}")
     when 'expand'
       GlobalConfigService.load('OPENAI_PROMPT_EXPAND',
-                               'You are a helpful support agent. Please expand the following response. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please expand the following response. #{language_instruction}")
     when 'make_friendly'
       GlobalConfigService.load('OPENAI_PROMPT_FRIENDLY',
-                               'You are a helpful support agent. Please make the following response more friendly. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please make the following response more friendly. #{language_instruction}")
     when 'make_formal'
       GlobalConfigService.load('OPENAI_PROMPT_FORMAL',
-                               'You are a helpful support agent. Please make the following response more formal. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please make the following response more formal. #{language_instruction}")
     when 'simplify'
       GlobalConfigService.load('OPENAI_PROMPT_SIMPLIFY',
-                               'You are a helpful support agent. Please simplify the following response. Ensure that the reply should be in user language.')
+                               "You are a helpful support agent. Please simplify the following response. #{language_instruction}")
     when 'generate_prompt'
       GlobalConfigService.load('OPENAI_PROMPT_GENERATE_PROMPT',
                                'You are an expert prompt engineer. Based on the user\'s description or context provided, generate a well-structured, effective prompt that can be used for AI interactions. The prompt should be clear, specific, and actionable. Ensure that the generated prompt is in the user\'s language.')
@@ -145,7 +156,7 @@ class Integrations::OpenaiBaseService
       GlobalConfigService.load('OPENAI_PROMPT_REVIEW_PROMPT',
                                'You are an expert prompt reviewer and optimizer. Review the provided prompt and generate an improved, optimized version. The improved prompt should be clearer, more specific, more actionable, and follow best practices for prompt engineering. Maintain the original intent and purpose while enhancing clarity, structure, and effectiveness. Return only the improved prompt without any explanations or comments. Ensure that the improved prompt is in the user\'s language.')
     else
-      'You are a helpful support agent. Ensure that the reply should be in user language.'
+      "You are a helpful support agent. #{language_instruction}"
     end
   end
 
