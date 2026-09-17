@@ -258,6 +258,41 @@ RSpec.describe Whatsapp::Providers::WhatsappCloudService do
       expect(service.last_delivery_error).to eq('<html>502 Bad Gateway</html>')
     end
 
+    # CRM-359: the dynamic URL button rides as its own component after the body,
+    # in Meta's shape; without one the payload is byte for byte what it was.
+    it 'appends the button components after the body component' do
+      ok_response = instance_double(HTTParty::Response, success?: true,
+                                                        parsed_response: { 'messages' => [{ 'id' => 'wamid.1' }] })
+      allow(HTTParty).to receive(:post).and_return(ok_response)
+      button = { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: 'abc123' }] }
+
+      service.send_template('5511999999999',
+                            template_info.merge(parameters: [{ type: 'text', text: 'João' }],
+                                                button_components: [button]))
+
+      expect(HTTParty).to have_received(:post) do |_url, options|
+        components = JSON.parse(options[:body])['template']['components']
+        expect(components).to eq([
+                                   { 'type' => 'body', 'parameters' => [{ 'type' => 'text', 'text' => 'João' }] },
+                                   { 'type' => 'button', 'sub_type' => 'url', 'index' => '0',
+                                     'parameters' => [{ 'type' => 'text', 'text' => 'abc123' }] }
+                                 ])
+      end
+    end
+
+    it 'sends only the body component when there is no button component' do
+      ok_response = instance_double(HTTParty::Response, success?: true,
+                                                        parsed_response: { 'messages' => [{ 'id' => 'wamid.1' }] })
+      allow(HTTParty).to receive(:post).and_return(ok_response)
+
+      service.send_template('5511999999999', template_info.merge(parameters: [{ type: 'text', text: 'João' }]))
+
+      expect(HTTParty).to have_received(:post) do |_url, options|
+        components = JSON.parse(options[:body])['template']['components']
+        expect(components.map { |c| c['type'] }).to eq(['body'])
+      end
+    end
+
     # Real rejection shape from a template with a dynamic URL button missing
     # its parameter — the exact case that used to stay `sent` forever.
     it 'returns nil and records the Meta rejection reason' do

@@ -231,6 +231,7 @@ on:
       # the status funnel. Both are silent to every other lane — a message that
       # goes back to reading `sent` still answers 201 and still shows a check.
       - 'app/services/whatsapp/send_on_whatsapp_service.rb'
+      - 'app/services/whatsapp/template_button_params.rb'
       - 'app/services/whatsapp/providers/base_service.rb'
       - 'app/services/whatsapp/providers/whatsapp_cloud_service.rb'
       - 'app/services/whatsapp/providers/evolution_service.rb'
@@ -241,6 +242,7 @@ on:
       - 'app/services/messages/status_update_service.rb'
       - 'app/jobs/send_reply_job.rb'
       - 'spec/services/whatsapp/send_on_whatsapp_service_spec.rb'
+      - 'spec/services/whatsapp/template_button_params_spec.rb'
       - 'spec/services/whatsapp/providers/whatsapp_cloud_service_spec.rb'
       - 'spec/services/whatsapp/providers/evolution_service_spec.rb'
       - 'spec/services/whatsapp/providers/evolution_go_service_send_spec.rb'
@@ -485,6 +487,7 @@ jobs:
             spec/listeners/action_cable_listener_hub_channel_spec.rb \
             spec/lib/meta_base_url_spec.rb \
             spec/services/whatsapp/send_on_whatsapp_service_spec.rb \
+            spec/services/whatsapp/template_button_params_spec.rb \
             spec/services/whatsapp/providers/whatsapp_cloud_service_spec.rb \
             spec/services/whatsapp/providers/evolution_service_spec.rb \
             spec/services/whatsapp/providers/evolution_go_service_send_spec.rb \
