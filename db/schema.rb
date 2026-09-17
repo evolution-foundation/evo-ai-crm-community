@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_17_090200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -782,6 +782,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_16_120000) do
     t.jsonb "actions", default: {}, null: false
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+  end
+
+  create_table "memory_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "app_name", null: false
+    t.string "user_id", null: false
+    t.string "role", null: false
+    t.text "content", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["app_name", "user_id", "created_at"], name: "index_memory_events_on_app_name_and_user_id_and_created_at"
+  end
+
+  create_table "memory_summaries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "app_name", null: false
+    t.string "user_id", null: false
+    t.text "content", null: false
+    t.integer "source_event_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["app_name", "user_id", "created_at"], name: "index_memory_summaries_on_app_name_and_user_id_and_created_at"
   end
 
   create_table "mentions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
