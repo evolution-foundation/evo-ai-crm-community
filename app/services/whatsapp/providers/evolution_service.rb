@@ -459,31 +459,33 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def send_attachment_message(phone_number, message)
-    attachment = message.attachments.first
+    attachments = message.attachments
 
-    unless attachment
+    if attachments.blank?
       Rails.logger.error "[Evolution] No attachment found for message #{message.id}"
       return false
     end
 
+    # WhatsApp has no single "message with N attachments" concept — Evolution
+    # sends each attachment as its own message. Message#source_id only tracks
+    # one id, so surface the first successful one (or false if none sent).
+    results = attachments.map { |attachment| send_single_attachment(phone_number, message, attachment) }
+    results.find(&:present?) || false
+  end
+
+  def send_single_attachment(phone_number, message, attachment)
     case attachment.file_type
-    when 'image'
-      send_media_message(phone_number, message, 'sendMedia')
+    when 'image', 'video', 'file'
+      send_media_message(phone_number, message, attachment, 'sendMedia')
     when 'audio'
-      send_audio_message(phone_number, message)
-    when 'video'
-      send_media_message(phone_number, message, 'sendMedia')
-    when 'file'
-      send_media_message(phone_number, message, 'sendMedia')
+      send_audio_message(phone_number, attachment)
     else
       # Fallback to text message
       send_text_message(phone_number, message)
     end
   end
 
-  def send_media_message(phone_number, message, endpoint)
-    attachment = message.attachments.first
-
+  def send_media_message(phone_number, message, attachment, endpoint)
     media_url = generate_media_url(attachment)
 
     Rails.logger.info "[Evolution Media] Sending #{attachment.file_type} with URL: #{media_url}"
@@ -516,9 +518,7 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     end
   end
 
-  def send_audio_message(phone_number, message)
-    attachment = message.attachments.first
-
+  def send_audio_message(phone_number, attachment)
     # Try direct public URL first (for public S3 buckets)
     result = send_audio_with_direct_url(phone_number, attachment)
 

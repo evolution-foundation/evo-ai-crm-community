@@ -21,6 +21,12 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
     )
   end
 
+  def attachment_double(file_type: 'image', name: "f.#{file_type}")
+    file_double = instance_double('AttachmentFile', filename: double(to_s: name), attached?: false)
+    instance_double('Attachment', file_type: file_type, file: file_double,
+                                  file_url: "https://s3.example.com/#{name}")
+  end
+
   describe '#fetch_profile_picture_url' do
     it 'POSTs the phone number to /chat/fetchProfilePictureUrl/{instance} and returns the URL' do
       response = instance_double(
@@ -272,15 +278,11 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
   end
 
   describe '#send_media_message (caption formatting)' do
-    let(:file_double) { instance_double('AttachmentFile', filename: double(to_s: 'photo.jpg'), attached?: false) }
-    let(:attachment) do
-      instance_double('Attachment', file_type: 'image', file: file_double,
-                                    file_url: 'https://s3.example.com/photo.jpg')
-    end
+    let(:attachment) { attachment_double(name: 'photo.jpg') }
 
     it 'converts HTML in caption to WhatsApp formatting' do
       message = instance_double('Message', content: '<p>Check this <b>image</b></p>',
-                                           attachments: double(present?: true, first: attachment))
+                                           attachments: [attachment])
 
       allow(HTTParty).to receive(:post).and_return(success_response)
 
@@ -294,16 +296,27 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
     end
   end
 
-  describe '#send_media_message (mediatype mapping — EVO-1940)' do
-    def attachment_double(file_type)
-      file_double = instance_double('AttachmentFile', filename: double(to_s: "f.#{file_type}"), attached?: false)
-      instance_double('Attachment', file_type: file_type, file: file_double,
-                                    file_url: "https://s3.example.com/f.#{file_type}")
-    end
+  describe '#send_attachment_message (multiple attachments)' do
+    it 'sends every attachment as its own Evolution API call, not just the first' do
+      first_attachment = attachment_double(name: 'one.jpg')
+      second_attachment = attachment_double(name: 'two.jpg')
+      message = instance_double('Message', content: 'caption', attachments: [first_attachment, second_attachment])
 
+      sent_filenames = []
+      allow(HTTParty).to receive(:post) do |_url, opts|
+        sent_filenames << JSON.parse(opts[:body])['fileName']
+        success_response
+      end
+
+      service.send_message(phone_number, message)
+
+      expect(sent_filenames).to contain_exactly('one.jpg', 'two.jpg')
+    end
+  end
+
+  describe '#send_media_message (mediatype mapping — EVO-1940)' do
     def send_attachment_of(file_type)
-      message = instance_double('Message', content: 'caption',
-                                           attachments: double(present?: true, first: attachment_double(file_type)))
+      message = instance_double('Message', content: 'caption', attachments: [attachment_double(file_type: file_type)])
       allow(HTTParty).to receive(:post).and_return(success_response)
       service.send_message(phone_number, message)
     end
@@ -342,7 +355,7 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
 
     it 'returns false when the provider rejects the media send (surfaces failure to caller)' do
       message = instance_double('Message', content: 'caption',
-                                           attachments: double(present?: true, first: attachment_double('file')))
+                                           attachments: [attachment_double(file_type: 'file')])
       allow(HTTParty).to receive(:post).and_return(
         instance_double(HTTParty::Response, success?: false, code: 400, body: 'invalid mediatype')
       )
