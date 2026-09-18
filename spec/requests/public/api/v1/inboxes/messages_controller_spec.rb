@@ -33,4 +33,16 @@ RSpec.describe 'Public Inbound Messages API', type: :request do
       expect(Rails.logger).not_to have_received(:warn).with(/deprecated inline content/)
     end
   end
+
+  describe 'POST create on an archived inbox' do
+    it 'rejects the message without creating it' do
+      inbox.update!(archived_at: Time.current)
+
+      expect do
+        post path, params: { content: 'hello from a contact' }, as: :json
+      end.not_to change(conversation.messages, :count)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
 end

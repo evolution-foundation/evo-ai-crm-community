@@ -95,6 +95,9 @@ Rails.application.routes.draw do
       end
 
       resources :inboxes, only: [:index, :show, :create, :update, :destroy], controller: 'inboxes' do
+        collection do
+          get :archived_whatsapp_match
+        end
         get :assignable_agents, on: :member
         get :agent_bot, on: :member
         post :set_agent_bot, on: :member
@@ -102,6 +105,8 @@ Rails.application.routes.draw do
         post :setup_channel_provider, on: :member
         post :disconnect_channel_provider, on: :member
         post :sync_whatsapp_subscription, on: :member
+        post :reactivate, on: :member
+        post :replace_archived_channel, on: :member
         # Discards a Hub connection that never completed. A separate door from
         # destroy because only this one refuses an already-connected channel.
         delete 'hub_connection', action: :abort_hub_connection, on: :member
@@ -140,6 +145,7 @@ Rails.application.routes.draw do
           post :email_team
           post :toggle_status
           post :return_to_bot
+          post :move_channel
           post :toggle_priority
           post :toggle_typing_status
           post :update_last_seen

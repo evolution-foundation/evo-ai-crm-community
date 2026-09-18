@@ -9,7 +9,7 @@ module Api
         rescue_from Sendgrid::InvalidApiKeyError, with: :handle_sendgrid_invalid_key
         rescue_from Sendgrid::ServiceUnavailableError, with: :handle_sendgrid_unavailable
 
-        before_action :fetch_inbox, except: %i[index create]
+        before_action :fetch_inbox, except: %i[index create archived_whatsapp_match]
         before_action :validate_limit, only: [:create]
         before_action :validate_channel_limit_for_creation, only: [:create]
         # we are already handling the authorization in fetch inbox
@@ -17,6 +17,7 @@ module Api
         require_permissions({
           index: 'inboxes.read',
           show: 'inboxes.read',
+          archived_whatsapp_match: 'inboxes.create',
           create: 'inboxes.create',
           update: 'inboxes.update',
           destroy: 'inboxes.delete',
@@ -27,6 +28,8 @@ module Api
           setup_channel_provider: 'inboxes.update',
           disconnect_channel_provider: 'inboxes.update',
           sync_whatsapp_subscription: 'inboxes.update',
+          reactivate: 'inboxes.update',
+          replace_archived_channel: 'inboxes.create',
           avatar: 'inboxes.update',
           # Template CRUD moved to MessageTemplatesController (EVO-1716); only the
           # per-channel Meta sync remains here, keeping its inbox permission.
@@ -55,6 +58,27 @@ module Api
           success_response(
             data: InboxSerializer.serialize(@inbox),
             message: 'Inbox retrieved successfully'
+          )
+        end
+
+        # Looks up an existing (possibly archived) WhatsApp channel by phone
+        # number, so the frontend can offer to reactivate it instead of
+        # creating a duplicate inbox for a number that's already known.
+        # The archived channel's stored phone_number and the one a later create
+        # attempt sends are not guaranteed to share formatting (spaces, dashes,
+        # a missing '+', Brazil's nono dígito) — an exact match would silently
+        # miss it, sending the user to plain create and a raw DB uniqueness
+        # error instead of the reactivate/replace flow. Compare on the same
+        # canonical form Evolution/WhatsApp itself resolves to.
+        def archived_whatsapp_match
+          target = ::Whatsapp::PhoneNumberNormalizer.call(params[:phone_number])
+          channel = target.present? &&
+                    Channel::Whatsapp.find { |c| ::Whatsapp::PhoneNumberNormalizer.call(c.phone_number) == target }
+          inbox = channel&.inbox
+
+          success_response(
+            data: (inbox&.archived? ? { inbox_id: inbox.id } : nil),
+            message: I18n.t('messages.archived_match_lookup_completed')
           )
         end
 
@@ -418,10 +442,60 @@ module Api
         end
 
         def destroy
-          ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip) if @inbox.present?
+          @inbox.archive! if @inbox.present?
           success_response(
             data: { id: @inbox.id },
             message: I18n.t('messages.inbox_deletetion_response')
+          )
+        end
+
+        def reactivate
+          unless @inbox.archived?
+            return error_response(
+              ApiErrorCodes::VALIDATION_ERROR,
+              I18n.t('messages.inbox_not_archived'),
+              status: :unprocessable_entity
+            )
+          end
+
+          @inbox.reactivate!
+          success_response(
+            data: InboxSerializer.serialize(@inbox),
+            message: I18n.t('messages.inbox_reactivated')
+          )
+        end
+
+        # Reconnecting an archived WhatsApp number with a DIFFERENT provider than
+        # it originally had: creates a fresh Channel::Whatsapp with the submitted
+        # provider/config, re-points this inbox at it (conversations/messages stay
+        # put, they belong to the Inbox, not the Channel), and retires the old
+        # channel row. The old channel's phone_number is renamed before the new
+        # one is created so the DB unique index never sees a collision.
+        def replace_archived_channel
+          unless @inbox.whatsapp? && @inbox.archived?
+            return error_response(
+              ApiErrorCodes::VALIDATION_ERROR,
+              I18n.t('messages.inbox_channel_replace_requires_archived_whatsapp'),
+              status: :unprocessable_entity
+            )
+          end
+
+          old_channel = @inbox.channel
+          original_phone_number = old_channel.phone_number
+          channel_params = permitted_params(Channel::Whatsapp::EDITABLE_ATTRS)[:channel]
+                           .except(:type, :phone_number)
+                           .merge(phone_number: original_phone_number)
+
+          ActiveRecord::Base.transaction do
+            old_channel.update_columns(phone_number: "released-#{old_channel.id}")
+            new_channel = Channel::Whatsapp.create!(channel_params)
+            @inbox.update!(channel: new_channel, archived_at: nil)
+            old_channel.destroy!
+          end
+
+          success_response(
+            data: InboxSerializer.serialize(@inbox),
+            message: I18n.t('messages.inbox_channel_replaced')
           )
         end
 
@@ -474,10 +548,13 @@ module Api
         # refused, or the discard commits first and the handler no longer finds
         # a channel to activate.
         #
-        # The destroy goes through DeleteObjectJob, the same path as #destroy,
-        # because its before_destroy cleanup is what removes the webhook and the
-        # channel on the Hub and gives the quota back. Synchronous because the
-        # caller has to know whether the discard actually happened.
+        # The discard goes through DeleteObjectJob — unlike #destroy (which now
+        # archives instead of hard-deleting), this path hard-deletes on purpose:
+        # a connection that never finished isn't a real inbox an operator has
+        # used, so there is nothing worth keeping archived, and the job's
+        # before_destroy cleanup is what removes the webhook and the channel on
+        # the Hub and gives the quota back. Synchronous because the caller has
+        # to know whether the discard actually happened.
         def discard_pending_hub_connection(channel)
           discarded = false
 

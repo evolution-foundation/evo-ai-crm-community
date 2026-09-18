@@ -100,3 +100,6 @@ _evo/
 _evo-output/
 _bmad/
 _bmad-output/
+
+# Git worktrees (isolated workspaces for subagent-driven development)
+.worktrees/

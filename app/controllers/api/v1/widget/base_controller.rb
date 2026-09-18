@@ -1,6 +1,7 @@
 class Api::V1::Widget::BaseController < ApplicationController
   include SwitchLocale
   include WebsiteTokenHelper
+  include ArchivedInboxGuard
 
   before_action :set_web_widget
   before_action :set_contact
@@ -62,6 +63,10 @@ class Api::V1::Widget::BaseController < ApplicationController
 
   def inbox
     @inbox ||= @web_widget.inbox
+  end
+
+  def archived_inbox_guard_target
+    inbox
   end
 
   def conversation_params

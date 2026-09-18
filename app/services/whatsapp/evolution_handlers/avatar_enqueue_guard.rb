@@ -28,11 +28,23 @@ module Whatsapp::EvolutionHandlers::AvatarEnqueueGuard
     return unless contact && avatar_url.present?
     return unless acquire_avatar_enqueue_lock(contact.id)
 
-    Avatar::AvatarFromUrlJob.perform_later(contact, avatar_url)
+    Whatsapp::EvolutionHandlers::AvatarDownloadJob.perform_later(contact, avatar_url)
   end
 
   def acquire_avatar_enqueue_lock(contact_id)
-    key = format(AVATAR_ENQUEUE_LOCK_KEY, contact_id: contact_id)
-    Redis::Alfred.set(key, 1, nx: true, ex: AVATAR_ENQUEUE_LOCK_TTL.to_i) ? true : false
+    Redis::Alfred.set(avatar_enqueue_lock_key(contact_id), 1, nx: true, ex: AVATAR_ENQUEUE_LOCK_TTL.to_i) ? true : false
+  end
+
+  # Called by the fetch job when an attempt did not end with an avatar
+  # (no URL found, or the download never landed). Without this, a transient
+  # failure left the contact locked out of a retry for the full debounce
+  # window (up to an hour) — the next legitimate trigger (e.g. their next
+  # incoming message) can now retry immediately instead of silently giving up.
+  def release_avatar_enqueue_lock(contact_id)
+    Redis::Alfred.delete(avatar_enqueue_lock_key(contact_id))
+  end
+
+  def avatar_enqueue_lock_key(contact_id)
+    format(AVATAR_ENQUEUE_LOCK_KEY, contact_id: contact_id)
   end
 end

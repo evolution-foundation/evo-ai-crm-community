@@ -13,6 +13,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     destroy: 'conversations.delete',
     toggle_status: 'conversations.toggle_status',
     return_to_bot: 'conversations.toggle_status',
+    move_channel: 'conversations.update',
     toggle_priority: 'conversations.toggle_priority',
     custom_attributes: 'conversations.custom_attributes',
     pin: 'conversations.update',
@@ -390,6 +391,36 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     )
   rescue Conversations::InvalidHandoffError => e
     error_response(ApiErrorCodes::VALIDATION_ERROR, e.message, status: :unprocessable_entity)
+  end
+
+  def move_channel
+    target_inbox = Inbox.find(params[:inbox_id])
+
+    unless @conversation.eligible_move_target?(target_inbox)
+      return error_response(
+        ApiErrorCodes::VALIDATION_ERROR,
+        I18n.t('messages.conversation_move_ineligible'),
+        status: :unprocessable_entity
+      )
+    end
+
+    ActiveRecord::Base.transaction do
+      @conversation.moved_from_inbox_id ||= @conversation.inbox_id
+      # contact_inbox must follow the inbox: outgoing delivery
+      # (Whatsapp::SendOnWhatsappService) and realtime pubsub
+      # (ActionCableListener) resolve the channel through
+      # conversation.contact_inbox, not conversation.inbox. Leaving it pointed
+      # at the old inbox makes the move silently ineffective for delivery.
+      target_contact_inbox = ContactInboxBuilder.new(contact: @conversation.contact, inbox: target_inbox).perform
+      @conversation.update!(inbox_id: target_inbox.id, contact_inbox_id: target_contact_inbox.id)
+    end
+
+    success_response(
+      data: ConversationSerializer.serialize(@conversation, include_messages: false),
+      message: I18n.t('messages.conversation_moved')
+    )
+  rescue ActiveRecord::RecordNotFound
+    error_response(ApiErrorCodes::RESOURCE_NOT_FOUND, 'Target inbox not found', status: :not_found)
   end
 
   def pending_to_open_by_bot?

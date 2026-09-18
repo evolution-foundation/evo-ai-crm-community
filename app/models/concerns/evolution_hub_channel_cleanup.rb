@@ -33,6 +33,28 @@ module EvolutionHubChannelCleanup
     extract_hub_metadata('status')
   end
 
+  # Stops the Hub from forwarding events for a channel that is being
+  # archived (not destroyed): the Hub webhook is what pushes messages in, so
+  # a disconnected/logged-out instance shouldn't keep one active. Unlike
+  # #evolution_hub_cleanup, the Hub channel itself is always preserved so
+  # reactivating later is a plain re-scan of the QR code, not a fresh Hub
+  # onboarding.
+  def evolution_hub_disconnect_webhook
+    hub_webhook_id = extract_hub_metadata('webhook_id')
+    return if hub_webhook_id.blank?
+
+    EvolutionHub::Client.new.delete_webhook(hub_webhook_id)
+    Rails.logger.info("EvolutionHubChannelCleanup: disconnected Hub webhook #{hub_webhook_id} for #{self.class.name}##{id}")
+  rescue EvolutionHub::Client::RequestError => e
+    Rails.logger.warn(
+      "EvolutionHubChannelCleanup: Hub returned #{e.status} while disconnecting webhook for #{self.class.name}##{id} — #{e.message}"
+    )
+  rescue EvolutionHub::Client::ConfigurationError => e
+    Rails.logger.warn("EvolutionHubChannelCleanup: skipped webhook disconnect — Hub not configured (#{e.message})")
+  rescue StandardError => e
+    Rails.logger.error("EvolutionHubChannelCleanup: unexpected error disconnecting webhook for #{self.class.name}##{id} — #{e.class}: #{e.message}")
+  end
+
   private
 
   def evolution_hub_cleanup

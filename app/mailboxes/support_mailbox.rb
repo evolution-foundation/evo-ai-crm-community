@@ -11,6 +11,7 @@ class SupportMailbox < ApplicationMailbox
 
     # Skip processing email if it belongs to any of the edge cases
     return unless incoming_email_from_valid_email?
+    return if @inbox.archived?
 
     ActiveRecord::Base.transaction do
       find_or_create_contact

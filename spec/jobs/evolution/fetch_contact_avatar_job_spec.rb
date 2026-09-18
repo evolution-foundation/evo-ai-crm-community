@@ -19,11 +19,12 @@ RSpec.describe Evolution::FetchContactAvatarJob do
       .and_return(provider_service)
   end
 
-  it 'enqueues Avatar::AvatarFromUrlJob when the provider returns a URL' do
+  it 'schedules the download (via the lock-releasing wrapper) when the provider returns a URL' do
     allow(provider_service).to receive(:fetch_profile_picture_url).with(phone_number)
                                                                   .and_return('https://cdn.example.com/profile.jpg')
 
-    expect(Avatar::AvatarFromUrlJob).to receive(:perform_later).with(contact, 'https://cdn.example.com/profile.jpg')
+    expect(Whatsapp::EvolutionHandlers::AvatarDownloadJob).to receive(:perform_later)
+      .with(contact, 'https://cdn.example.com/profile.jpg')
 
     described_class.new.perform(contact_id, phone_number, channel_id)
   end
@@ -31,7 +32,24 @@ RSpec.describe Evolution::FetchContactAvatarJob do
   it 'skips download when the provider returns no URL' do
     allow(provider_service).to receive(:fetch_profile_picture_url).and_return(nil)
 
-    expect(Avatar::AvatarFromUrlJob).not_to receive(:perform_later)
+    expect(Whatsapp::EvolutionHandlers::AvatarDownloadJob).not_to receive(:perform_later)
+
+    described_class.new.perform(contact_id, phone_number, channel_id)
+  end
+
+  it 'releases the enqueue debounce lock when no URL is found, so a later message can retry the fetch' do
+    allow(provider_service).to receive(:fetch_profile_picture_url).and_return(nil)
+
+    expect(Whatsapp::EvolutionHandlers::AvatarEnqueueGuard).to receive(:release_avatar_enqueue_lock).with(contact_id)
+
+    described_class.new.perform(contact_id, phone_number, channel_id)
+  end
+
+  it 'does not release the debounce lock itself when a URL was found — the download wrapper job owns that' do
+    allow(provider_service).to receive(:fetch_profile_picture_url).and_return('https://cdn.example.com/profile.jpg')
+    allow(Whatsapp::EvolutionHandlers::AvatarDownloadJob).to receive(:perform_later)
+
+    expect(Whatsapp::EvolutionHandlers::AvatarEnqueueGuard).not_to receive(:release_avatar_enqueue_lock)
 
     described_class.new.perform(contact_id, phone_number, channel_id)
   end
@@ -40,7 +58,7 @@ RSpec.describe Evolution::FetchContactAvatarJob do
     allow(avatar_double).to receive(:attached?).and_return(true)
 
     expect(provider_service).not_to receive(:fetch_profile_picture_url)
-    expect(Avatar::AvatarFromUrlJob).not_to receive(:perform_later)
+    expect(Whatsapp::EvolutionHandlers::AvatarDownloadJob).not_to receive(:perform_later)
 
     described_class.new.perform(contact_id, phone_number, channel_id)
   end
@@ -48,7 +66,7 @@ RSpec.describe Evolution::FetchContactAvatarJob do
   it 'does nothing when the contact cannot be found' do
     allow(Contact).to receive(:find_by).with(id: contact_id).and_return(nil)
 
-    expect(Avatar::AvatarFromUrlJob).not_to receive(:perform_later)
+    expect(Whatsapp::EvolutionHandlers::AvatarDownloadJob).not_to receive(:perform_later)
 
     described_class.new.perform(contact_id, phone_number, channel_id)
   end
