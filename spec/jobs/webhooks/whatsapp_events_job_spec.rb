@@ -214,4 +214,70 @@ RSpec.describe Webhooks::WhatsappEventsJob, type: :job do
       expect(job.send(:reconcile_channel_state!, evo_channel, {})).to be(false)
     end
   end
+
+  describe '#connection_lifecycle_event?' do
+    it 'is true for Evolution connection.update' do
+      expect(described_class.new.send(:connection_lifecycle_event?, { event: 'connection.update' })).to be(true)
+    end
+
+    it 'is true for each Evolution Go connection lifecycle event' do
+      %w[Connected PairSuccess Disconnected ConnectFailure TemporaryBan LoggedOut].each do |name|
+        expect(described_class.new.send(:connection_lifecycle_event?, { event: name })).to be(true)
+      end
+    end
+
+    it 'is true for Z-API connection callback types' do
+      expect(described_class.new.send(:connection_lifecycle_event?, { type: 'ConnectedCallback' })).to be(true)
+      expect(described_class.new.send(:connection_lifecycle_event?, { type: 'DisconnectedCallback' })).to be(true)
+    end
+
+    it 'is false for a message event' do
+      expect(described_class.new.send(:connection_lifecycle_event?, { event: 'messages.upsert' })).to be(false)
+    end
+  end
+
+  # Regression: once a permanent-disconnect statusReason (e.g. 401) sets
+  # reauthorization_required, the CRM stayed stuck showing "Connection closed"
+  # forever even after a successful reconnect — the very connection.update
+  # webhook that should clear the flag was itself discarded by the
+  # channel_is_inactive? gate, because connection.update is not a
+  # message_event? and so never reached the EVO-1967 reconciliation path.
+  describe 'perform with a reauthorization-flagged Evolution channel (reconnect deadlock)' do
+    let(:evolution_channel) do
+      ch = Channel::Whatsapp.new(
+        provider: 'evolution',
+        phone_number: "+5511#{SecureRandom.hex(4)}",
+        provider_config: { 'instance_name' => 'reconnect-test', 'evolution_hub' => { 'status' => 'active' } }
+      )
+      ch.save!(validate: false)
+      ch
+    end
+
+    before { Inbox.create!(channel: evolution_channel, name: "Inbox #{SecureRandom.hex(3)}") }
+
+    def connection_update_payload(state:, status_reason: nil)
+      {
+        event: 'connection.update',
+        instance: 'reconnect-test',
+        data: { state: state, statusReason: status_reason }
+      }.with_indifferent_access
+    end
+
+    it 'processes a connection.update open event and clears reauthorization even while flagged' do
+      evolution_channel.prompt_reauthorization!
+      expect(evolution_channel.reauthorization_required?).to be(true)
+
+      described_class.new.perform(connection_update_payload(state: 'open'))
+
+      expect(evolution_channel.reauthorization_required?).to be(false)
+      expect(evolution_channel.reload.provider_connection['connection']).to eq('open')
+    end
+
+    it 'still discards an unrelated non-message event while flagged (unchanged behavior)' do
+      evolution_channel.prompt_reauthorization!
+
+      expect(Whatsapp::IncomingMessageEvolutionService).not_to receive(:new)
+      described_class.new.perform({ event: 'contacts.update', instance: 'reconnect-test', data: [] }.with_indifferent_access)
+    end
+  end
 end

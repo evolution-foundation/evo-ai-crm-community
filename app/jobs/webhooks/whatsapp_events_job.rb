@@ -5,7 +5,7 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
     Rails.logger.info "WhatsApp webhook processing started: #{params.inspect}"
 
     channel = find_channel(params)
-    if channel_is_inactive?(channel)
+    if channel_is_inactive?(channel) && !(channel.present? && connection_lifecycle_event?(params))
       # Fix B (EVO-1967): reconciliacao ativa. Se chega uma mensagem real e a Evolution
       # reporta a instancia como 'open', a flag de reauthorization esta presa indevidamente
       # (resto de um close transitorio) -> destrava (reauthorized!) e segue processando.
@@ -630,6 +630,25 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
   def message_event?(params)
     params[:event].to_s == 'messages.upsert' ||
       params.dig(:entry, 0, :changes, 0, :value, :messages).present?
+  end
+
+  # A channel flagged reauthorization_required (set by a permanent-disconnect
+  # statusReason, e.g. Evolution's 401) must still be able to receive the
+  # connection-lifecycle event that would clear that flag. Without this
+  # exemption, channel_is_inactive? drops every non-message event for that
+  # channel — including the very `connection.update: open` webhook fired by a
+  # successful reconnect — so the CRM stays stuck showing "Connection closed"
+  # forever until (if ever) an unrelated inbound message triggers the
+  # message_event? reconciliation path instead.
+  CONNECTION_LIFECYCLE_EVENT_NAMES = %w[
+    connection.update
+    Connected PairSuccess Disconnected ConnectFailure TemporaryBan LoggedOut
+  ].freeze
+  CONNECTION_LIFECYCLE_TYPES = %w[ConnectedCallback DisconnectedCallback].freeze
+
+  def connection_lifecycle_event?(params)
+    CONNECTION_LIFECYCLE_EVENT_NAMES.include?(params[:event].to_s) ||
+      CONNECTION_LIFECYCLE_TYPES.include?(params[:type].to_s)
   end
 
   # Cooldown para nao re-consultar a Evolution a cada mensagem enquanto o canal segue
