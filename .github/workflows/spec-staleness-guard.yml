@@ -212,6 +212,20 @@ on:
       - 'spec/services/super_admin_fossil_spec.rb'
       - 'spec/services/whatsapp/incoming_message_base_service_spec.rb'
       - 'spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb'
+      # An outgoing echo arrives with no identity, so it is stored with no sender
+      # and only a sent_from_device marker. Every consumer of authorship then has to read the
+      # marker instead of the sender type, and each half fails silently on its own: drop the
+      # marker and a stranger is credited again, drop the reader and the panel reports that a
+      # customer who was answered from the phone never got a reply. No other lane runs either.
+      - 'app/models/message.rb'
+      - 'app/listeners/reporting_event_listener.rb'
+      - 'app/services/dashboard/customer_dashboard_service.rb'
+      - 'app/services/whatsapp/evolution_handlers/content_handlers.rb'
+      - 'spec/services/whatsapp/device_echo_author_spec.rb'
+      - 'spec/models/message_device_echo_reporting_spec.rb'
+      - 'spec/listeners/reporting_event_listener_device_echo_spec.rb'
+      - 'spec/services/dashboard/customer_dashboard_service_ai_vs_human_spec.rb'
+      - 'spec/services/facebook/moderation/action_executor_service_reply_author_spec.rb'
       # CRM-318: the screen that opened the Hub tab only leaves "Aguardando" because
       # the two lifecycle handlers announce the transition and the listener puts it on
       # the wire. Dropping any of the three is silent everywhere else — the channel
@@ -476,6 +490,11 @@ jobs:
             spec/requests/webhooks/meta_token_verify_spec.rb \
             spec/services/whatsapp/incoming_message_base_service_spec.rb \
             spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb \
+            spec/services/whatsapp/device_echo_author_spec.rb \
+            spec/models/message_device_echo_reporting_spec.rb \
+            spec/listeners/reporting_event_listener_device_echo_spec.rb \
+            spec/services/dashboard/customer_dashboard_service_ai_vs_human_spec.rb \
+            spec/services/facebook/moderation/action_executor_service_reply_author_spec.rb \
             spec/services/evolution_hub/ \
             spec/controllers/api/v1/integrations/evolution_hub_controller_spec.rb \
             spec/lib/evolution_hub/client_public_connect_spec.rb \

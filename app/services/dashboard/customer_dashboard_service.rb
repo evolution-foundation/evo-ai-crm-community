@@ -71,7 +71,7 @@ module Dashboard
     def build_ai_vs_human
       outgoing_messages = scoped_messages.outgoing.where(private: false)
       ai_messages = outgoing_messages.where(sender_type: 'AgentBot')
-      human_messages = outgoing_messages.where(sender_type: 'User')
+      human_messages = outgoing_messages.human_outgoing
       ai_count = ai_messages.count
       human_count = human_messages.count
       total_known = ai_count + human_count
@@ -79,9 +79,7 @@ module Dashboard
       ai_conversations = ai_messages.select(:conversation_id).distinct.count
       human_conversations = human_messages.select(:conversation_id).distinct.count
 
-      first_response_events = scoped_reporting_events.where(name: 'first_response')
-      human_first_response = first_response_events.where.not(user_id: nil).average(:value).to_f.round(2)
-      ai_first_response = first_response_events.where(user_id: nil).average(:value).to_f.round(2)
+      ai_first_response, human_first_response = first_response_averages
 
       {
         ai_messages_count: ai_count,
@@ -93,6 +91,20 @@ module Dashboard
         avg_first_response_time_ai_seconds: ai_first_response,
         avg_first_response_time_human_seconds: human_first_response
       }
+    end
+
+    # A reply typed on the phone in an unassigned conversation leaves user_id null; it is
+    # still a human reply, so it must not land in the AI average. The reclassification is by
+    # conversation, not by the message behind the event: a bot-answered conversation that later
+    # got a phone reply counts as human here.
+    def first_response_averages
+      events = scoped_reporting_events.where(name: 'first_response')
+      device_conversations = scoped_messages.reorder(nil).sent_from_device.select(:conversation_id)
+      unattributed = events.where(user_id: nil)
+      by_device = unattributed.where(conversation_id: device_conversations)
+
+      [unattributed.where.not(conversation_id: device_conversations).average(:value).to_f.round(2),
+       events.where.not(user_id: nil).or(by_device).average(:value).to_f.round(2)]
     end
 
     def build_csat
