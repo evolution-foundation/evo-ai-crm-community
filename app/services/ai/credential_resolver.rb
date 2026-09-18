@@ -110,7 +110,12 @@ class Ai::CredentialResolver
 
   # A credential the consumer cannot speak to is skipped, so resolution falls
   # through to a more generic link instead of failing at the provider (FR18).
+  # An empty `allowed_consumers` means unrestricted, the behavior every
+  # credential had before this column existed.
   def accepted?(credential)
-    Ai::ConsumerCompatibility.accepts?(@consumer, credential.provider)
+    return false unless Ai::ConsumerCompatibility.accepts?(@consumer, credential.provider)
+
+    allowed = credential.allowed_consumers
+    allowed.blank? || allowed.include?(@consumer.to_s)
   end
 end

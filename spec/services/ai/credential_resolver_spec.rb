@@ -17,7 +17,7 @@ RSpec.describe Ai::CredentialResolver do
 
   before { Ai::Credential.delete_all }
 
-  def create_credential(name:, scope:, provider: 'openai', active: true)
+  def create_credential(name:, scope:, provider: 'openai', active: true, allowed_consumers: [])
     # insert_all! is the point: the model is read-only, so the core service is
     # simulated writing straight to its own table.
     Ai::Credential.insert_all!( # rubocop:disable Rails/SkipsModelValidations
@@ -28,6 +28,7 @@ RSpec.describe Ai::CredentialResolver do
         key_hint: '4f2a',
         scope: scope,
         is_active: active,
+        allowed_consumers: allowed_consumers,
         created_at: Time.current,
         updated_at: Time.current
       }]
@@ -137,6 +138,35 @@ RSpec.describe Ai::CredentialResolver do
       create_credential(name: 'Producao', scope: 'account')
 
       expect(described_class.resolve(for_consumer: :not_a_consumer)).to be_nil
+    end
+  end
+
+  describe '#resolve / accepted?' do
+    it 'skips a credential whose allowed_consumers excludes the requesting consumer' do
+      create_credential(name: 'Restrita', scope: 'installation', provider: 'openai',
+                         allowed_consumers: ['inbox_assist'])
+
+      result = described_class.resolve(for_consumer: :knowledge_embedding)
+
+      expect(result).to be_nil
+    end
+
+    it 'accepts a credential whose allowed_consumers includes the requesting consumer' do
+      credential = create_credential(name: 'Permitida', scope: 'installation', provider: 'openai',
+                                      allowed_consumers: ['knowledge_embedding'])
+
+      result = described_class.resolve(for_consumer: :knowledge_embedding)
+
+      expect(result).to eq(credential)
+    end
+
+    it 'accepts a credential whose allowed_consumers is empty, exactly like before this column existed' do
+      credential = create_credential(name: 'Sem restricao', scope: 'installation', provider: 'openai',
+                                      allowed_consumers: [])
+
+      result = described_class.resolve(for_consumer: :knowledge_embedding)
+
+      expect(result).to eq(credential)
     end
   end
 

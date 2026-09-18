@@ -32,6 +32,10 @@ module EvoCoreApiKeysTable
       t.string :base_url, limit: 512
       t.string :imported_from, limit: 64
       t.boolean :is_active, null: false, default: true
+      # Mirrors Task 1's Go migration on evo_core_api_keys: a Postgres text
+      # array, not-null, defaulting to empty — an empty array means "no
+      # restriction", matching the resolver's pre-existing behavior.
+      t.string :allowed_consumers, array: true, null: false, default: []
       t.timestamps
     end
   end

@@ -4,13 +4,14 @@
 #
 # Table name: evo_core_api_keys
 #
-#  id         :uuid             not null, primary key
-#  is_active  :boolean          default(TRUE)
-#  key        :text             not null
-#  name       :string(255)      not null
-#  provider   :string(255)      not null
-#  created_at :timestamptz
-#  updated_at :timestamptz
+#  id                :uuid             not null, primary key
+#  allowed_consumers :string(255)      default([]), not null, is an Array
+#  is_active         :boolean          default(TRUE)
+#  key               :text             not null
+#  name              :string(255)      not null
+#  provider          :string(255)      not null
+#  created_at        :timestamptz
+#  updated_at        :timestamptz
 #
 # Indexes
 #
