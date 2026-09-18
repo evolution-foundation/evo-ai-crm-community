@@ -53,5 +53,31 @@ RSpec.describe Knowledge::EmbeddingService do
 
       expect { described_class.new.embed('hello') }.to raise_error(Knowledge::EmbeddingService::Error, /credential/i)
     end
+
+    it 'uses the configured model override instead of the hardcoded default' do
+      allow(GlobalConfigService).to receive(:load).with('KNOWLEDGE_EMBEDDING_MODEL', 'text-embedding-3-small').and_return('text-embedding-3-large')
+
+      stub_request(:post, 'https://api.openai.com/v1/embeddings')
+        .with(body: hash_including(model: 'text-embedding-3-large'))
+        .to_return(status: 200, body: { data: [{ embedding: Array.new(1536, 0.01) }] }.to_json)
+
+      described_class.new.embed('hello')
+
+      expect(a_request(:post, 'https://api.openai.com/v1/embeddings')
+        .with(body: hash_including(model: 'text-embedding-3-large'))).to have_been_made
+    end
+
+    it 'falls back to the hardcoded default when nothing is configured' do
+      allow(GlobalConfigService).to receive(:load).with('KNOWLEDGE_EMBEDDING_MODEL', 'text-embedding-3-small').and_return('text-embedding-3-small')
+
+      stub_request(:post, 'https://api.openai.com/v1/embeddings')
+        .with(body: hash_including(model: 'text-embedding-3-small'))
+        .to_return(status: 200, body: { data: [{ embedding: Array.new(1536, 0.01) }] }.to_json)
+
+      described_class.new.embed('hello')
+
+      expect(a_request(:post, 'https://api.openai.com/v1/embeddings')
+        .with(body: hash_including(model: 'text-embedding-3-small'))).to have_been_made
+    end
   end
 end

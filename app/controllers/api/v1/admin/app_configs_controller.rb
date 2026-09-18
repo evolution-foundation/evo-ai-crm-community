@@ -27,8 +27,13 @@ module Api
           ],
           # No OPENAI_API_SECRET: the credential lives in the registry now. URL,
           # model, toggle and prompts stay — consumer config, not credential.
+          # OPENAI_AUDIO_TRANSCRIPTION_MODEL / KNOWLEDGE_EMBEDDING_MODEL /
+          # MEMORY_COMPRESSION_MODEL: per-feature model overrides for features
+          # whose model was previously a hardcoded Ruby constant with no UI.
           'openai' => %w[
             OPENAI_API_URL OPENAI_MODEL OPENAI_ENABLE_AUDIO_TRANSCRIPTION
+            OPENAI_AUDIO_TRANSCRIPTION_MODEL KNOWLEDGE_EMBEDDING_MODEL
+            MEMORY_COMPRESSION_MODEL
             OPENAI_PROMPT_REPLY OPENAI_PROMPT_SUMMARY OPENAI_PROMPT_REPHRASE
             OPENAI_PROMPT_FIX_GRAMMAR OPENAI_PROMPT_SHORTEN OPENAI_PROMPT_EXPAND
             OPENAI_PROMPT_FRIENDLY OPENAI_PROMPT_FORMAL OPENAI_PROMPT_SIMPLIFY

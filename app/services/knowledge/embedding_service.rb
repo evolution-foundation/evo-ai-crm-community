@@ -7,7 +7,7 @@ class Knowledge::EmbeddingService
   MODEL = 'text-embedding-3-small'
   DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 
-  def embed(text, model: MODEL)
+  def embed(text, model: GlobalConfigService.load('KNOWLEDGE_EMBEDDING_MODEL', MODEL))
     raise Error, 'content is blank' if text.blank?
 
     endpoint = Ai::CredentialResolver.resolve_endpoint(for_consumer: :knowledge_embedding)

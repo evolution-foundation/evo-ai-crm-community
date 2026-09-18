@@ -235,6 +235,18 @@ RSpec.describe Api::V1::Admin::AppConfigsController, type: :controller do
           expect(body['error']['message']).to include('unknown_type')
         end
       end
+
+      context 'with openai config type' do
+        it 'includes the new per-feature model override keys in the openai config response' do
+          get :show, params: { config_type: 'openai' }, format: :json
+
+          expect(response).to have_http_status(:ok)
+          configs = JSON.parse(response.body)['data']['configs']
+          expect(configs).to have_key('OPENAI_AUDIO_TRANSCRIPTION_MODEL')
+          expect(configs).to have_key('KNOWLEDGE_EMBEDDING_MODEL')
+          expect(configs).to have_key('MEMORY_COMPRESSION_MODEL')
+        end
+      end
     end
   end
 
@@ -499,6 +511,18 @@ RSpec.describe Api::V1::Admin::AppConfigsController, type: :controller do
                 .to eq(full_payload[first_required.to_sym])
             end
           end
+        end
+      end
+
+      context 'with openai config type' do
+        it 'persists a custom embedding model override' do
+          post :create, params: {
+            config_type: 'openai',
+            app_config: { KNOWLEDGE_EMBEDDING_MODEL: 'text-embedding-3-large' }
+          }, format: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(GlobalConfigService.load('KNOWLEDGE_EMBEDDING_MODEL', nil)).to eq('text-embedding-3-large')
         end
       end
     end

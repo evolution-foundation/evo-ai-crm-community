@@ -1,4 +1,5 @@
 require 'rails_helper'
+require 'webmock/rspec'
 
 RSpec.describe Memory::CompressionService do
   subject(:service) { described_class.new }
@@ -100,6 +101,23 @@ RSpec.describe Memory::CompressionService do
         .and_return(Ai::CredentialResolver::Endpoint.new(key: 'test-key', base_url: nil))
 
       expect { compress! }.to raise_error(Memory::CompressionService::Error, /unparseable JSON/)
+    end
+
+    it 'uses the configured model override in the LLM request body' do
+      allow(GlobalConfigService).to receive(:load).with('MEMORY_COMPRESSION_MODEL', 'gpt-4o-mini').and_return('gpt-4o')
+      allow(Ai::CredentialResolver).to receive(:resolve_endpoint)
+        .with(for_consumer: :memory_compression)
+        .and_return(Ai::CredentialResolver::Endpoint.new(key: 'sk-test-key', base_url: nil))
+      create_events(10)
+
+      stub_request(:post, 'https://api.openai.com/v1/chat/completions')
+        .with(body: hash_including(model: 'gpt-4o'))
+        .to_return(status: 200, body: { choices: [{ message: { content: 'Summary.' } }] }.to_json)
+
+      compress!
+
+      expect(a_request(:post, 'https://api.openai.com/v1/chat/completions')
+        .with(body: hash_including(model: 'gpt-4o'))).to have_been_made
     end
   end
 end

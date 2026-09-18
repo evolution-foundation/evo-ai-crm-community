@@ -60,7 +60,7 @@ class Memory::CompressionService
     request['Content-Type'] = 'application/json'
     request['Authorization'] = "Bearer #{endpoint.key}"
     request.body = {
-      model: MODEL,
+      model: GlobalConfigService.load('MEMORY_COMPRESSION_MODEL', MODEL),
       messages: [
         { role: 'system', content: 'Summarize the following conversation into a concise paragraph capturing key facts, decisions, and context. Do not add commentary.' },
         { role: 'user', content: transcript }

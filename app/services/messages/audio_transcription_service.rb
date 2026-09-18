@@ -2,6 +2,8 @@ class Messages::AudioTranscriptionService
   include Events::Types
   pattr_initialize [:attachment!]
 
+  DEFAULT_TRANSCRIPTION_MODEL = 'whisper-1'
+
   def perform
     Rails.logger.info "AudioTranscriptionService: Starting for attachment #{attachment.id}"
 
@@ -203,7 +205,7 @@ class Messages::AudioTranscriptionService
 
     form_data = [
       ['file', audio_file, { filename: filename }],
-      ['model', 'whisper-1']
+      ['model', GlobalConfigService.load('OPENAI_AUDIO_TRANSCRIPTION_MODEL', DEFAULT_TRANSCRIPTION_MODEL)]
     ]
 
     # Only add language if detect_language returns a non-nil value
