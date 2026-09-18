@@ -3,8 +3,10 @@
 # Async fetch of a contact's WhatsApp profile picture via Evolution API.
 # Mirrors the EvolutionGo::FetchContactAvatarWithFallbackJob pattern: this job
 # resolves the picture URL through the provider service and hands the actual
-# download off to Avatar::AvatarFromUrlJob, so neither the message ingestion
-# path nor the avatar attach path block on a flaky external call.
+# download off to Whatsapp::EvolutionHandlers::AvatarDownloadJob (which wraps
+# Avatar::AvatarFromUrlJob and releases the enqueue debounce lock once the
+# attempt is over), so neither the message ingestion path nor the avatar
+# attach path block on a flaky external call.
 class Evolution::FetchContactAvatarJob < ApplicationJob
   queue_as :low
 
@@ -27,7 +29,7 @@ class Evolution::FetchContactAvatarJob < ApplicationJob
 
     if profile_picture_url.present?
       Rails.logger.info "Evolution API: Scheduling avatar download for contact #{contact.id}"
-      Avatar::AvatarFromUrlJob.perform_later(contact, profile_picture_url)
+      Whatsapp::EvolutionHandlers::AvatarDownloadJob.perform_later(contact, profile_picture_url)
     else
       Rails.logger.debug { "Evolution API: No profile picture available for contact #{contact.id}" }
       Whatsapp::EvolutionHandlers::AvatarEnqueueGuard.release_avatar_enqueue_lock(contact_id)

@@ -28,7 +28,7 @@ module Whatsapp::EvolutionHandlers::AvatarEnqueueGuard
     return unless contact && avatar_url.present?
     return unless acquire_avatar_enqueue_lock(contact.id)
 
-    Avatar::AvatarFromUrlJob.perform_later(contact, avatar_url)
+    Whatsapp::EvolutionHandlers::AvatarDownloadJob.perform_later(contact, avatar_url)
   end
 
   def acquire_avatar_enqueue_lock(contact_id)
