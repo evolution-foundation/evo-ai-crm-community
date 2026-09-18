@@ -64,9 +64,16 @@ module Api
         # Looks up an existing (possibly archived) WhatsApp channel by phone
         # number, so the frontend can offer to reactivate it instead of
         # creating a duplicate inbox for a number that's already known.
+        # The archived channel's stored phone_number and the one a later create
+        # attempt sends are not guaranteed to share formatting (spaces, dashes,
+        # a missing '+', Brazil's nono dígito) — an exact match would silently
+        # miss it, sending the user to plain create and a raw DB uniqueness
+        # error instead of the reactivate/replace flow. Compare on the same
+        # canonical form Evolution/WhatsApp itself resolves to.
         def archived_whatsapp_match
-          phone_number = params[:phone_number].to_s
-          channel = Channel::Whatsapp.find_by(phone_number: phone_number)
+          target = ::Whatsapp::PhoneNumberNormalizer.call(params[:phone_number])
+          channel = target.present? &&
+                    Channel::Whatsapp.find { |c| ::Whatsapp::PhoneNumberNormalizer.call(c.phone_number) == target }
           inbox = channel&.inbox
 
           success_response(
