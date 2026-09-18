@@ -5,9 +5,10 @@ require 'rails_helper'
 # Every AI feature is registered here, and the
 # resolver reads this map instead of each consumer carrying its own rule.
 RSpec.describe Ai::ConsumerCompatibility do
-  it 'registers the five AI features of the CRM' do
+  it 'registers the seven AI features of the CRM' do
     expect(described_class::CONSUMERS.keys).to contain_exactly(
-      :ai_agents, :inbox_assist, :audio_transcription, :label_suggestion, :moderation
+      :ai_agents, :inbox_assist, :audio_transcription, :label_suggestion, :moderation,
+      :knowledge_embedding, :memory_compression
     )
   end
 
@@ -17,10 +18,10 @@ RSpec.describe Ai::ConsumerCompatibility do
     expect(described_class.accepts?(:ai_agents, 'gemini')).to be(true)
   end
 
-  # These four build an OpenAI-shaped request (chat/completions, or Whisper for
-  # transcription). A non-OpenAI provider there is a different protocol, not a
-  # misconfiguration, so it must never reach the wire.
-  %i[inbox_assist audio_transcription label_suggestion moderation].each do |consumer|
+  # These six build an OpenAI-shaped request (chat/completions, Whisper for
+  # transcription, or the embeddings endpoint). A non-OpenAI provider there is
+  # a different protocol, not a misconfiguration, so it must never reach the wire.
+  %i[inbox_assist audio_transcription label_suggestion moderation knowledge_embedding memory_compression].each do |consumer|
     it "restricts #{consumer} to OpenAI-compatible providers" do
       expect(described_class.accepts?(consumer, 'openai')).to be(true)
       expect(described_class.accepts?(consumer, 'azure')).to be(true)
