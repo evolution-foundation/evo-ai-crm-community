@@ -246,6 +246,17 @@ RSpec.describe Api::V1::Admin::AppConfigsController, type: :controller do
           expect(configs).to have_key('KNOWLEDGE_EMBEDDING_MODEL')
           expect(configs).to have_key('MEMORY_COMPRESSION_MODEL')
         end
+
+        it 'includes the pinned-credential-id keys in the openai config response' do
+          get :show, params: { config_type: 'openai' }, format: :json
+
+          expect(response).to have_http_status(:ok)
+          configs = JSON.parse(response.body)['data']['configs']
+          expect(configs).to have_key('INBOX_ASSIST_CREDENTIAL_ID')
+          expect(configs).to have_key('AUDIO_TRANSCRIPTION_CREDENTIAL_ID')
+          expect(configs).to have_key('KNOWLEDGE_EMBEDDING_CREDENTIAL_ID')
+          expect(configs).to have_key('MEMORY_COMPRESSION_CREDENTIAL_ID')
+        end
       end
     end
   end
@@ -523,6 +534,21 @@ RSpec.describe Api::V1::Admin::AppConfigsController, type: :controller do
 
           expect(response).to have_http_status(:ok)
           expect(GlobalConfigService.load('KNOWLEDGE_EMBEDDING_MODEL', nil)).to eq('text-embedding-3-large')
+        end
+
+        it 'persists a pinned credential id, which is not treated as a sensitive/maskable key' do
+          expect(InstallationConfig.sensitive_name?('KNOWLEDGE_EMBEDDING_CREDENTIAL_ID')).to be(false)
+
+          post :create, params: {
+            config_type: 'openai',
+            app_config: { KNOWLEDGE_EMBEDDING_CREDENTIAL_ID: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }
+          }, format: :json
+
+          expect(response).to have_http_status(:ok)
+          configs = JSON.parse(response.body)['data']['configs']
+          expect(configs['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID']).to eq('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')
+          expect(GlobalConfigService.load('KNOWLEDGE_EMBEDDING_CREDENTIAL_ID', nil))
+            .to eq('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')
         end
       end
     end

@@ -16,6 +16,18 @@ class Ai::CredentialResolver
   # `base_url` nil means "use the consumer's default".
   Endpoint = Struct.new(:key, :base_url, keyword_init: true)
 
+  # Consumers an admin can explicitly pin to one credential, and the config
+  # key each pin is read from. Scoped to consumers that actually have a
+  # settings page to put the picker on — ai_agents already has its own
+  # per-agent credential selection elsewhere, and label_suggestion/moderation
+  # have no settings page at all today.
+  PINNED_CREDENTIAL_CONFIG_KEYS = {
+    inbox_assist: 'INBOX_ASSIST_CREDENTIAL_ID',
+    audio_transcription: 'AUDIO_TRANSCRIPTION_CREDENTIAL_ID',
+    knowledge_embedding: 'KNOWLEDGE_EMBEDDING_CREDENTIAL_ID',
+    memory_compression: 'MEMORY_COMPRESSION_CREDENTIAL_ID'
+  }.freeze
+
   # Returns the credential record in effect, or nil when no link in the chain
   # offers a usable one. Never raises for "nothing configured" — that is an
   # expected state.
@@ -45,6 +57,9 @@ class Ai::CredentialResolver
 
   def resolve
     return nil unless Ai::ConsumerCompatibility.known?(@consumer)
+
+    pinned = pinned_credential
+    return pinned if pinned
 
     # Most specific first: Ai::ScopeChain reads the chain backwards, so
     # inserting a link changes precedence without touching this method.
@@ -95,6 +110,24 @@ class Ai::CredentialResolver
   def legacy_hook_key
     hook = @legacy_hook || Integrations::Hook.find_by(app_id: 'openai')
     hook&.settings&.dig('api_key').presence
+  end
+
+  def pinned_credential
+    config_key = PINNED_CREDENTIAL_CONFIG_KEYS[@consumer]
+    return nil unless config_key
+
+    pinned_id = GlobalConfigService.load(config_key, nil)
+    return nil if pinned_id.blank?
+
+    credential = Ai::Credential.active.find_by(id: pinned_id)
+    return nil unless credential && accepted?(credential)
+
+    credential
+  rescue ActiveRecord::StatementInvalid
+    # A malformed (non-UUID) pinned id must degrade to "no pin", not raise —
+    # an admin-entered value should never be able to break every AI feature
+    # that reads through this resolver.
+    nil
   end
 
   def credential_for(scope)

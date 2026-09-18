@@ -170,6 +170,66 @@ RSpec.describe Ai::CredentialResolver do
     end
   end
 
+  describe 'pinning (explicit credential selection)' do
+    after { ENV.delete('KNOWLEDGE_EMBEDDING_CREDENTIAL_ID') }
+
+    it 'prefers a pinned credential over the scope chain' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+      pinned = create_credential(name: 'Pin explicito', scope: 'account', provider: 'openai')
+      # Account normally wins here — pin the installation one instead, so this
+      # test actually proves the pin overrides the chain rather than agreeing
+      # with it by coincidence.
+      ENV['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID'] = installation.id
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).not_to eq(pinned)
+    end
+
+    it 'falls back to the scope chain when no pin is configured' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+    end
+
+    it 'falls back to the scope chain when the pinned credential id does not exist' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+      ENV['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID'] = 'deadbeef-0000-0000-0000-000000000000'
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+    end
+
+    it 'falls back to the scope chain when the pinned credential is inactive' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+      inactive = create_credential(name: 'Desativada', scope: 'account', provider: 'openai', active: false)
+      ENV['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID'] = inactive.id
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+    end
+
+    it 'falls back to the scope chain when the pinned credential is provider-incompatible for this consumer' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+      wrong_provider = create_credential(name: 'Claude', scope: 'account', provider: 'anthropic')
+      ENV['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID'] = wrong_provider.id
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+    end
+
+    it 'falls back to the scope chain when the pinned credential is restricted away from this consumer' do
+      installation = create_credential(name: 'Chave da casa', scope: 'installation', provider: 'openai')
+      restricted = create_credential(name: 'So agentes', scope: 'account', provider: 'openai',
+                                      allowed_consumers: ['ai_agents'])
+      ENV['KNOWLEDGE_EMBEDDING_CREDENTIAL_ID'] = restricted.id
+
+      expect(described_class.resolve(for_consumer: :knowledge_embedding)).to eq(installation)
+    end
+
+    it 'has no pin config key for ai_agents, label_suggestion, or moderation' do
+      expect(described_class::PINNED_CREDENTIAL_CONFIG_KEYS.keys).to contain_exactly(
+        :inbox_assist, :audio_transcription, :knowledge_embedding, :memory_compression
+      )
+    end
+  end
+
   describe 'the credential model' do
     it 'is read-only — writes belong to the core service' do
       credential = create_credential(name: 'Producao', scope: 'account')

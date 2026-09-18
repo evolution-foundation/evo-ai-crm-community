@@ -30,10 +30,15 @@ module Api
           # OPENAI_AUDIO_TRANSCRIPTION_MODEL / KNOWLEDGE_EMBEDDING_MODEL /
           # MEMORY_COMPRESSION_MODEL: per-feature model overrides for features
           # whose model was previously a hardcoded Ruby constant with no UI.
+          # *_CREDENTIAL_ID: optional explicit credential pin per feature, read
+          # by Ai::CredentialResolver::PINNED_CREDENTIAL_CONFIG_KEYS — not a
+          # secret, just a UUID reference into the credential registry.
           'openai' => %w[
             OPENAI_API_URL OPENAI_MODEL OPENAI_ENABLE_AUDIO_TRANSCRIPTION
             OPENAI_AUDIO_TRANSCRIPTION_MODEL KNOWLEDGE_EMBEDDING_MODEL
             MEMORY_COMPRESSION_MODEL
+            INBOX_ASSIST_CREDENTIAL_ID AUDIO_TRANSCRIPTION_CREDENTIAL_ID
+            KNOWLEDGE_EMBEDDING_CREDENTIAL_ID MEMORY_COMPRESSION_CREDENTIAL_ID
             OPENAI_PROMPT_REPLY OPENAI_PROMPT_SUMMARY OPENAI_PROMPT_REPHRASE
             OPENAI_PROMPT_FIX_GRAMMAR OPENAI_PROMPT_SHORTEN OPENAI_PROMPT_EXPAND
             OPENAI_PROMPT_FRIENDLY OPENAI_PROMPT_FORMAL OPENAI_PROMPT_SIMPLIFY
