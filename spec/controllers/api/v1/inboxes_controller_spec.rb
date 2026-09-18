@@ -196,6 +196,22 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
         expect(response.parsed_body['data']).to be_nil
       end
     end
+
+    # Regression: the stored phone_number and the one the phone input sends on
+    # a later create attempt are not guaranteed to be formatted identically
+    # (spaces, dashes, missing '+') — an exact string match silently misses the
+    # archived channel, so the user falls through to plain create and hits the
+    # DB's raw uniqueness error instead of the reactivate/replace flow.
+    context 'when the phone number matches only after stripping formatting' do
+      before { inbox.update!(archived_at: Time.current) }
+
+      it 'still finds the archived inbox for a differently formatted but equivalent number' do
+        get :archived_whatsapp_match, params: { phone_number: '+55 (11) 99999-9999' }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body.dig('data', 'inbox_id')).to eq(inbox.id)
+      end
+    end
   end
 
   describe 'POST #replace_archived_channel' do
