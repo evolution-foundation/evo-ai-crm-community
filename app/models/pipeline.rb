@@ -28,7 +28,14 @@ class Pipeline < ApplicationRecord
   belongs_to :created_by, class_name: 'User'
 
   has_many :pipeline_stages, -> { order(:position) }, dependent: :destroy, inverse_of: :pipeline
-  has_many :pipeline_items, dependent: :destroy
+  # Ordered so the Kanban board renders cards in a stable order across
+  # requests: without it, Postgres has no guaranteed row order for an
+  # unordered SELECT, and an UPDATE (e.g. moving a card) creates a new
+  # physical row version that can shift where the row lands in a later scan
+  # — letting cards silently swap positions between reloads. `id` breaks
+  # ties between items sharing the same entered_at (e.g. a bulk API import),
+  # which entered_at alone does not.
+  has_many :pipeline_items, -> { order(:entered_at, :id) }, dependent: :destroy
   has_many :conversations, through: :pipeline_items
   has_many :pipeline_service_definitions, dependent: :nullify
   # EVO-2222: teams a `team`-visible pipeline is shared with. `team_ids=` (from the

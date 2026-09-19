@@ -178,6 +178,45 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
     end
   end
 
+  describe 'PATCH #move_to_stage' do
+    # set_pipeline_item's first lookup strategy treats params[:id] as a
+    # conversation display_id. display_id is an integer column, and Rails
+    # casts a non-numeric string to its leading digits (e.g.
+    # "8a4ab330-...".to_i == 8) rather than nil — so a pipeline_item UUID
+    # that happens to start with digits matching another conversation's
+    # display_id gets silently resolved to THAT unrelated conversation's
+    # item instead of the one the caller actually specified by UUID.
+    context 'when the target pipeline_item UUID starts with digits matching an unrelated conversation display_id' do
+      let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
+      let(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel) }
+      let(:unrelated_contact) { Contact.create!(name: 'Someone Else', email: 'someone@example.com') }
+      let(:unrelated_contact_inbox) { ContactInbox.create!(inbox: inbox, contact: unrelated_contact, source_id: SecureRandom.hex(4)) }
+      let!(:unrelated_conversation) { Conversation.create!(inbox: inbox, contact: unrelated_contact, contact_inbox: unrelated_contact_inbox) }
+      let!(:unrelated_item) do
+        PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage_one, conversation: unrelated_conversation, assigned_by: user)
+      end
+      let(:target_contact) { Contact.create!(name: 'Target Contact', email: 'target@example.com') }
+      let!(:target_item) do
+        # An explicit id whose leading digits equal unrelated_conversation's
+        # display_id — reproducing the exact collision, not relying on luck.
+        colliding_id = "#{unrelated_conversation.display_id}#{SecureRandom.uuid[unrelated_conversation.display_id.to_s.length..]}"
+        PipelineItem.create!(id: colliding_id, pipeline: pipeline, pipeline_stage: stage_one, contact: target_contact, assigned_by: user)
+      end
+
+      it 'moves the item identified by the UUID, not the unrelated conversation sharing its leading digits' do
+        patch :move_to_stage, params: {
+          pipeline_id: pipeline.id,
+          id: target_item.id,
+          new_stage_id: stage_two.id
+        }
+
+        expect(response).to have_http_status(:ok)
+        expect(target_item.reload.pipeline_stage_id).to eq(stage_two.id)
+        expect(unrelated_item.reload.pipeline_stage_id).to eq(stage_one.id)
+      end
+    end
+  end
+
   # EVO-1272 [10.14]: endpoint consumed by the evo-flow Journey "Move to
   # Pipeline Stage" node. Resolves the conversation's current placement
   # server-side (same-pipeline / cross-pipeline / assign) so the Journey

@@ -169,4 +169,43 @@ RSpec.describe Pipeline, type: :model do
       end
     end
   end
+
+  describe '#pipeline_items ordering' do
+    let(:pipeline) do
+      described_class.create!(name: "Ordering Pipeline #{SecureRandom.hex(4)}", pipeline_type: 'custom', created_by: admin_user)
+    end
+    let(:stage) { PipelineStage.create!(pipeline: pipeline, name: 'Stage 1', position: 1) }
+    let(:contact_a) { Contact.create!(name: 'A', email: "a-#{SecureRandom.hex(4)}@example.com") }
+    let(:contact_b) { Contact.create!(name: 'B', email: "b-#{SecureRandom.hex(4)}@example.com") }
+
+    # Without an explicit order, Postgres does not guarantee row order for an
+    # unordered SELECT, and an UPDATE creates a new physical row version (MVCC)
+    # that can change where the row lands in a later scan. The Kanban board
+    # renders items in whatever order this association returns, so an
+    # unordered association lets cards silently swap positions between
+    # requests — which is how a click meant for one card can act on another.
+    it 'orders items by entered_at regardless of update order' do
+      older = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_a, entered_at: 2.days.ago)
+      newer = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_b, entered_at: 1.day.ago)
+
+      older.touch
+
+      expect(pipeline.reload.pipeline_items.to_a).to eq([older, newer])
+    end
+
+    # entered_at alone leaves ties unresolved — Postgres is free to return
+    # tied rows in a different order after either one is updated. A bulk API
+    # import (leads created in the same request) is exactly the case where
+    # multiple items share one entered_at value.
+    it 'breaks entered_at ties by id, regardless of update order' do
+      same_time = 1.day.ago
+      first = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_a, entered_at: same_time)
+      second = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_b, entered_at: same_time)
+      expected = [first, second].sort_by(&:id)
+
+      first.touch
+
+      expect(pipeline.reload.pipeline_items.to_a).to eq(expected)
+    end
+  end
 end
