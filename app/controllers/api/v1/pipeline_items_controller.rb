@@ -632,8 +632,13 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   def set_pipeline_item
     # For destroy and move_to_stage actions, try to find by conversation_id first, then by pipeline_item id
     if %w[destroy move_to_stage update_conversation].include?(action_name)
-      # First try to find by conversation display_id
-      conversation = Conversation.find_by(display_id: params[:id])
+      # First try to find by conversation display_id. display_id is an integer
+      # column, and Rails casts a non-numeric string to its LEADING DIGITS
+      # (e.g. "8a4ab330-...".to_i == 8) rather than nil — so without this
+      # guard, a pipeline_item UUID happening to start with digits that match
+      # some OTHER conversation's display_id would silently resolve to that
+      # unrelated conversation's item instead of raising or falling through.
+      conversation = Conversation.find_by(display_id: params[:id]) if params[:id].to_s.match?(/\A\d+\z/)
       @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
 
       # If not found, try by conversation id (UUID)
