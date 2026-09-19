@@ -192,5 +192,20 @@ RSpec.describe Pipeline, type: :model do
 
       expect(pipeline.reload.pipeline_items.to_a).to eq([older, newer])
     end
+
+    # entered_at alone leaves ties unresolved — Postgres is free to return
+    # tied rows in a different order after either one is updated. A bulk API
+    # import (leads created in the same request) is exactly the case where
+    # multiple items share one entered_at value.
+    it 'breaks entered_at ties by id, regardless of update order' do
+      same_time = 1.day.ago
+      first = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_a, entered_at: same_time)
+      second = PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact_b, entered_at: same_time)
+      expected = [first, second].sort_by(&:id)
+
+      first.touch
+
+      expect(pipeline.reload.pipeline_items.to_a).to eq(expected)
+    end
   end
 end
