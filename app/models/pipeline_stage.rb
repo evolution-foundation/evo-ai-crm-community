@@ -21,7 +21,8 @@
 #
 class PipelineStage < ApplicationRecord
   belongs_to :pipeline
-  has_many :pipeline_items, dependent: :destroy
+  # See Pipeline#pipeline_items for why this needs a stable order.
+  has_many :pipeline_items, -> { order(:entered_at) }, dependent: :destroy
   has_many :conversations, through: :pipeline_items
   has_many :stage_movements_from, class_name: 'StageMovement', foreign_key: 'from_stage_id', dependent: :destroy, inverse_of: :from_stage
   has_many :stage_movements_to, class_name: 'StageMovement', foreign_key: 'to_stage_id', dependent: :destroy, inverse_of: :to_stage
