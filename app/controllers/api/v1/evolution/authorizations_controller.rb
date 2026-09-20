@@ -1,7 +1,9 @@
 class Api::V1::Evolution::AuthorizationsController < Api::V1::BaseController
+  include EvolutionConcern
+
   require_permissions({
-    create: 'inboxes.create'
-  })
+                        create: 'inboxes.create'
+                      })
 
   def create
     Rails.logger.info "Evolution API connection verification called with params: #{params.inspect}"
@@ -37,7 +39,7 @@ class Api::V1::Evolution::AuthorizationsController < Api::V1::BaseController
       check_and_delete_existing_instance(api_url, admin_token, instance_name)
 
       # Create new instance
-      instance_data = create_instance(api_url, admin_token, instance_name, phone_number, auth_params)
+      instance_data = create_evolution_instance!(api_url, admin_token, instance_name, phone_number)
 
       # Apply proxy settings if provided
       if auth_params[:proxy_settings].present?
@@ -103,76 +105,6 @@ class Api::V1::Evolution::AuthorizationsController < Api::V1::BaseController
   rescue StandardError => e
     Rails.logger.error "Evolution API: Server connection error: #{e.class} - #{e.message}"
     raise "Failed to verify instance: #{e.message}"
-  end
-
-  def create_instance(api_url, admin_token, instance_name, phone_number, auth_params)
-    create_url = "#{api_url.chomp('/')}/instance/create"
-    Rails.logger.info "Evolution API: Creating instance at #{create_url}"
-
-    # Clean phone number (remove +, spaces, -)
-    clean_number = phone_number.gsub(/[\+\s\-]/, '')
-
-    # Get webhook URL (following Evolution pattern)
-    webhook_url_value = webhook_url
-
-    # Webhook events - fixed list as per Evolution v2 specification
-    webhook_events = [
-      'CONNECTION_UPDATE',     # Connection status changes
-      'CONTACTS_SET',          # Historical contacts sync (initial)
-      'CONTACTS_UPDATE',       # Contact updates
-      'CONTACTS_UPSERT',       # Contact create/update
-      'LABELS_ASSOCIATION',    # Label associations
-      'LABELS_EDIT',           # Label edits
-      'LOGOUT_INSTANCE',       # Instance logout events
-      'MESSAGES_DELETE',       # Message deletions
-      'MESSAGES_UPDATE',       # Message updates (read status, etc)
-      'MESSAGES_UPSERT',       # New incoming messages
-      'SEND_MESSAGE'           # Sent message events
-    ]
-
-    Rails.logger.info "Evolution v2: Configured webhook events: #{webhook_events.join(', ')}"
-
-    request_body = {
-      instanceName: instance_name,
-      number: clean_number,
-      integration: 'WHATSAPP-BAILEYS',
-      qrcode: false,
-      webhook: {
-        url: webhook_url_value,
-        byEvents: false,
-        base64: true,
-        events: webhook_events
-      }
-    }
-
-    uri = URI.parse(create_url)
-
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = (uri.scheme == 'https')
-    http.open_timeout = 15
-    http.read_timeout = 15
-
-    request = Net::HTTP::Post.new(uri)
-    request['apikey'] = admin_token
-    request['Content-Type'] = 'application/json'
-    request.body = request_body.to_json
-
-    Rails.logger.info "Evolution API: Create instance request headers: #{request.to_hash}"
-    Rails.logger.info "Evolution API: Create instance request body: #{request.body}"
-
-    response = http.request(request)
-    Rails.logger.info "Evolution API: Create instance response code: #{response.code}"
-    Rails.logger.info "Evolution API: Create instance response body: #{response.body}"
-
-    raise "Failed to create instance. Status: #{response.code}, Body: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
-
-    JSON.parse(response.body)
-  rescue JSON::ParserError => e
-    Rails.logger.error "Evolution API: Create instance JSON parse error: #{e.message}, Body: #{response&.body}"
-    raise 'Invalid response from Evolution API create instance endpoint'
-  rescue StandardError => e
-    Rails.logger.error "Evolution API: Create instance connection error: #{e.class} - #{e.message}"
-    raise "Failed to create instance: #{e.message}"
   end
 
   def check_and_delete_existing_instance(api_url, admin_token, instance_name)
@@ -298,13 +230,6 @@ class Api::V1::Evolution::AuthorizationsController < Api::V1::BaseController
   rescue StandardError => e
     Rails.logger.error "Evolution API: QR code connection error: #{e.class} - #{e.message}"
     raise "Failed to get QR code: #{e.message}"
-  end
-
-  def webhook_url
-    api_url = ENV['BACKEND_URL'].to_s.strip
-    raise 'BACKEND_URL is not configured (required to register Evolution webhook callback)' if api_url.empty?
-
-    "#{api_url.chomp('/')}/webhooks/whatsapp/evolution"
   end
 
   def apply_proxy_settings(api_url, admin_token, instance_name, proxy_settings)
