@@ -188,8 +188,7 @@ class Messages::AudioTranscriptionService
 
     # A key issued by a local gateway must not go to api.openai.com just because
     # the installation setting still points there.
-    base_url = credential_endpoint.base_url.presence ||
-               GlobalConfigService.load('OPENAI_API_URL', 'https://api.openai.com/v1')
+    base_url = credential_endpoint.base_url.presence || 'https://api.openai.com/v1'
     transcription_url = "#{base_url}/audio/transcriptions"
 
     uri = URI(transcription_url)

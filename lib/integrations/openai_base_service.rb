@@ -86,7 +86,7 @@ class Integrations::OpenaiBaseService
   # Endpoint from the same credential as the key; installation setting is the
   # fallback for credentials that carry no URL of their own.
   def api_url
-    @api_url ||= "#{credential_endpoint.base_url.presence || GlobalConfigService.load('OPENAI_API_URL', 'https://api.openai.com/v1')}/chat/completions"
+    @api_url ||= "#{credential_endpoint.base_url.presence || 'https://api.openai.com/v1'}/chat/completions"
   end
 
   # Get OpenAI model from global configuration

@@ -41,7 +41,7 @@ class Integrations::Openai::GlobalProcessorService
   # Endpoint from the same credential as the key: mixing halves points a valid
   # key at the wrong server.
   def api_url
-    @api_url ||= credential_endpoint.base_url.presence || GlobalConfigService.load('OPENAI_API_URL', nil)
+    @api_url ||= credential_endpoint.base_url.presence || 'https://api.openai.com/v1'
   end
 
   # The registry is the single source; the pre-registry global/hook chain is the

@@ -25,8 +25,11 @@ module Api
             EVOLUTION_HUB_ENABLED
             EVOLUTION_HUB_API_KEY EVOLUTION_HUB_WEBHOOK_SECRET
           ],
-          # No OPENAI_API_SECRET: the credential lives in the registry now. URL,
-          # model, toggle and prompts stay — consumer config, not credential.
+          # No OPENAI_API_SECRET: the credential lives in the registry now. No
+          # OPENAI_API_URL either: every credential carries its own base_url
+          # (or falls back to the same hardcoded default every consuming
+          # service already uses). Model, toggle and prompts stay — consumer
+          # config, not credential.
           # OPENAI_AUDIO_TRANSCRIPTION_MODEL / KNOWLEDGE_EMBEDDING_MODEL /
           # MEMORY_COMPRESSION_MODEL: per-feature model overrides for features
           # whose model was previously a hardcoded Ruby constant with no UI.
@@ -34,7 +37,7 @@ module Api
           # by Ai::CredentialResolver::PINNED_CREDENTIAL_CONFIG_KEYS — not a
           # secret, just a UUID reference into the credential registry.
           'openai' => %w[
-            OPENAI_API_URL OPENAI_MODEL OPENAI_ENABLE_AUDIO_TRANSCRIPTION
+            OPENAI_MODEL OPENAI_ENABLE_AUDIO_TRANSCRIPTION
             OPENAI_AUDIO_TRANSCRIPTION_MODEL KNOWLEDGE_EMBEDDING_MODEL
             MEMORY_COMPRESSION_MODEL
             INBOX_ASSIST_CREDENTIAL_ID AUDIO_TRANSCRIPTION_CREDENTIAL_ID
