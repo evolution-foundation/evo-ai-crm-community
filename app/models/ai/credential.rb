@@ -37,9 +37,21 @@ class Ai::Credential < ActiveRecord::Base
   SCOPE_INSTALLATION = 'installation'
   SCOPE_ACCOUNT = 'account'
 
-  # Providers speaking the OpenAI wire protocol; the others only serve AI Agents.
-  # Mirrors IsOpenAICompatible in the core's api_key model.
-  OPENAI_COMPATIBLE_PROVIDERS = %w[openai azure custom custom_openai_compatible].freeze
+  # Providers speaking the OpenAI wire protocol, so every AI feature can use
+  # them — including embeddings and audio transcription. OpenRouter joined
+  # this set (not just CHAT_COMPLETIONS_COMPATIBLE_PROVIDERS below) because it
+  # exposes OpenAI-shaped /embeddings and /audio/transcriptions endpoints too,
+  # verified against OpenRouter's own documentation.
+  OPENAI_COMPATIBLE_PROVIDERS = %w[openai azure custom custom_openai_compatible openrouter].freeze
+
+  # Providers that speak the OpenAI chat-completions wire protocol
+  # specifically — a wider set than OPENAI_COMPATIBLE_PROVIDERS, most of which
+  # don't offer OpenAI-compatible embeddings or audio transcription. Mirrors
+  # evo-ai-core-service-community's chatCompletionsCompatibleProviders exactly.
+  CHAT_COMPLETIONS_COMPATIBLE_PROVIDERS = %w[
+    openai azure custom custom_openai_compatible
+    openrouter groq deepseek together_ai fireworks_ai
+  ].freeze
 
   scope :active, -> { where(is_active: true) }
   scope :for_scope, ->(scope) { where(scope: scope) }

@@ -18,14 +18,44 @@ RSpec.describe Ai::ConsumerCompatibility do
     expect(described_class.accepts?(:ai_agents, 'gemini')).to be(true)
   end
 
-  # These six build an OpenAI-shaped request (chat/completions, Whisper for
-  # transcription, or the embeddings endpoint). A non-OpenAI provider there is
-  # a different protocol, not a misconfiguration, so it must never reach the wire.
-  %i[inbox_assist audio_transcription label_suggestion moderation knowledge_embedding memory_compression].each do |consumer|
+  # These four build an OpenAI-shaped request (Whisper for transcription, or
+  # the embeddings endpoint) that only a provider speaking that exact protocol
+  # can serve. A non-OpenAI-shaped provider there is a different protocol, not
+  # a misconfiguration, so it must never reach the wire.
+  %i[audio_transcription label_suggestion moderation knowledge_embedding].each do |consumer|
     it "restricts #{consumer} to OpenAI-compatible providers" do
       expect(described_class.accepts?(consumer, 'openai')).to be(true)
       expect(described_class.accepts?(consumer, 'azure')).to be(true)
       expect(described_class.accepts?(consumer, 'custom')).to be(true)
+      # OpenRouter exposes OpenAI-shaped /embeddings and /audio/transcriptions
+      # endpoints too (verified against its own docs), unlike a bare
+      # chat-completions-only provider.
+      expect(described_class.accepts?(consumer, 'openrouter')).to be(true)
+
+      expect(described_class.accepts?(consumer, 'anthropic')).to be(false)
+      expect(described_class.accepts?(consumer, 'gemini')).to be(false)
+      expect(described_class.accepts?(consumer, 'bedrock')).to be(false)
+      # groq/deepseek/together_ai/fireworks_ai are unverified for embeddings
+      # and transcription — chat-completions-only, so they stay rejected here.
+      expect(described_class.accepts?(consumer, 'groq')).to be(false)
+    end
+  end
+
+  # These two build a chat-completions request via HTTParty (inbox_assist) or
+  # Net::HTTP (memory_compression), and neither hardcodes api.openai.com —
+  # both already resolve their URL from the credential's own base_url. Any
+  # provider that speaks the OpenAI chat-completions wire protocol works here,
+  # not just the narrower embeddings/transcription-capable set.
+  %i[inbox_assist memory_compression].each do |consumer|
+    it "accepts OpenAI-chat-completions-compatible providers for #{consumer}" do
+      expect(described_class.accepts?(consumer, 'openai')).to be(true)
+      expect(described_class.accepts?(consumer, 'azure')).to be(true)
+      expect(described_class.accepts?(consumer, 'custom')).to be(true)
+      expect(described_class.accepts?(consumer, 'openrouter')).to be(true)
+      expect(described_class.accepts?(consumer, 'groq')).to be(true)
+      expect(described_class.accepts?(consumer, 'deepseek')).to be(true)
+      expect(described_class.accepts?(consumer, 'together_ai')).to be(true)
+      expect(described_class.accepts?(consumer, 'fireworks_ai')).to be(true)
 
       expect(described_class.accepts?(consumer, 'anthropic')).to be(false)
       expect(described_class.accepts?(consumer, 'gemini')).to be(false)

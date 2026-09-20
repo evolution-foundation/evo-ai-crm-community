@@ -12,12 +12,12 @@ class Ai::ConsumerCompatibility
 
   CONSUMERS = {
     ai_agents: ALL_PROVIDERS,
-    inbox_assist: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
+    inbox_assist: Ai::Credential::CHAT_COMPLETIONS_COMPATIBLE_PROVIDERS,
     audio_transcription: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     label_suggestion: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     moderation: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     knowledge_embedding: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
-    memory_compression: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS
+    memory_compression: Ai::Credential::CHAT_COMPLETIONS_COMPATIBLE_PROVIDERS
   }.freeze
 
   class << self
