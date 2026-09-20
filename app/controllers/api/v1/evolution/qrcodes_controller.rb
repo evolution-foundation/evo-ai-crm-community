@@ -16,7 +16,7 @@ class Api::V1::Evolution::QrcodesController < Api::V1::BaseController
       if channel
         api_url, api_hash = evolution_credentials_for!(channel)
 
-        result = get_qrcode(api_url, api_hash, instance_name)
+        result = get_qrcode_with_recreate(channel, api_url, api_hash, instance_name)
 
         render json: {
           success: true,
@@ -46,7 +46,7 @@ class Api::V1::Evolution::QrcodesController < Api::V1::BaseController
       Rails.logger.info "Evolution API: Refreshing QR code for instance #{instance_name}"
 
       # Get updated QR code
-      qrcode_data = get_qrcode(api_url, api_hash, instance_name)
+      qrcode_data = get_qrcode_with_recreate(channel, api_url, api_hash, instance_name)
 
       render json: {
         success: true,
@@ -76,6 +76,28 @@ class Api::V1::Evolution::QrcodesController < Api::V1::BaseController
     end
   end
 
+  # Archiving a channel can leave Evolution API's own instance deleted (see
+  # InstanceNotFoundError) — reconnecting an archived channel would otherwise
+  # dead-end on a 404 forever, since nothing else ever recreates it. Recreate
+  # once with the channel's own persisted config and retry, so reactivating
+  # an archived WhatsApp channel "just works" even when Evolution API no
+  # longer has the instance.
+  def get_qrcode_with_recreate(channel, api_url, api_hash, instance_name)
+    get_qrcode(api_url, api_hash, instance_name)
+  rescue InstanceNotFoundError
+    # Without a channel record there's no phone_number to recreate with —
+    # nothing to do but surface the original 404 (legacy/unmatched instance).
+    raise if channel.nil? || channel.phone_number.blank?
+
+    Rails.logger.warn "Evolution API: instance #{instance_name} missing — recreating from channel #{channel.id}"
+    # api_hash here IS the admin token: both callers resolve it via
+    # evolution_credentials_for!/resolve_evolution_credentials, which return
+    # [api_url, admin_token] — the per-instance apikey used for /instance/connect
+    # is the same admin credential Evolution API accepts for /instance/create.
+    create_evolution_instance!(api_url, api_hash, instance_name, channel.phone_number)
+    get_qrcode(api_url, api_hash, instance_name)
+  end
+
   def get_qrcode(api_url, api_hash, instance_name)
     qrcode_url = "#{api_url.chomp('/')}/instance/connect/#{instance_name}"
     Rails.logger.info "Evolution API: Getting QR code from #{qrcode_url}"
@@ -97,6 +119,7 @@ class Api::V1::Evolution::QrcodesController < Api::V1::BaseController
     Rails.logger.info "Evolution API: QR code response code: #{response.code}"
     Rails.logger.info "Evolution API: QR code response body: #{response.body}"
 
+    raise InstanceNotFoundError, "Evolution instance #{instance_name} does not exist" if response.code == '404'
     raise "Failed to get QR code. Status: #{response.code}, Body: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
 
     parsed_response = JSON.parse(response.body)
@@ -116,6 +139,8 @@ class Api::V1::Evolution::QrcodesController < Api::V1::BaseController
       pairingCode: parsed_response['pairingCode'],
       connected: false
     }
+  rescue InstanceNotFoundError
+    raise
   rescue JSON::ParserError => e
     Rails.logger.error "Evolution API: QR code JSON parse error: #{e.message}, Body: #{response&.body}"
     raise 'Invalid response from Evolution API connect endpoint'
