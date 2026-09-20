@@ -10,6 +10,10 @@
 #
 # `account:` is threaded rather than queried: this CRM is single-tenant and has
 # no accounts table. The parameter exists for that overlay to scope a link.
+#
+# Also the ONLY owner of endpoint resolution: no consumer reads OPENAI_API_URL
+# itself any more. The lone exception lives in the legacy fallback below, where
+# that global setting is still the only source a base_url can come from.
 class Ai::CredentialResolver
   # Key and endpoint travel together: an OpenAI-compatible provider is the pair,
   # so a key from one credential with a URL from elsewhere hits the wrong server.
@@ -75,9 +79,14 @@ class Ai::CredentialResolver
     key = credential && Ai::CredentialDecryptor.decrypt(credential.key)
     return Endpoint.new(key: key, base_url: credential.base_url.presence) if key.present?
 
-    # The legacy sources hold a key and nothing else: the endpoint there has
-    # always been the consumer's own OPENAI_API_URL, and nil keeps it that way.
-    Endpoint.new(key: legacy_key, base_url: nil)
+    # The legacy sources hold a key and nothing else: they were never paired
+    # with a credential-level base_url, so the only place one can still come
+    # from is the installation's own global OPENAI_API_URL — read it directly
+    # here, since this is the one path left where a global setting is still
+    # part of the contract. Absent, `nil` still means "let the consumer's own
+    # hardcoded default apply", same as a real credential with no base_url.
+    fallback_key = legacy_key
+    Endpoint.new(key: fallback_key, base_url: fallback_key.present? ? legacy_base_url : nil)
   end
 
   private
@@ -110,6 +119,13 @@ class Ai::CredentialResolver
   def legacy_hook_key
     hook = @legacy_hook || Integrations::Hook.find_by(app_id: 'openai')
     hook&.settings&.dig('api_key').presence
+  end
+
+  # The only place a global setting still feeds an Endpoint: a legacy key was
+  # never stored with a base_url of its own, so this is what the consumer's
+  # OPENAI_API_URL has always meant for it.
+  def legacy_base_url
+    GlobalConfigService.load('OPENAI_API_URL', nil).presence
   end
 
   def pinned_credential

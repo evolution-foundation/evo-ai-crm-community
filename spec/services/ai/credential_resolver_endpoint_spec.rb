@@ -89,9 +89,22 @@ RSpec.describe Ai::CredentialResolver, '.resolve_endpoint' do
   end
 
   # The legacy sources carry a key and nothing else: the consumer's own
-  # OPENAI_API_URL stays the endpoint there, as it always was.
-  it 'reports no endpoint when the key came from the legacy fallback' do
+  # OPENAI_API_URL is the only place a base_url can still come from there.
+  it 'reads the endpoint from OPENAI_API_URL when the key came from the legacy fallback' do
+    allow(GlobalConfigService).to receive(:load).and_call_original
     allow(GlobalConfigService).to receive(:load).with('OPENAI_API_SECRET', nil).and_return('sk-legacy-global')
+    allow(GlobalConfigService).to receive(:load).with('OPENAI_API_URL', nil).and_return('https://gateway.legado/v1')
+
+    endpoint = described_class.resolve_endpoint(for_consumer: :inbox_assist)
+
+    expect(endpoint.key).to eq('sk-legacy-global')
+    expect(endpoint.base_url).to eq('https://gateway.legado/v1')
+  end
+
+  it 'reports no endpoint from the legacy fallback when OPENAI_API_URL is unset' do
+    allow(GlobalConfigService).to receive(:load).and_call_original
+    allow(GlobalConfigService).to receive(:load).with('OPENAI_API_SECRET', nil).and_return('sk-legacy-global')
+    allow(GlobalConfigService).to receive(:load).with('OPENAI_API_URL', nil).and_return(nil)
 
     endpoint = described_class.resolve_endpoint(for_consumer: :inbox_assist)
 
