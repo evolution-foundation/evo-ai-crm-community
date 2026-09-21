@@ -440,6 +440,9 @@ jobs:
             spec/services/whatsapp/phone_number_normalizer_spec.rb \
             spec/builders/contact_inbox_with_contact_builder_phone_lookup_spec.rb \
             spec/builders/contact_inbox_builder_spec.rb \
+            spec/actions/contact_identify_action_phone_lookup_spec.rb \
+            spec/services/data_import/contact_manager_phone_lookup_spec.rb \
+            spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb \
             spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb \
             spec/services/public/leads/creation_service_spec.rb \
             spec/requests/api/v1/webhooks/purchase_platforms_spec.rb \

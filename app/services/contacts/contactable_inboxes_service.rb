@@ -55,8 +55,7 @@ class Contacts::ContactableInboxesService
   def whatsapp_contactable_inbox(inbox)
     return if @contact.phone_number.blank?
 
-    # Remove the plus since thats the format 360 dialog uses
-    { source_id: @contact.phone_number.delete('+'), inbox: inbox }
+    { source_id: ContactInboxBuilder.whatsapp_source_id(@contact.phone_number), inbox: inbox }
   end
 
   def sms_contactable_inbox(inbox)
@@ -72,7 +71,7 @@ class Contacts::ContactableInboxesService
     when 'sms'
       { source_id: @contact.phone_number, inbox: inbox }
     when 'whatsapp'
-      { source_id: "whatsapp:#{@contact.phone_number}", inbox: inbox }
+      { source_id: ContactInboxBuilder.twilio_whatsapp_source_id(@contact.phone_number), inbox: inbox }
     end
   end
 

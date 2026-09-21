@@ -43,6 +43,20 @@ RSpec.describe ContactInboxBuilder do
       expect(bh.reload.phone_number).to eq('+5531988887777')
     end
 
+    # The "start conversation" screen and the stage-inactivity job take the source_id
+    # from ContactableInboxesService and hand it back to this builder explicitly.
+    it 'lands on the same ContactInbox whether the source_id comes from the contactable list or is derived here' do
+      bh = Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person')
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:whatsapp_contactable_inbox, whatsapp_inbox)
+
+      from_list = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: listed[:source_id]).perform
+      derived = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: nil).perform
+
+      expect(listed[:source_id]).to eq('553188887777')
+      expect(derived.id).to eq(from_list.id)
+      expect(ContactInbox.where(contact: bh, inbox: whatsapp_inbox).count).to eq(1)
+    end
+
     it 'returns the existing ContactInbox when one already matches (idempotent)' do
       first = described_class.new(contact: contact, inbox: whatsapp_inbox, source_id: nil).perform
       second = described_class.new(contact: contact, inbox: whatsapp_inbox, source_id: nil).perform
@@ -55,6 +69,25 @@ RSpec.describe ContactInboxBuilder do
       explicit = "ws-#{SecureRandom.hex(4)}"
       contact_inbox = described_class.new(contact: contact, inbox: inbox, source_id: explicit).perform
       expect(contact_inbox.source_id).to eq(explicit)
+    end
+  end
+  describe 'the Twilio WhatsApp source_id' do
+    let(:twilio_inbox) { instance_double(Inbox, channel: instance_double(Channel::TwilioSms, medium: 'whatsapp')) }
+    let(:bh) { Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person') }
+
+    it 'is the channel form, from the builder and from the contactable list alike' do
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:twilio_contactable_inbox, twilio_inbox)
+
+      expect(described_class.twilio_whatsapp_source_id(bh.phone_number)).to eq('whatsapp:+553188887777')
+      expect(listed[:source_id]).to eq('whatsapp:+553188887777')
+    end
+
+    it 'keeps the informed number for the SMS medium' do
+      sms_inbox = instance_double(Inbox, channel: instance_double(Channel::TwilioSms, medium: 'sms'))
+
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:twilio_contactable_inbox, sms_inbox)
+
+      expect(listed[:source_id]).to eq('+5531988887777')
     end
   end
 end

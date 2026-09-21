@@ -61,6 +61,27 @@ RSpec.describe Contact do
     end
   end
 
+  # A host may re-declare the uniqueness of the number under a scope. The check of
+  # the equivalent forms follows whatever scope that validator carries.
+  describe 'equivalent forms under a scoped uniqueness validator' do
+    let(:scoped) do
+      Class.new(described_class) do
+        def self.name = 'Contact'
+        validates :phone_number, uniqueness: { scope: :type }, allow_blank: true
+      end
+    end
+
+    before { described_class.create!(name: 'Person', phone_number: '+553188887777', type: 'person') }
+
+    it 'accepts the other form of the number outside the scope' do
+      expect(scoped.new(name: 'Company', phone_number: '+5531988887777', type: 'company')).to be_valid
+    end
+
+    it 'still refuses it inside the scope' do
+      expect(scoped.new(name: 'Twin', phone_number: '+5531988887777', type: 'person')).not_to be_valid
+    end
+  end
+
   describe '.from_phone_number' do
     it 'finds a contact stored with the ninth digit from the form the channel reports' do
       contact = described_class.create!(name: 'Full', phone_number: '+5531988887777', type: 'person')

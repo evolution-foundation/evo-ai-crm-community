@@ -4,6 +4,18 @@
 class ContactInboxBuilder
   pattr_initialize [:contact, :inbox, :source_id, { hmac_verified: false }]
 
+  # The ONE place a WhatsApp source_id is derived from a phone number. The contact
+  # keeps the number as informed; the source_id is the form the channel reports (no
+  # '+', WhatsApp's digit quirks applied). Every caller that hands a source_id to this
+  # builder has to derive it here, or the same person gets two contact_inboxes.
+  def self.whatsapp_source_id(phone_number)
+    Whatsapp::PhoneNumberNormalizer.call(phone_number).to_s
+  end
+
+  def self.twilio_whatsapp_source_id(phone_number)
+    "whatsapp:#{Whatsapp::PhoneNumberNormalizer.to_e164(phone_number)}"
+  end
+
   def perform
     @source_id ||= generate_source_id
     create_contact_inbox if source_id.present?
@@ -44,10 +56,7 @@ class ContactInboxBuilder
 
   def wa_source_id
     if @contact.phone_number.present?
-      # The contact keeps the number as informed; the source_id is the form the
-      # channel reports (no '+', WhatsApp's digit quirks applied), or an inbound
-      # message from the same person would open a second contact_inbox.
-      Whatsapp::PhoneNumberNormalizer.call(@contact.phone_number).to_s
+      self.class.whatsapp_source_id(@contact.phone_number)
     elsif @source_id.present?
       # BSUID-only contact: source_id was already set externally
       @source_id
@@ -63,7 +72,7 @@ class ContactInboxBuilder
     when 'sms'
       @contact.phone_number
     when 'whatsapp'
-      "whatsapp:#{Whatsapp::PhoneNumberNormalizer.to_e164(@contact.phone_number)}"
+      self.class.twilio_whatsapp_source_id(@contact.phone_number)
     end
   end
 

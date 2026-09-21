@@ -239,15 +239,15 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   # leading +. Deliberately stricter than RegexHelper::WHATSAPP_CHANNEL_REGEX, which
   # validates inbound source_ids (1-digit numbers, BSUIDs) and lacks @s.whatsapp.net:
   # here a false positive sends a message to a wrong destination (EVO-1682).
+  def valid_wa_destination?(value)
+    value.to_s.match?(/\A\+?\d+(?:-\d+)?@(?:lid|s\.whatsapp\.net|g\.us)\z/) ||
+      value.to_s.match?(/\A\+?\d{8,15}\z/)
+  end
+
   # The contact keeps the number as informed; the channel is addressed by the form
   # WhatsApp resolves it to (Brazilian ninth digit, MX/AR extra digit).
   def channel_number(phone_number)
     Whatsapp::PhoneNumberNormalizer.call(phone_number)
-  end
-
-  def valid_wa_destination?(value)
-    value.to_s.match?(/\A\+?\d+(?:-\d+)?@(?:lid|s\.whatsapp\.net|g\.us)\z/) ||
-      value.to_s.match?(/\A\+?\d{8,15}\z/)
   end
 
   def template_params

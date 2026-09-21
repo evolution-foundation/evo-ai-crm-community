@@ -296,6 +296,17 @@ RSpec.describe 'Api::V1::Webhooks::PurchasesController#receive', type: :request 
       expect(existing.reload.phone_number).to eq('+553188887777')
     end
 
+    it 'does not hand an email-matched contact a phone another contact holds in the other form' do
+      Contact.create!(name: 'Dona do número', phone_number: '+553188887777', type: 'person')
+      matched = Contact.create!(name: 'Sem telefone', email: 'semfone@cliente.com', type: 'person')
+      body = payload_hash.deep_merge(data: { customer: { email: 'semfone@cliente.com', phone: '31988887777' } }).to_json
+
+      post url, params: body, headers: auth_headers(body)
+
+      expect(response.parsed_body['data']['contact_id']).to eq(matched.id)
+      expect(matched.reload.phone_number).to be_blank
+    end
+
     it 'drops a phone too short to be a real number instead of minting a fake E.164' do
       body = { event: 'approved',
                data: { order_id: 'ORD-SHORT', customer: { name: 'Z', email: 'z@x.com', phone: '123' } } }.to_json
