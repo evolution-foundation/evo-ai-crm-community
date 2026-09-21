@@ -1,4 +1,6 @@
 class MessageFinder
+  class InvalidParams < StandardError; end
+
   def initialize(conversation, params, includes: nil)
     @conversation = conversation
     @params = params
@@ -6,6 +8,8 @@ class MessageFinder
   end
 
   def perform
+    validate_page!
+
     query = Message.where(conversation_id: @conversation.id)
                    .includes(@includes || [:sender, :attachments])
 
@@ -14,15 +18,16 @@ class MessageFinder
       query = query.where(private: false).where.not(message_type: :activity)
     end
 
-    # Paginação baseada em after/before
+    # Provider timestamps have second resolution, so created_at ties are common
+    # (media bursts); id breaks the tie so no message falls between pages.
     if @params[:after].present?
       after_message = Message.find_by(id: @params[:after])
-      query = query.where('created_at > ?', after_message.created_at) if after_message
+      query = query.where('(messages.created_at, messages.id) > (?, ?)', after_message.created_at, after_message.id) if after_message
     end
 
     if @params[:before].present?
       before_message = Message.find_by(id: @params[:before])
-      query = query.where('created_at < ?', before_message.created_at) if before_message
+      query = query.where('(messages.created_at, messages.id) < (?, ?)', before_message.created_at, before_message.id) if before_message
     end
 
     # Aplicar paginação orientada por cursor:
@@ -32,13 +37,13 @@ class MessageFinder
     limit = limit_for_params
     messages =
       if @params[:before].present? && @params[:after].blank?
-        query.reorder(created_at: :desc).limit(limit).to_a.reverse
+        query.reorder(created_at: :desc, id: :desc).limit(limit).to_a.reverse
       elsif @params[:after].present? && @params[:before].blank?
-        query.reorder(created_at: :asc).limit(limit).to_a
+        query.reorder(created_at: :asc, id: :asc).limit(limit).to_a
       elsif @params[:before].blank? && @params[:after].blank?
-        query.reorder(created_at: :desc).limit(limit).to_a.reverse
+        query.reorder(created_at: :desc, id: :desc).offset((page - 1) * limit).limit(limit).to_a.reverse
       else
-        query.reorder(created_at: :asc).limit(limit).to_a
+        query.reorder(created_at: :asc, id: :asc).limit(limit).to_a
       end
 
     # Carregar attachments se não foram incluídos
@@ -56,6 +61,19 @@ class MessageFinder
   end
 
   private
+
+  def validate_page!
+    return if @params[:page].blank?
+
+    if @params[:before].present? || @params[:after].present?
+      raise InvalidParams, 'page cannot be combined with before/after; paginate with the cursor only'
+    end
+    raise InvalidParams, 'page must be a positive integer' unless @params[:page].to_s.match?(/\A[1-9]\d*\z/)
+  end
+
+  def page
+    @params[:page].present? ? @params[:page].to_i : 1
+  end
 
   def limit_for_params
     return 1000 if @params[:after].present? && @params[:before].present?
