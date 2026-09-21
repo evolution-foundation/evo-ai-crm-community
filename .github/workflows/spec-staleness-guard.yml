@@ -302,7 +302,7 @@ env:
 jobs:
   spec-staleness:
     name: Spec staleness guard (EVO-1141)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, bellosoft]
     timeout-minutes: 15
 
     services:

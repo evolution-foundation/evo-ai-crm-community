@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   role-sti-guard:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, bellosoft]
     steps:
       - uses: actions/checkout@v4
 

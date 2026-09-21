@@ -19,7 +19,7 @@ env:
 jobs:
   contract:
     name: Verify EvoExtensionPoints contract (EXTENSION_POINTS.md ↔ API)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, bellosoft]
     timeout-minutes: 10
 
     services:
