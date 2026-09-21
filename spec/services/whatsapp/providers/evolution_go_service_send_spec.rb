@@ -54,4 +54,37 @@ RSpec.describe Whatsapp::Providers::EvolutionGoService do
       expect(service.send_message('5511999999999', message)).to be_nil
     end
   end
+
+  # A quoted reply carries the original author's JID. The contact stores the number as
+  # informed, so the participant has to be derived, not read off the stored string.
+  describe '#extract_participant_from_message' do
+    def incoming_from(phone_number)
+      instance_double(
+        Message, message_type: 'incoming', id: 1,
+                 sender: instance_double(Contact, phone_number: phone_number)
+      )
+    end
+
+    it 'drops the ninth digit of a DDD >= 31 mobile stored as informed' do
+      participant = service.send(:extract_participant_from_message, incoming_from('+5531988887777'))
+
+      expect(participant).to eq('553188887777@s.whatsapp.net')
+    end
+
+    it 'keeps the ninth digit where WhatsApp keeps it (DDD < 31)' do
+      participant = service.send(:extract_participant_from_message, incoming_from('+5511988887777'))
+
+      expect(participant).to eq('5511988887777@s.whatsapp.net')
+    end
+
+    it 'leaves a number already in the channel form unchanged' do
+      participant = service.send(:extract_participant_from_message, incoming_from('+553188887777'))
+
+      expect(participant).to eq('553188887777@s.whatsapp.net')
+    end
+
+    it 'is nil without a phone on the sender' do
+      expect(service.send(:extract_participant_from_message, incoming_from(nil))).to be_nil
+    end
+  end
 end
