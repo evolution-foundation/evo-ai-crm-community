@@ -206,7 +206,7 @@ class Public::Leads::CreationService
     return if phone_number.blank?
 
     # Find if phone number exists in another contact
-    existing_contact = Contact.find_by(phone_number: phone_number)
+    existing_contact = Contact.from_phone_number(phone_number)
 
     # If phone exists and belongs to a DIFFERENT contact, raise error
     if existing_contact && existing_contact != current_contact
@@ -217,11 +217,10 @@ class Public::Leads::CreationService
   def normalize_phone_number(phone)
     return nil if phone.blank?
 
-    # Canonicalize to the same form WhatsApp resolves to (Brazilian nono dígito,
-    # MX/AR extra digit) via the shared normalizer — a faithful port of Evolution
-    # API's createJid. This keeps the leads API in lockstep with the inbound
-    # WhatsApp path so the same person never lands as two contacts.
-    phone = Whatsapp::PhoneNumberNormalizer.to_e164(phone)
+    # Kept as informed (cosmetic cleanup only). The inbound WhatsApp path reports
+    # another form of the same number; Contact.from_phone_number matches both, so
+    # the same person still never lands as two contacts.
+    phone = Whatsapp::PhoneNumberNormalizer.informed_e164(phone)
 
     # Validate E.164 format: +[1-9]\d{1,14}
     unless phone.present? && phone.match?(/\A\+[1-9]\d{1,14}\z/)

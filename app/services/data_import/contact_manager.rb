@@ -42,7 +42,7 @@ class DataImport::ContactManager
   def find_contact_by_phone_number(params)
     return unless params[:phone_number]
 
-    Contact.find_by(phone_number: format_phone_number(params[:phone_number]))
+    Contact.from_phone_number(format_phone_number(params[:phone_number]))
   end
 
   def find_contact_by_tax_id(params)

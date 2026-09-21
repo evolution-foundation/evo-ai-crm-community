@@ -159,7 +159,7 @@ class DataImport::ConversationManager
     return by_identifier if by_identifier
 
     phone = format_phone(value)
-    by_phone = phone && Contact.find_by(phone_number: phone)
+    by_phone = phone && Contact.from_phone_number(phone)
     return by_phone if by_phone
 
     return nil unless value.include?('@')

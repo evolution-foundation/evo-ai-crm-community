@@ -72,6 +72,37 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
     end
   end
 
+  # The contact keeps the number as informed; the channel is addressed by the form
+  # WhatsApp resolves it to. The identifier and source_id paths are untouched.
+  describe '#determine_target_number_for_sending — the stored number vs the channel form' do
+    let(:contact_inbox_source_id) { nil }
+    let(:additional_attributes) { {} }
+
+    { 'zapi' => 'Z-API', 'evolution_go' => 'Evolution Go' }.each do |provider_key, label|
+      context "when provider is #{label}" do
+        let(:provider) { provider_key }
+
+        it 'drops the ninth digit of a DDD >= 31 mobile stored as informed' do
+          allow(contact).to receive(:phone_number).and_return('+5531988887777')
+
+          expect(service.send(:determine_target_number_for_sending)).to eq('553188887777')
+        end
+
+        it 'keeps the ninth digit where WhatsApp keeps it (DDD < 31)' do
+          allow(contact).to receive(:phone_number).and_return('+5511988887777')
+
+          expect(service.send(:determine_target_number_for_sending)).to eq('5511988887777')
+        end
+
+        it 'sends a number already stored in the channel form unchanged' do
+          allow(contact).to receive(:phone_number).and_return('+553188887777')
+
+          expect(service.send(:determine_target_number_for_sending)).to eq('553188887777')
+        end
+      end
+    end
+  end
+
   # EVO-1682: identifier is only a valid Evolution Go destination when it looks like
   # a number/JID; non-numeric identifiers (imported lead labels) must fall back to
   # phone_number / source_id instead of being sent as the recipient.
@@ -84,7 +115,7 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       let(:contact_inbox_source_id) { '5561993372804' }
 
       it 'ignores the identifier and uses the cleaned phone_number' do
-        expect(service.send(:determine_target_number_for_sending)).to eq('5561993372804')
+        expect(service.send(:determine_target_number_for_sending)).to eq('556193372804')
       end
     end
 
@@ -138,7 +169,7 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       let(:contact_inbox_source_id) { '5561993372804' }
 
       it 'rejects it and uses the cleaned phone_number' do
-        expect(service.send(:determine_target_number_for_sending)).to eq('5561993372804')
+        expect(service.send(:determine_target_number_for_sending)).to eq('556193372804')
       end
     end
 
@@ -147,7 +178,7 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       let(:contact_inbox_source_id) { '5561993372804' }
 
       it 'rejects it and uses the cleaned phone_number' do
-        expect(service.send(:determine_target_number_for_sending)).to eq('5561993372804')
+        expect(service.send(:determine_target_number_for_sending)).to eq('556193372804')
       end
     end
 
@@ -174,7 +205,7 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
       let(:contact_inbox_source_id) { '5561993372804' }
 
       it 'uses the cleaned phone_number' do
-        expect(service.send(:determine_target_number_for_sending)).to eq('5561993372804')
+        expect(service.send(:determine_target_number_for_sending)).to eq('556193372804')
       end
     end
 

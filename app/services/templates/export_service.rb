@@ -41,7 +41,10 @@ module Templates
         # CRM-205: the same scope every other macro read path asks.
         'macros' => VisibilityScope.for('macros', ::Macro, current_user)
           .reorder(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } },
-        'inboxes' => ::Inbox.order(:name).pluck(:id, :name, :channel_type)
+        # Unscoped, this listed every inbox by name — and the id then opened its
+        # settings through the export itself.
+        'inboxes' => VisibilityScope.for('inboxes', ::Inbox, current_user)
+          .reorder(:name).pluck(:id, :name, :channel_type)
           .map { |id, name, ct| { id: id, name: "#{name} (#{ct.demodulize})" } },
         'message_templates' => ::MessageTemplate.order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } }
       }

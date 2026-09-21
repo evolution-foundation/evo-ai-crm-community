@@ -16,6 +16,8 @@ class Api::V1::Conversations::MessagesController < Api::V1::Conversations::BaseC
       data: MessageSerializer.serialize_collection(@messages, include_attachments: true, include_sender: true),
       message: 'Messages retrieved successfully'
     )
+  rescue MessageFinder::InvalidParams => e
+    error_response(ApiErrorCodes::INVALID_PARAMETER, 'Invalid pagination parameters', details: e.message, status: :unprocessable_entity)
   end
 
   def create

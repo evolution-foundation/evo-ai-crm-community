@@ -121,36 +121,4 @@ RSpec.describe Contact, type: :model do
       expect(collected.map { |d| d[:label_name] }).to include('beta')
     end
   end
-
-  describe 'phone number normalization (before_validation)' do
-    it 'normalizes a Brazilian number with the extra 9 on create' do
-      contact = Contact.create!(name: 'Bruno', phone_number: '+5574999879409', type: 'person')
-      expect(contact.phone_number).to eq('+557499879409')
-    end
-
-    it 'converges a leads-style number and a WhatsApp-style number to the same value' do
-      leads = Contact.new(phone_number: '+557499879409')
-      whats = Contact.new(phone_number: '+5574999879409')
-      leads.valid?
-      whats.valid?
-      expect(leads.phone_number).to eq(whats.phone_number)
-    end
-
-    it 'does NOT re-normalize an untouched persisted record (guards against legacy collisions)' do
-      # Simulate a legacy row stored with the old 13-digit form by writing past the
-      # callback, then saving an unrelated attribute.
-      contact = Contact.create!(name: 'Legacy', phone_number: '+557499879409', type: 'person')
-      contact.update_column(:phone_number, '+5574999879409')
-
-      contact.update!(name: 'Legacy Renamed')
-
-      expect(contact.reload.phone_number).to eq('+5574999879409')
-    end
-
-    it 'normalizes when the phone number itself is edited' do
-      contact = Contact.create!(name: 'Edited', email: 'edited@example.com', type: 'person')
-      contact.update!(phone_number: '+5574999879409')
-      expect(contact.phone_number).to eq('+557499879409')
-    end
-  end
 end

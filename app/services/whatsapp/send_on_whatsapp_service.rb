@@ -182,7 +182,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     if channel.provider == 'zapi'
       # If contact has phone_number, use it without +
       if contact.phone_number.present?
-        target = contact.phone_number.delete('+')
+        target = channel_number(contact.phone_number)
         Rails.logger.info "WhatsApp Send: Using phone_number #{target} (from #{contact.phone_number}) - Z-API format"
         return target
       # If contact has identifier, use it
@@ -209,7 +209,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
         contact_inbox.source_id
       # Fallback to contact's phone number if available
       elsif contact.phone_number.present?
-        target = contact.phone_number.delete('+')
+        target = channel_number(contact.phone_number)
         Rails.logger.info "WhatsApp Send: Using phone_number #{target} (from #{contact.phone_number}) - clean number without @lid"
         target
       else
@@ -223,7 +223,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
       # If source_id is a BSUID, prefer phone_number if available
       if source_id.match?(RegexHelper::BSUID_REGEX)
         if contact.phone_number.present?
-          contact.phone_number.delete('+')
+          channel_number(contact.phone_number)
         else
           # BSUID-only: return BSUID, WhatsappCloudService will use `recipient` field
           source_id
@@ -242,6 +242,12 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   def valid_wa_destination?(value)
     value.to_s.match?(/\A\+?\d+(?:-\d+)?@(?:lid|s\.whatsapp\.net|g\.us)\z/) ||
       value.to_s.match?(/\A\+?\d{8,15}\z/)
+  end
+
+  # The contact keeps the number as informed; the channel is addressed by the form
+  # WhatsApp resolves it to (Brazilian ninth digit, MX/AR extra digit).
+  def channel_number(phone_number)
+    Whatsapp::PhoneNumberNormalizer.call(phone_number)
   end
 
   def template_params

@@ -178,7 +178,7 @@ module ScheduledActions
       phone = scheduled_action.contact.phone_number
       return nil if phone.blank?
 
-      phone.delete('+').to_s
+      ContactInboxBuilder.whatsapp_source_id(phone)
     end
 
     def whatsapp_inbox

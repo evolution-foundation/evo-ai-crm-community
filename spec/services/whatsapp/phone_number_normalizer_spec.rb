@@ -108,4 +108,41 @@ RSpec.describe Whatsapp::PhoneNumberNormalizer do
       end
     end
   end
+
+  describe '.e164_variants' do
+    it 'lists both Brazilian forms for a DDD >= 31 mobile, whichever one comes in' do
+      expected = %w[+5531988887777 +553188887777]
+
+      expect(described_class.e164_variants('+5531988887777')).to match_array(expected)
+      expect(described_class.e164_variants('553188887777@s.whatsapp.net')).to match_array(expected)
+    end
+
+    it 'lists a single form where the channel applies no quirk' do
+      expect(described_class.e164_variants('+5511988887777')).to eq(%w[+5511988887777])
+      expect(described_class.e164_variants('+553132221111')).to eq(%w[+553132221111])
+      expect(described_class.e164_variants('+351912345678')).to eq(%w[+351912345678])
+    end
+
+    it 'lists both forms for Mexico and Argentina' do
+      expect(described_class.e164_variants('+5215512345678')).to match_array(%w[+5215512345678 +525512345678])
+      expect(described_class.e164_variants('+541112345678')).to match_array(%w[+541112345678 +5491112345678])
+    end
+
+    it 'puts the informed number first' do
+      expect(described_class.e164_variants('+553188887777').first).to eq('+553188887777')
+      expect(described_class.e164_variants('+5531988887777').first).to eq('+5531988887777')
+    end
+
+    it 'is empty for blank input' do
+      expect(described_class.e164_variants(nil)).to eq([])
+      expect(described_class.e164_variants('  ')).to eq([])
+    end
+
+    it 'only lists numbers that normalize to the same canonical form' do
+      %w[+5531988887777 +5215512345678 +5491112345678 +5511988887777].each do |number|
+        forms = described_class.e164_variants(number)
+        expect(forms.map { |form| described_class.call(form) }.uniq.size).to eq(1)
+      end
+    end
+  end
 end
