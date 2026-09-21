@@ -14,8 +14,9 @@ class ContactInboxWithContactBuilder
   end
 
   def find_or_create_contact_and_contact_inbox
-    # For non-Evolution Go channels, use the simple source_id lookup
-    unless evolution_go_channel?
+    # For channels without phone-format drift between normalizers (Cloud API,
+    # Instagram, Web Widget, ...), use the simple source_id lookup
+    unless reconcilable_whatsapp_channel?
       @contact_inbox = inbox.contact_inboxes.find_by(source_id: source_id) if source_id.present?
       # BSUID fallback: if source_id lookup failed and source_id looks like a BSUID,
       # try finding by bsuid column (contact was previously created with phone as source_id)
@@ -25,11 +26,14 @@ class ContactInboxWithContactBuilder
       return @contact_inbox if @contact_inbox
     end
 
-    # For Evolution Go, do a smart search first
-    if evolution_go_channel?
-      # Try to find existing ContactInbox or reuse one from the same contact
-      Rails.logger.info "Evolution Go: Smart contact/inbox lookup for source_id: #{source_id}"
-      perform_evolution_go_lookup
+    # Evolution Go and Evolution API (non-official) can see the same contact
+    # arrive with a slightly different source_id than what's already stored
+    # (e.g. manual CRM creation vs. inbound webhook disagreeing on the nono
+    # dígito). Do a smart search that reuses the contact's existing
+    # ContactInbox on this inbox instead of creating a duplicate.
+    if reconcilable_whatsapp_channel?
+      Rails.logger.info "#{inbox.channel.provider}: Smart contact/inbox lookup for source_id: #{source_id}"
+      perform_smart_whatsapp_lookup
       return @contact_inbox if @contact_inbox
     end
 
@@ -41,17 +45,17 @@ class ContactInboxWithContactBuilder
     @contact_inbox
   end
 
-  def evolution_go_channel?
-    inbox.channel_type == 'Channel::Whatsapp' && inbox.channel.provider == 'evolution_go'
+  def reconcilable_whatsapp_channel?
+    inbox.channel_type == 'Channel::Whatsapp' && inbox.channel.provider.in?(%w[evolution_go evolution])
   end
 
   private
 
-  def perform_evolution_go_lookup
+  def perform_smart_whatsapp_lookup
     # First check if ContactInbox with this exact source_id already exists
     @contact_inbox = inbox.contact_inboxes.find_by(source_id: source_id) if source_id.present?
     if @contact_inbox
-      Rails.logger.info "Evolution Go: Found existing ContactInbox #{@contact_inbox.id} with exact source_id '#{source_id}'"
+      Rails.logger.info "#{inbox.channel.provider}: Found existing ContactInbox #{@contact_inbox.id} with exact source_id '#{source_id}'"
       @contact = @contact_inbox.contact
       return
     end
@@ -60,10 +64,10 @@ class ContactInboxWithContactBuilder
     @contact = find_contact
     if @contact
       # Always check if this contact already has a ContactInbox in this inbox
-      existing_contact_inbox = find_existing_contact_inbox_for_evolution_go(@contact)
+      existing_contact_inbox = find_existing_contact_inbox_for_reconciliation(@contact)
       if existing_contact_inbox
-        Rails.logger.info "Evolution Go: Contact #{@contact.id} already has ContactInbox #{existing_contact_inbox.id} (source_id: '#{existing_contact_inbox.source_id}')"
-        Rails.logger.info "Evolution Go: Updating to new source_id '#{source_id}' - REUSING existing ContactInbox"
+        Rails.logger.info "#{inbox.channel.provider}: Contact #{@contact.id} already has ContactInbox #{existing_contact_inbox.id} (source_id: '#{existing_contact_inbox.source_id}')"
+        Rails.logger.info "#{inbox.channel.provider}: Updating to new source_id '#{source_id}' - REUSING existing ContactInbox"
         existing_contact_inbox.update!(source_id: source_id)
         @contact_inbox = existing_contact_inbox
         return
@@ -71,7 +75,7 @@ class ContactInboxWithContactBuilder
     end
 
     # If no contact found or contact has no ContactInbox in this inbox, will create new ones
-    Rails.logger.info "Evolution Go: No existing ContactInbox found for source_id '#{source_id}' - will create new contact/inbox"
+    Rails.logger.info "#{inbox.channel.provider}: No existing ContactInbox found for source_id '#{source_id}' - will create new contact/inbox"
   end
 
   def build_contact_with_contact_inbox
@@ -136,7 +140,7 @@ class ContactInboxWithContactBuilder
     inbox.channel_type == 'Channel::Whatsapp' && inbox.channel.provider == 'whatsapp_cloud'
   end
 
-  def find_existing_contact_inbox_for_evolution_go(contact)
+  def find_existing_contact_inbox_for_reconciliation(contact)
     return nil unless contact
 
     # Find any existing ContactInbox for this contact in this inbox
