@@ -146,9 +146,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     recipient_alt = @evolution_go_info&.dig(:RecipientAlt)
     if recipient_alt.present?
       phone = recipient_alt.split('@').first.gsub(/:\d+$/, '')
-      contact_inbox = inbox.contact_inboxes
-                           .joins(:contact)
-                           .find_by(contacts: { phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(phone) })
+      contact_inbox = contact_inbox_by_equivalent_phone(phone)
       if contact_inbox
         @contact_inbox = contact_inbox
         @contact = contact_inbox.contact
@@ -160,6 +158,16 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     Rails.logger.warn "Evolution Go API: No existing contact found for outgoing echo (Chat: #{chat_lid}). Skipping message."
     @contact_inbox = nil
     @contact = nil
+  end
+
+  # Same preference as Contact.from_phone_number: the form the channel reported wins
+  # over a legacy twin of the same number.
+  def contact_inbox_by_equivalent_phone(phone)
+    forms = Whatsapp::PhoneNumberNormalizer.e164_variants(phone)
+    return nil if forms.empty?
+
+    candidates = inbox.contact_inboxes.joins(:contact).where(contacts: { phone_number: forms }).to_a
+    candidates.find { |candidate| candidate.contact.phone_number == forms.first } || candidates.first
   end
 
   def determine_source_id(sender_alt_value, phone_number)
