@@ -35,7 +35,7 @@ module ConversationSerializer
   )
     result = conversation.as_json(
       only: [:id, :inbox_id, :status, :assignee_id, :team_id,
-             :campaign_id, :display_id, :additional_attributes, :priority]
+             :campaign_id, :display_id, :identifier, :additional_attributes, :priority]
     )
 
     result['labels'] = []
@@ -67,6 +67,7 @@ module ConversationSerializer
       contact = conversation.contact
       result['contact'] = {
         id: contact.id,
+        identifier: pii_masked ? ContactPiiMasker.mask_identifier(contact.identifier) : contact.identifier,
         name: pii_masked ? ContactPiiMasker.mask_phone_like_name(contact.name) : contact.name,
         email: pii_masked ? ContactPiiMasker.mask_email(contact.email) : contact.email,
         phone_number: pii_masked ? ContactPiiMasker.mask_phone(contact.phone_number) : contact.phone_number,
