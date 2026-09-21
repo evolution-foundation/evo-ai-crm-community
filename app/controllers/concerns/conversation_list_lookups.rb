@@ -1,4 +1,7 @@
-module ConversationListPreloads
+# Per-request lookups every conversation LIST shares: unread counts, latest
+# message, label indexes and the page meta. They are batched by conversation
+# id so the query count does not follow the number of rows on the page.
+module ConversationListLookups
   extend ActiveSupport::Concern
 
   private
@@ -66,6 +69,31 @@ module ConversationListPreloads
       message = messages_by_id[row['message_id']]
       memo[row['conversation_id']] = message if message
     end
+  end
+
+  def labels_by_title
+    label_indexes[:by_title]
+  end
+
+  def labels_by_id
+    label_indexes[:by_id]
+  end
+
+  def label_indexes
+    @label_indexes ||= Labels::TagChipResolver.indexes_for(Label.all.to_a)
+  end
+
+  # Keys mirror the main conversation list, so a client pages both the same way.
+  def conversation_page_meta(paginated)
+    {
+      total_count: paginated.total_count,
+      current_page: paginated.current_page,
+      per_page: paginated.limit_value,
+      total: paginated.total_count,
+      total_pages: paginated.total_pages,
+      has_next_page: paginated.current_page < paginated.total_pages,
+      has_previous_page: paginated.current_page > 1
+    }
   end
 
   def quoted_uuid_list(ids, connection = ActiveRecord::Base.connection)

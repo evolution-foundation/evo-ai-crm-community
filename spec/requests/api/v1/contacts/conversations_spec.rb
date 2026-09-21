@@ -25,12 +25,32 @@ RSpec.describe 'Api::V1::Contacts::Conversations', type: :request do
 
   after { Current.reset }
 
-  def create_conversation(identifier: nil)
-    conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox,
+  def create_conversation(identifier: nil, in_inbox: nil)
+    target = in_inbox || inbox
+    ci = if target == inbox
+           contact_inbox
+         else
+           ContactInbox.create!(contact: contact, inbox: target, source_id: SecureRandom.hex(8))
+         end
+    conversation = Conversation.create!(inbox: target, contact: contact, contact_inbox: ci,
                                         identifier: identifier)
-    Message.create!(conversation: conversation, inbox: inbox, message_type: :incoming,
+    Message.create!(conversation: conversation, inbox: target, message_type: :incoming,
                     content: "oi #{conversation.id}", sender: contact)
     conversation
+  end
+
+  def other_inbox(name)
+    channel = Channel::WebWidget.create!(website_url: "https://#{name}-#{SecureRandom.hex(3)}.example.com")
+    Inbox.create!(name: name, channel: channel)
+  end
+
+  def count_queries
+    queries = 0
+    counter = ->(*, payload) { queries += 1 unless payload[:name].in?(%w[SCHEMA TRANSACTION]) || payload[:cached] }
+    ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+      get "/api/v1/contacts/#{contact.id}/conversations", as: :json
+    end
+    queries
   end
 
   def json_response
@@ -74,19 +94,60 @@ RSpec.describe 'Api::V1::Contacts::Conversations', type: :request do
 
   it 'keeps the query count flat as the contact gains conversations' do
     create_conversation
-    count_queries = lambda do
-      queries = 0
-      counter = ->(*, payload) { queries += 1 unless payload[:name].in?(%w[SCHEMA TRANSACTION]) || payload[:cached] }
-      ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
-        get "/api/v1/contacts/#{contact.id}/conversations", as: :json
-      end
-      queries
-    end
 
-    baseline = count_queries.call
+    baseline = count_queries
     3.times { create_conversation }
 
-    expect(count_queries.call).to eq(baseline)
+    expect(count_queries).to eq(baseline)
+  end
+
+  it 'keeps the query count flat when the conversations sit in different inboxes' do
+    create_conversation(in_inbox: other_inbox('first'))
+
+    baseline = count_queries
+    3.times { |i| create_conversation(in_inbox: other_inbox("spread-#{i}")) }
+
+    expect(count_queries).to eq(baseline)
+  end
+
+  it 'resolves the label chips instead of answering an empty list' do
+    label = Label.create!(title: 'urgente', color: '#ff0000')
+    create_conversation.update!(label_list: ['urgente'])
+
+    get "/api/v1/contacts/#{contact.id}/conversations", as: :json
+
+    expect(json_response['data'].first['labels']).to contain_exactly(
+      hash_including('id' => label.id, 'title' => 'urgente', 'color' => '#ff0000')
+    )
+  end
+
+  it 'pages the list and reports how many conversations there are' do
+    stub_const('Api::V1::Contacts::ConversationsController::CONVERSATIONS_PER_PAGE', 2)
+    3.times { create_conversation }
+
+    get "/api/v1/contacts/#{contact.id}/conversations", as: :json
+
+    expect(json_response['data'].size).to eq(2)
+    expect(json_response['meta']).to include(
+      'total_count' => 3, 'current_page' => 1, 'per_page' => 2,
+      'total_pages' => 2, 'has_next_page' => true, 'has_previous_page' => false
+    )
+
+    get "/api/v1/contacts/#{contact.id}/conversations?page=2", as: :json
+
+    expect(json_response['data'].size).to eq(1)
+    expect(json_response['meta']).to include('current_page' => 2, 'has_next_page' => false)
+  end
+
+  context 'when the caller cannot read conversations' do
+    it 'answers 403 instead of the list' do
+      create_conversation
+      allow_any_instance_of(EvoAuthService).to receive(:check_user_permission).and_return(false)
+
+      get "/api/v1/contacts/#{contact.id}/conversations", as: :json
+
+      expect(response).to have_http_status(:forbidden)
+    end
   end
 
   context 'when the account masks contact PII' do

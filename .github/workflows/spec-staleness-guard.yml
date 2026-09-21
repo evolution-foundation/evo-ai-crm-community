@@ -369,6 +369,12 @@ on:
       - 'spec/regression/conversation_mention_retirement_spec.rb'
       - 'spec/helpers/message_format_helper_spec.rb'
       - 'spec/migrations/20260914120000_drop_mentions_table_spec.rb'
+      # The contact's conversation list renders through the shared serializer and
+      # the shared list lookups, so its own spec is the only lane that pins the
+      # route's envelope, its permission gate and its flat query count.
+      - 'app/controllers/api/v1/contacts/conversations_controller.rb'
+      - 'app/controllers/concerns/conversation_list_lookups.rb'
+      - 'spec/requests/api/v1/contacts/conversations_spec.rb'
 
 permissions:
   contents: read
@@ -472,6 +478,7 @@ jobs:
             spec/serializers/conversation_serializer_spec.rb \
             spec/services/automation_rules/label_token_resolution_spec.rb \
             spec/requests/api/v1/contacts/notes_spec.rb \
+            spec/requests/api/v1/contacts/conversations_spec.rb \
             spec/requests/api/v1/ai_credentials_migration_state_spec.rb \
             spec/services/ai/migration_state_spec.rb \
             spec/finders/conversation_finder_spec.rb \

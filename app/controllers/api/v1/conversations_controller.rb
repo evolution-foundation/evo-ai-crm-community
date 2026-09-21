@@ -3,7 +3,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   include DateRangeHelper
   include HmacConcern
   include ConversationResolver
-  include ConversationListPreloads
+  include ConversationListLookups
 
   # Configuração de permissões - Define exatamente quais actions precisam de verificação
   require_permissions({
@@ -513,18 +513,6 @@ class Api::V1::ConversationsController < Api::V1::BaseController
         status: :unprocessable_entity
       )
     end
-  end
-
-  def labels_by_title
-    label_indexes[:by_title]
-  end
-
-  def labels_by_id
-    label_indexes[:by_id]
-  end
-
-  def label_indexes
-    @label_indexes ||= Labels::TagChipResolver.indexes_for(Label.all.to_a)
   end
 
   def conversations_pagination_meta
