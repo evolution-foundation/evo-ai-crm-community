@@ -48,7 +48,7 @@ module Templates
           next if ids.blank?
 
           records = base_relation(category).where(id: ids)
-          payload = SERIALIZER_MAP[category].serialize_all(records)
+          payload = SERIALIZER_MAP[category].serialize_all(records, current_user: @current_user)
 
           zip.put_next_entry("#{category}.json")
           zip.write(JSON.pretty_generate(payload))
