@@ -48,4 +48,11 @@ RSpec.describe 'GET /api/v1/conversations/:id/messages (pagination)', type: :req
     expect(response).to have_http_status(:unprocessable_entity)
     expect(response.parsed_body.dig('error', 'code')).to eq('INVALID_PARAMETER')
   end
+
+  it 'answers 422 for a page whose offset would overflow, not 500' do
+    list(page: MessageFinder::MAX_PAGE + 1)
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response.parsed_body.dig('error', 'code')).to eq('INVALID_PARAMETER')
+  end
 end

@@ -369,6 +369,14 @@ on:
       - 'spec/regression/conversation_mention_retirement_spec.rb'
       - 'spec/helpers/message_format_helper_spec.rb'
       - 'spec/migrations/20260914120000_drop_mentions_table_spec.rb'
+      # CRM-665: the cursor comparison and the page guard are the whole of "does a
+      # media burst keep every message". Both fail silently - a wrong comparison
+      # drops rows between pages and still answers 200 - and no other lane runs
+      # the finder.
+      - 'app/finders/message_finder.rb'
+      - 'app/controllers/api/v1/conversations/messages_controller.rb'
+      - 'spec/finders/message_finder_spec.rb'
+      - 'spec/requests/api/v1/conversations/messages_pagination_spec.rb'
 
 permissions:
   contents: read
@@ -534,4 +542,6 @@ jobs:
             spec/regression/conversation_mention_retirement_spec.rb \
             spec/helpers/message_format_helper_spec.rb \
             spec/migrations/20260914120000_drop_mentions_table_spec.rb \
+            spec/finders/message_finder_spec.rb \
+            spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             --format progress
