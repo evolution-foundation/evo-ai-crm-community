@@ -10,6 +10,11 @@ class InboxPolicy < ApplicationPolicy
     end
 
     def resolve
+      # Service-to-service calls carry no Current.user by design and read every
+      # inbox, as show? answers for them. A bare userless caller is a member of none.
+      return scope.all if user_context[:service_authenticated] == true
+      return scope.none if user.nil?
+
       user.assigned_inboxes
     end
   end
