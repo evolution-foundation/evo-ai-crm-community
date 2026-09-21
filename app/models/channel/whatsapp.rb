@@ -26,7 +26,7 @@ class Channel::Whatsapp < ApplicationRecord
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
-  PROVIDERS = %w[default whatsapp_cloud evolution evolution_go notificame zapi].freeze
+  PROVIDERS = %w[default whatsapp_cloud evolution evolution_go notificame zapi waha].freeze
 
   # Snapshot values that mean the channel is down; mirrors the disconnected
   # half of Channels::ConnectionStateResolver::CONNECTION_MAP.
@@ -60,7 +60,7 @@ class Channel::Whatsapp < ApplicationRecord
   after_create :sync_templates
   before_destroy :unsubscribe
 
-  before_destroy :disconnect_channel_provider, if: -> { provider.in?(%w[evolution evolution_go]) }
+  before_destroy :disconnect_channel_provider, if: -> { provider.in?(%w[evolution evolution_go waha]) }
 
   # Notificame specific callbacks
   after_create_commit -> { Notificame::SubscribeWebhookJob.perform_later(id) },
@@ -106,6 +106,8 @@ class Channel::Whatsapp < ApplicationRecord
       Whatsapp::Providers::NotificameService.new(whatsapp_channel: self)
     when 'zapi'
       Whatsapp::Providers::ZapiService.new(whatsapp_channel: self)
+    when 'waha'
+      Whatsapp::Providers::WahaService.new(whatsapp_channel: self)
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
     end
