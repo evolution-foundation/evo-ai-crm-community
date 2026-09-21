@@ -2,7 +2,7 @@ require 'rails_helper'
 
 RSpec.describe Whatsapp::IncomingMessageWahaService do
   let(:channel) { instance_double(Channel::Whatsapp, id: 'chan-1') }
-  let(:inbox) { instance_double(Inbox, id: 'inbox-1', channel: channel, archived?: false) }
+  let(:inbox) { instance_double(Inbox, id: 'inbox-1', channel: channel, archived?: false, lock_to_single_conversation: false) }
 
   def service_for(event, payload)
     described_class.new(inbox: inbox, params: { event: event, session: 'default', payload: payload })
@@ -11,7 +11,7 @@ RSpec.describe Whatsapp::IncomingMessageWahaService do
   describe 'message event' do
     it 'creates a contact/inbox via ContactInboxWithContactBuilder with a normalized source_id' do
       payload = { 'id' => 'true_5511988887777@c.us_ABC', 'from' => '5511988887777@c.us', 'fromMe' => false, 'body' => 'oi', 'hasMedia' => false }
-      contact_inbox = instance_double(ContactInbox, contact: instance_double(Contact))
+      contact_inbox = instance_double(ContactInbox, contact: instance_double(Contact, id: 'contact-1'), id: 'ci-1')
       conversation = instance_double(Conversation, messages: double(build: instance_double(Message, save!: true, attachments: [])))
 
       expect(Whatsapp::PhoneNumberNormalizer).to receive(:call).with('5511988887777').and_call_original
