@@ -322,6 +322,7 @@
 - users.permissions
 - users.read
 - users.remove_avatar
+- users.reset_password
 - users.stats
 - users.types
 - users.update
