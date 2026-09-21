@@ -66,16 +66,6 @@ RSpec.describe DataImport::ConversationManager do
       expect(report['success_count']).to eq(1)
       expect(Conversation.find_by(identifier: 'conv-2').contact_id).to eq(contact.id)
     end
-
-    it 'matches a contact stored with the ninth digit from the form the channel exports' do
-      full = Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person')
-      attach_csv([header_row, 'conv-bh,553188887777,Hi,incoming,2026-01-15T10:30:00Z,,text,msg-bh'].join("\n"))
-
-      report = described_class.new(data_import).process
-
-      expect(report['success_count']).to eq(1)
-      expect(Conversation.find_by(identifier: 'conv-bh').contact_id).to eq(full.id)
-    end
   end
 
   describe 'orphan contact (AC5)' do

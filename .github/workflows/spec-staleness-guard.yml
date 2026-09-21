@@ -369,6 +369,27 @@ on:
       - 'spec/regression/conversation_mention_retirement_spec.rb'
       - 'spec/helpers/message_format_helper_spec.rb'
       - 'spec/migrations/20260914120000_drop_mentions_table_spec.rb'
+      # A contact stores the number as informed; the WhatsApp equivalence only
+      # decides lookups and the channel address. Each side triggers the other.
+      - 'app/services/whatsapp/phone_number_normalizer.rb'
+      - 'app/actions/contact_identify_action.rb'
+      - 'app/builders/contact_inbox_builder.rb'
+      - 'app/builders/contact_inbox_with_contact_builder.rb'
+      - 'app/services/contacts/contactable_inboxes_service.rb'
+      - 'app/services/data_import/contact_manager.rb'
+      - 'app/services/data_import/conversation_manager.rb'
+      - 'app/services/public/leads/creation_service.rb'
+      - 'app/services/scheduled_actions/executor_service.rb'
+      - 'spec/models/contact_phone_number_spec.rb'
+      - 'spec/services/whatsapp/phone_number_normalizer_spec.rb'
+      - 'spec/actions/contact_identify_action_phone_lookup_spec.rb'
+      - 'spec/builders/contact_inbox_builder_spec.rb'
+      - 'spec/builders/contact_inbox_with_contact_builder_phone_lookup_spec.rb'
+      - 'spec/services/data_import/contact_manager_phone_lookup_spec.rb'
+      - 'spec/services/data_import/conversation_manager_phone_lookup_spec.rb'
+      - 'spec/services/public/leads/creation_service_spec.rb'
+      - 'spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb'
+      - 'spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb'
 
 permissions:
   contents: read
@@ -442,6 +463,7 @@ jobs:
             spec/builders/contact_inbox_builder_spec.rb \
             spec/actions/contact_identify_action_phone_lookup_spec.rb \
             spec/services/data_import/contact_manager_phone_lookup_spec.rb \
+            spec/services/data_import/conversation_manager_phone_lookup_spec.rb \
             spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb \
             spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb \
             spec/services/public/leads/creation_service_spec.rb \
