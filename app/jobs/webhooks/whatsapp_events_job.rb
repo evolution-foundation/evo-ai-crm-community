@@ -424,6 +424,8 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       Whatsapp::IncomingMessageNotificameService.new(inbox: channel.inbox, params: params).perform
     when 'zapi'
       Whatsapp::IncomingMessageZapiService.new(inbox: channel.inbox, params: params).perform
+    when 'waha'
+      Whatsapp::IncomingMessageWahaService.new(inbox: channel.inbox, params: params).perform
     else
       Whatsapp::IncomingMessageService.new(inbox: channel.inbox, params: params).perform
     end
@@ -512,6 +514,12 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       end
     end
 
+    # For WAHA, find by session name
+    if params[:session].present?
+      channel = find_channel_by_waha_session(params[:session])
+      return channel if channel
+    end
+
     # Try phone_number parameter for other providers
     if params[:phone_number].present?
       channel = find_channel_by_phone_number(params[:phone_number])
@@ -597,6 +605,13 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
     channel
   end
 
+  def find_channel_by_waha_session(session_name)
+    Channel::Whatsapp.joins(:inbox)
+                      .where(provider: 'waha')
+                      .where("provider_config ->> 'session_name' = ?", session_name)
+                      .first
+  end
+
   def find_channel_by_phone_number(phone_number)
     Channel::Whatsapp.find_by(phone_number: phone_number)
   end
@@ -642,6 +657,7 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
   # message_event? reconciliation path instead.
   CONNECTION_LIFECYCLE_EVENT_NAMES = %w[
     connection.update
+    session.status
     Connected PairSuccess Disconnected ConnectFailure TemporaryBan LoggedOut
   ].freeze
   CONNECTION_LIFECYCLE_TYPES = %w[ConnectedCallback DisconnectedCallback].freeze
