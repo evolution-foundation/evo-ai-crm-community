@@ -25,6 +25,9 @@ RSpec.describe ContactInboxBuilder do
   describe '#perform with nil source_id on a phone-derived channel (flag-on round-trip)' do
     let(:whatsapp_channel) { Channel::Whatsapp.new(phone_number: '+5511111111111', provider: 'whatsapp_cloud', provider_config: { 'api_key' => 'x', 'phone_number_id' => '1', 'business_account_id' => '1' }) }
     let(:whatsapp_inbox) do
+      # Saving a cloud channel syncs its templates over HTTP; this spec is about the
+      # source_id, so the call never leaves the process.
+      allow(whatsapp_channel).to receive(:sync_templates)
       whatsapp_channel.save(validate: false)
       Inbox.create!(name: 'WA Inbox', channel: whatsapp_channel)
     end
