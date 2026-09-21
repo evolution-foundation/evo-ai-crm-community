@@ -148,7 +148,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
       phone = recipient_alt.split('@').first.gsub(/:\d+$/, '')
       contact_inbox = inbox.contact_inboxes
                            .joins(:contact)
-                           .find_by(contacts: { phone_number: "+#{phone}" })
+                           .find_by(contacts: { phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(phone) })
       if contact_inbox
         @contact_inbox = contact_inbox
         @contact = contact_inbox.contact

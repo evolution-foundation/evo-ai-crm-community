@@ -439,6 +439,7 @@ jobs:
             spec/models/contact_phone_number_spec.rb \
             spec/services/whatsapp/phone_number_normalizer_spec.rb \
             spec/builders/contact_inbox_with_contact_builder_phone_lookup_spec.rb \
+            spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb \
             spec/services/public/leads/creation_service_spec.rb \
             spec/requests/api/v1/webhooks/purchase_platforms_spec.rb \
             spec/requests/api/v1/purchase_webhooks_spec.rb \
