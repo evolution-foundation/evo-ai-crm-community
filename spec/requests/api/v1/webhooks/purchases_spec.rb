@@ -274,6 +274,28 @@ RSpec.describe 'Api::V1::Webhooks::PurchasesController#receive', type: :request 
       expect(contact.phone_number).to eq('+5511999998888')
     end
 
+    it 'stores a DDD >= 31 mobile as informed, ninth digit included' do
+      body = payload_hash.deep_merge(data: { customer: { email: 'bh@cliente.com', phone: '31988887777' } }).to_json
+
+      post url, params: body, headers: auth_headers(body)
+
+      expect(response).to have_http_status(:created)
+      contact = Contact.find(response.parsed_body['data']['contact_id'])
+      expect(contact.phone_number).to eq('+5531988887777')
+    end
+
+    it 'matches a phone-only payload to a contact stored in the other form of the number' do
+      existing = Contact.create!(name: 'Do WhatsApp', phone_number: '+553188887777', type: 'person')
+      body = payload_hash.deep_dup
+      body[:data][:customer] = { name: 'Compradora', phone: '31988887777' }
+      body = body.to_json
+
+      expect { post url, params: body, headers: auth_headers(body) }.not_to change(Contact, :count)
+
+      expect(response.parsed_body['data']['contact_id']).to eq(existing.id)
+      expect(existing.reload.phone_number).to eq('+553188887777')
+    end
+
     it 'drops a phone too short to be a real number instead of minting a fake E.164' do
       body = { event: 'approved',
                data: { order_id: 'ORD-SHORT', customer: { name: 'Z', email: 'z@x.com', phone: '123' } } }.to_json

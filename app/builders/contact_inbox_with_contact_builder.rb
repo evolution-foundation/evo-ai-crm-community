@@ -175,11 +175,8 @@ class ContactInboxWithContactBuilder
   def find_contact_by_phone_number(phone_number)
     return if phone_number.blank?
 
-    # Normalize the lookup key to the canonical stored form so a contact created
-    # via another path (e.g. leads API) is matched instead of duplicated.
-    normalized = Whatsapp::PhoneNumberNormalizer.to_e164(phone_number)
-    return if normalized.blank?
-
-    Contact.find_by(phone_number: normalized)
+    # The channel reports the canonical form; a contact created via another path
+    # (e.g. leads API) keeps the number as informed. Match either, do not duplicate.
+    Contact.from_phone_number(phone_number)
   end
 end

@@ -2,12 +2,16 @@
 
 # Whatsapp::PhoneNumberNormalizer
 #
-# Single source of truth for normalizing a phone number into the canonical form
-# WhatsApp itself resolves to. This is a faithful port of Evolution API's
-# `createJid` logic (evolution-api/src/utils/createJid.ts) — the same rules the
-# gateway applies before talking to WhatsApp — so that contacts created in the
-# CRM (leads API, widget, import) and contacts seen via inbound WhatsApp messages
-# converge on ONE string and stop duplicating.
+# Single source of truth for the canonical form WhatsApp itself resolves a phone
+# number to. This is a faithful port of Evolution API's `createJid` logic
+# (evolution-api/src/utils/createJid.ts) — the same rules the gateway applies
+# before talking to WhatsApp.
+#
+# The canonical form is how the CHANNEL addresses a number, not how the contact
+# stores it: a contact keeps the number as informed. `.call` is for addressing the
+# channel; `.e164_variants` lists every form that resolves to the same canonical
+# one, so a lookup matches a contact whichever form it was stored in and the same
+# person does not land as two contacts.
 #
 # Covers the three countries with an "extra digit" quirk:
 #   - Brazil (+55):  the nono dígito. Kept for DDD <= 30 (or landline-leading
@@ -15,8 +19,8 @@
 #   - Mexico (+52):  the leading "1" after the country code on 13-digit numbers.
 #   - Argentina (+54): the leading "9" after the country code on 13-digit numbers.
 #
-# Returns DIGITS ONLY (no '+', no '@s.whatsapp.net'). Callers that persist E.164
-# prepend '+' themselves; callers that build a JID append the suffix.
+# `.call` returns DIGITS ONLY (no '+', no '@s.whatsapp.net'); callers that build a
+# JID append the suffix.
 #
 # Numbers from any other country, group JIDs, or strings that don't match the
 # expected shape are returned with only cosmetic cleanup (non-digits removed),
@@ -26,13 +30,23 @@ class Whatsapp::PhoneNumberNormalizer
     new(raw).call
   end
 
-  # Convenience for lookup/persist paths that store E.164 ('+<digits>'). Returns
-  # nil for blank/uninormalizable input so callers can guard a find_by cleanly.
+  # The canonical form as E.164 ('+<digits>'), nil for blank input.
   def self.to_e164(raw)
     digits = call(raw)
     return nil if digits.blank?
 
     "+#{digits}"
+  end
+
+  # The number as informed, as E.164: cosmetic cleanup only, no digit dropped.
+  def self.informed_e164(raw)
+    new(raw).informed_e164
+  end
+
+  # Every E.164 form that resolves to the same canonical number, the informed one
+  # first. Empty for blank input.
+  def self.e164_variants(raw)
+    new(raw).e164_variants
   end
 
   def initialize(raw)
@@ -50,7 +64,29 @@ class Whatsapp::PhoneNumberNormalizer
     format_br(number)
   end
 
+  def informed_e164
+    digits = strip_to_digits(@raw)
+    digits.empty? ? nil : "+#{digits}"
+  end
+
+  def e164_variants
+    canonical = call
+    return [] if canonical.blank?
+
+    [informed_e164, "+#{canonical}", expanded(canonical)].compact.uniq
+  end
+
   private
+
+  # The inverse of the two format_* below: the longer form that normalizes to
+  # `canonical`, nil where the channel applies no quirk to it.
+  def expanded(canonical)
+    br = /\A55(\d{2})(\d{8})\z/.match(canonical)
+    return "+55#{br[1]}9#{br[2]}" if br && br[1].to_i >= 31 && br[2][0].to_i >= 7
+
+    extra = { '52' => '1', '54' => '9' }[canonical[0, 2]]
+    "+#{canonical[0, 2]}#{extra}#{canonical[2..]}" if extra && canonical.length == 12
+  end
 
   # Mirrors createJid's cleanup: drop whitespace, '+', parens, ':' suffix and any
   # JID domain, then keep only digits.
