@@ -524,6 +524,15 @@ Rails.application.routes.draw do
         delete 'profile/:id/picture', to: 'evolution_go/profile#remove_picture', as: :profile_remove_picture
       end
 
+      scope path: 'waha', as: 'waha' do
+        resource :authorization, only: [:create], controller: 'waha/authorizations' do
+          collection do
+            delete :logout
+          end
+        end
+        resources :qrcodes, only: [:show], controller: 'waha/qrcodes'
+      end
+
       scope path: 'zapi', as: 'zapi' do
         resources :qrcodes, only: [:show, :create], controller: 'zapi/qrcodes' do
           collection do
