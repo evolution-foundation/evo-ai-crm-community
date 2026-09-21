@@ -389,11 +389,14 @@ Rails.application.routes.draw do
           get 'whatsapp', to: 'webhooks/whatsapp#verify'
           post 'whatsapp', to: 'webhooks/whatsapp#process_payload'
           get 'whatsapp/:phone_number', to: 'webhooks/whatsapp#verify'
-          post 'whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
+          # Literal provider routes must come before the :phone_number wildcard
+          # below, otherwise Rails matches them as phone_number == 'evolution_go'
+          # / 'waha' / 'zapi' and routes them to process_payload instead.
           post 'whatsapp/evolution', to: 'webhooks/whatsapp#process_payload'
           post 'whatsapp/evolution_go', to: 'webhooks/whatsapp#process_evolution_go_payload'
           post 'whatsapp/waha', to: 'webhooks/whatsapp#process_waha_payload'
           post 'whatsapp/zapi', to: 'webhooks/whatsapp#process_payload'
+          post 'whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
 
           # Telegram webhooks
           post 'telegram/:bot_token', to: 'webhooks/telegram#process_payload'
@@ -792,9 +795,11 @@ Rails.application.routes.draw do
   get 'webhooks/whatsapp', to: 'webhooks/whatsapp#verify'
   post 'webhooks/whatsapp', to: 'webhooks/whatsapp#process_payload'
   get 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#verify'
-  post 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
   get 'webhooks/instagram', to: 'webhooks/instagram#verify'
   post 'webhooks/instagram', to: 'webhooks/instagram#events'
+  # Literal provider routes must come before the :phone_number wildcard below,
+  # otherwise Rails matches them as phone_number == 'evolution_go' / 'waha' /
+  # 'zapi' and routes them to process_payload instead of the dedicated actions.
   post 'webhooks/whatsapp/evolution', to: 'webhooks/whatsapp#process_payload'
   # EVO-2089: com WEBHOOK_BY_EVENTS=true a Evolution posta cada evento em
   # .../evolution/<evento> (ex.: messages-upsert). :sub_event (NAO :event — path
@@ -803,6 +808,7 @@ Rails.application.routes.draw do
   post 'webhooks/whatsapp/evolution_go', to: 'webhooks/whatsapp#process_evolution_go_payload'
   post 'webhooks/whatsapp/waha', to: 'webhooks/whatsapp#process_waha_payload'
   post 'webhooks/whatsapp/zapi', to: 'webhooks/whatsapp#process_payload'
+  post 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
   post 'webhooks/evolution_hub', to: 'webhooks/evolution_hub#create'
 
   # Bot Runtime postback
