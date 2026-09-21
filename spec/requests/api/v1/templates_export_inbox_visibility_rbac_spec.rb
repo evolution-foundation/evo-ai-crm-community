@@ -121,6 +121,20 @@ RSpec.describe 'Template export inbox visibility scope', type: :request do
       expect(exported).not_to include('foreign.example.com')
     end
 
+    it 'carries every inbox for a caller holding conversations.read_all, with `all` and by explicit id' do
+      login_as(exporter, 'templates.export', read_all_inboxes: true)
+
+      expect(exported_inbox_names(all: true)).to match_array(Inbox.pluck(:name).map(&:parameterize))
+      expect(exported_inbox_names(ids: [foreign_inbox.id])).to eq(['foreign-inbox'])
+    end
+
+    it 'carries an explicit id of any inbox for an administrator' do
+      allow(exporter).to receive(:administrator?).and_return(true)
+      login_as(exporter, 'templates.export')
+
+      expect(exported_inbox_names(ids: [foreign_inbox.id])).to eq(['foreign-inbox'])
+    end
+
     it 'carries every inbox for an administrator' do
       allow(exporter).to receive(:administrator?).and_return(true)
       login_as(exporter, 'templates.export')
@@ -143,6 +157,45 @@ RSpec.describe 'Template export inbox visibility scope', type: :request do
       expect(response).to have_http_status(:ok)
       expect(category_in_bundle(response.body, 'labels').length).to eq(Label.count)
       expect(category_in_bundle(response.body, 'teams').length).to eq(Team.count)
+    end
+  end
+
+  # --- the inbox named from inside another category ----------------------------
+
+  # A message template is a shared asset and stays exportable by anyone holding
+  # templates.export. The inbox it is linked to is referenced by NAME, and that name
+  # is the datum the inbox rule protects.
+  describe 'the inbox a message template is linked to' do
+    let!(:member_template) do
+      MessageTemplate.create!(name: "member-tpl-#{SecureRandom.hex(3)}", content: 'Oi', channel: member_inbox.channel)
+    end
+    let!(:foreign_template) do
+      MessageTemplate.create!(name: "foreign-tpl-#{SecureRandom.hex(3)}", content: 'Oi', channel: foreign_inbox.channel)
+    end
+
+    def exported_inbox_slugs
+      post '/api/v1/templates/export',
+           params: { template_name: 'T', selection: { message_templates: { ids: [member_template.id, foreign_template.id] } } },
+           as: :json
+      expect(response).to have_http_status(:ok)
+      category_in_bundle(response.body, 'message_templates').to_h { |tpl| [tpl['name'], tpl['inbox_slug']] }
+    end
+
+    it 'names the inbox the caller can read, and not the one it cannot' do
+      login_as(exporter, 'templates.export')
+
+      slugs = exported_inbox_slugs
+
+      expect(slugs[member_template.name]).to eq('member-inbox')
+      expect(slugs).to have_key(foreign_template.name)
+      expect(slugs[foreign_template.name]).to be_nil
+    end
+
+    it 'names both for an administrator' do
+      allow(exporter).to receive(:administrator?).and_return(true)
+      login_as(exporter, 'templates.export')
+
+      expect(exported_inbox_slugs.values).to contain_exactly('member-inbox', 'foreign-inbox')
     end
   end
 
