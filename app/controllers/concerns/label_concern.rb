@@ -1,16 +1,18 @@
 module LabelConcern
   def create
     model.update_labels(resolve_label_titles(incoming_label_tokens))
-    @labels = model.label_list
-    render json: { payload: @labels }
+    render_labels
   end
 
   def index
-    @labels = model.label_list
-    render json: { payload: @labels }
+    render_labels
   end
 
   private
+
+  def render_labels
+    render json: { payload: model.label_list }
+  end
 
   # EVO-1928: `#create` historically only honoured `labels` shaped as a flat
   # array of strings (`params.permit(labels: [])`). Any other shape made

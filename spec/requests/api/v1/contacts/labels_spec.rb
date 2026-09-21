@@ -36,7 +36,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: ['vip'] }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('vip')
+      expect(json_response['data']).to contain_exactly('vip')
       expect(taggings_for(contact).count).to eq(1)
       expect(contact.reload.label_list).to contain_exactly('vip')
     end
@@ -49,7 +49,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labelId: 'vip' }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('vip')
+      expect(json_response['data']).to contain_exactly('vip')
       expect(taggings_for(contact).count).to eq(1)
       expect(contact.reload.label_list).to contain_exactly('vip')
     end
@@ -59,7 +59,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: 'support' }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('support')
+      expect(json_response['data']).to contain_exactly('support')
       expect(taggings_for(contact).count).to eq(1)
     end
 
@@ -70,7 +70,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: [label.id] }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('priority')
+      expect(json_response['data']).to contain_exactly('priority')
       expect(taggings_for(contact).count).to eq(1)
     end
 
@@ -84,7 +84,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: [orphan_uuid] }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly(orphan_uuid)
+      expect(json_response['data']).to contain_exactly(orphan_uuid)
       expect(taggings_for(contact).count).to eq(1)
       expect(contact.reload.label_list).to contain_exactly(orphan_uuid)
     end
@@ -100,9 +100,20 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: ['support'] }, headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('support')
+      expect(json_response['data']).to contain_exactly('support')
       expect(taggings_for(contact).count).to eq(1)
       expect(contact.reload.label_list).to contain_exactly('support')
+    end
+
+    it 'replaces the whole set, dropping labels absent from the request' do
+      contact.update_labels(%w[vip support])
+
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: ['lead'] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to contain_exactly('lead')
+      expect(contact.reload.label_list).to contain_exactly('lead')
     end
 
     it 'reflects the persisted label on the subsequent index read' do
@@ -113,7 +124,100 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
       get "/api/v1/contacts/#{contact.id}/labels", headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(json_response['payload']).to contain_exactly('support')
+      expect(json_response['data']).to contain_exactly('support')
+    end
+  end
+
+  describe 'GET /api/v1/contacts/:contact_id/labels' do
+    it 'answers in the standard envelope, keeping payload for older clients' do
+      contact.update_labels(%w[vip support])
+
+      get "/api/v1/contacts/#{contact.id}/labels", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['success']).to be(true)
+      expect(json_response['data']).to contain_exactly('vip', 'support')
+      expect(json_response['payload']).to eq(json_response['data'])
+      expect(json_response['meta']).to include('timestamp')
+    end
+
+    # The reported loss: a client read `data`, found nothing under the old
+    # shape, and posted back an empty set.
+    it 'returns what a client needs to post the set back unchanged' do
+      contact.update_labels(%w[vip support])
+
+      get "/api/v1/contacts/#{contact.id}/labels", headers: headers, as: :json
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: json_response['data'] }, headers: headers, as: :json
+
+      expect(contact.reload.label_list).to contain_exactly('vip', 'support')
+    end
+  end
+
+  describe 'POST /api/v1/contacts/:contact_id/labels/add' do
+    it 'adds the labels without touching the existing ones' do
+      contact.update_labels(%w[vip])
+
+      post "/api/v1/contacts/#{contact.id}/labels/add",
+           params: { labels: %w[support vip] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to contain_exactly('vip', 'support')
+      expect(contact.reload.label_list).to contain_exactly('vip', 'support')
+    end
+
+    it 'resolves a label id to its title' do
+      label = Label.create!(title: 'Priority')
+      contact.update_labels(%w[vip])
+
+      post "/api/v1/contacts/#{contact.id}/labels/add",
+           params: { labels: [label.id] }, headers: headers, as: :json
+
+      expect(contact.reload.label_list).to contain_exactly('vip', 'priority')
+    end
+
+    it 'rejects a request without labels instead of answering success' do
+      contact.update_labels(%w[vip])
+
+      post "/api/v1/contacts/#{contact.id}/labels/add",
+           params: {}, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json_response['success']).to be(false)
+      expect(contact.reload.label_list).to contain_exactly('vip')
+    end
+  end
+
+  describe 'POST /api/v1/contacts/:contact_id/labels/remove' do
+    it 'removes only the labels sent' do
+      contact.update_labels(%w[vip support lead])
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labels: %w[support] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to contain_exactly('vip', 'lead')
+      expect(contact.reload.label_list).to contain_exactly('vip', 'lead')
+    end
+
+    it 'ignores a label the contact does not have' do
+      contact.update_labels(%w[vip])
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labelId: 'missing' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(contact.reload.label_list).to contain_exactly('vip')
+    end
+
+    it 'rejects a request without labels instead of answering success' do
+      contact.update_labels(%w[vip])
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labels: [] }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(contact.reload.label_list).to contain_exactly('vip')
     end
   end
 end
