@@ -100,10 +100,8 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
       expect(response).to have_http_status(:forbidden)
     end
 
-    # Guards against over-scoping. Labels (and the
-    # other account-wide categories) are shared, so `all` must still export every
-    # label regardless of who created it — a base_relation that scoped them too would
-    # silently drop account-wide assets from every bundle.
+    # Catches the opposite error: a base_relation that scoped the account-wide
+    # categories too would silently drop shared assets from every bundle.
     it 'leaves account-wide categories (labels) fully exportable' do
       login_as(exporter, 'templates.export')
       Label.create!(title: "shared-#{SecureRandom.hex(3)}")
