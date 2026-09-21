@@ -8,13 +8,16 @@ module Templates
       class << self
         # Returns an array of plain hashes suitable for JSON.dump.
         # `records` is an enumerable of ActiveRecord rows for this category.
-        def serialize_all(records)
-          Array(records).map { |record| new(record).to_h }
+        # `current_user` is the caller, for a serializer that names a record of
+        # ANOTHER category and has to ask that category's visibility rule first.
+        def serialize_all(records, current_user: nil)
+          Array(records).map { |record| new(record, current_user: current_user).to_h }
         end
       end
 
-      def initialize(record)
+      def initialize(record, current_user: nil)
         @record = record
+        @current_user = current_user
       end
 
       # Default: pick allow-listed attributes and tag with a slug.

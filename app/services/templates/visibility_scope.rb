@@ -21,6 +21,14 @@ module Templates
         ::PipelinePolicy::Scope.new(
           { user: user, service_authenticated: Current.service_authenticated }, ::Pipeline
         ).resolve
+      },
+      # An inbox is read by its members, or by an administrator / a holder of
+      # conversations.read_all. The rule lives on the user and the policy, and is
+      # not visible from the Inbox model, which is how it was missed here.
+      'inboxes' => lambda { |user|
+        ::InboxPolicy::Scope.new(
+          { user: user, service_authenticated: Current.service_authenticated }, ::Inbox
+        ).resolve
       }
     }.freeze
 
