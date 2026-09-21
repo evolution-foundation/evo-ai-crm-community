@@ -57,6 +57,7 @@ class Contact < ApplicationRecord
   validates :phone_number,
             allow_blank: true, uniqueness: true,
             format: { with: /\+[1-9]\d{1,14}\z/, message: I18n.t('errors.contacts.phone_number.invalid') }
+  validate :phone_number_free_in_equivalent_forms, if: :phone_number_changed?
   validates :tax_id, allow_blank: true, uniqueness: true, length: { maximum: 14 }
   validates :website, allow_blank: true, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]), message: 'must be a valid URL' }
   has_many :conversations, dependent: :destroy_async
@@ -223,6 +224,16 @@ class Contact < ApplicationRecord
     email_format
   end
 
+  # Matches a contact whichever equivalent form its number was stored in; the
+  # exact form wins when legacy twins of the same number exist.
+  def self.from_phone_number(phone_number)
+    forms = Whatsapp::PhoneNumberNormalizer.e164_variants(phone_number)
+    return nil if forms.empty?
+
+    candidates = where(phone_number: forms).order(:created_at).to_a
+    candidates.find { |contact| contact.phone_number == forms.first } || candidates.first
+  end
+
   def self.from_email(email)
     find_by(email: email&.downcase)
   end
@@ -265,26 +276,34 @@ class Contact < ApplicationRecord
     prepare_jsonb_attributes
   end
 
-  # Normalize the phone number to the canonical form WhatsApp resolves to, so that
-  # every write path (leads API, widget, import, inbound WhatsApp) converges on one
-  # string and stops creating duplicate contacts. See Whatsapp::PhoneNumberNormalizer
-  # (a faithful port of Evolution API's createJid). The E.164 format validation below
-  # remains the final guard.
+  # The number is stored as informed: only cosmetic cleanup, no digit dropped.
+  # The forms WhatsApp treats as one number (Brazilian ninth digit, MX/AR extra
+  # digit) are matched at lookup (`.from_phone_number`) and at the uniqueness
+  # check below, so the same person still does not land as two contacts.
   def prepare_phone_number_attribute
     return if phone_number.blank?
-
-    # Only normalize when the value is actually being set or changed in this save.
-    # Re-normalizing an untouched persisted record would lazily rewrite legacy
-    # numbers (e.g. older inbound 13-digit form) and could collide with the
-    # uniqueness validation against a pre-existing twin — turning a harmless
-    # legacy duplicate into a hard save error. New records and real edits still
-    # get normalized; cleaning up legacy twins is a separate dedupe job.
     return unless phone_number_changed?
 
-    digits = Whatsapp::PhoneNumberNormalizer.call(phone_number)
-    return if digits.blank?
+    self.phone_number = Whatsapp::PhoneNumberNormalizer.informed_e164(phone_number) || phone_number
+  end
 
-    self.phone_number = "+#{digits}"
+  # The uniqueness validator above only sees the exact string. This covers the
+  # other forms of the same number, under whatever scope that validator carries.
+  def phone_number_free_in_equivalent_forms
+    return if phone_number.blank?
+
+    others = Whatsapp::PhoneNumberNormalizer.e164_variants(phone_number) - [phone_number]
+    return if others.empty?
+
+    taken = self.class.where(phone_number: others).where.not(id: id)
+    phone_number_uniqueness_scope.each { |column| taken = taken.where(column => public_send(column)) }
+    errors.add(:phone_number, :taken) if taken.exists?
+  end
+
+  def phone_number_uniqueness_scope
+    self.class.validators_on(:phone_number)
+        .grep(ActiveRecord::Validations::UniquenessValidator)
+        .flat_map { |validator| Array(validator.options[:scope]) }
   end
 
   def prepare_email_attribute

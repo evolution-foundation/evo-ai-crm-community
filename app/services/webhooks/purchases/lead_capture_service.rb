@@ -107,7 +107,7 @@ module Webhooks
       end
 
       def find_contact(email, phone)
-        (email && Contact.from_email(email)) || (phone && Contact.find_by(phone_number: phone))
+        (email && Contact.from_email(email)) || (phone && Contact.from_phone_number(phone))
       end
 
       def create_contact(email, phone)
@@ -135,7 +135,7 @@ module Webhooks
         updates = {}
         updates[:name] = @lead[:name] if contact.name.blank? && @lead[:name].present?
         if contact.phone_number.blank? && phone.present?
-          if Contact.where.not(id: contact.id).exists?(phone_number: phone)
+          if Contact.where.not(id: contact.id).exists?(phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(phone))
             Rails.logger.warn("Purchase webhook: phone on purchase #{@lead[:purchase_id]} belongs to another contact — skipped")
           else
             updates[:phone_number] = phone
@@ -148,7 +148,7 @@ module Webhooks
       def normalized_phone
         return nil if @lead[:phone_number].blank?
 
-        phone = Whatsapp::PhoneNumberNormalizer.to_e164(@lead[:phone_number])
+        phone = Whatsapp::PhoneNumberNormalizer.informed_e164(@lead[:phone_number])
         return phone if phone.presence&.match?(E164)
 
         Rails.logger.warn("Purchase webhook: unusable phone on purchase #{@lead[:purchase_id]} " \

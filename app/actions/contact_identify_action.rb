@@ -61,13 +61,10 @@ class ContactIdentifyAction
   def existing_phone_number_contact
     return if params[:phone_number].blank?
 
-    # Normalize the lookup key to the same canonical form contacts are stored in,
-    # otherwise a raw/differently-formatted number misses an existing contact and
-    # a duplicate is created (or the uniqueness validation later raises).
-    normalized = Whatsapp::PhoneNumberNormalizer.to_e164(params[:phone_number])
-    return if normalized.blank?
-
-    @existing_phone_number_contact ||= Contact.find_by(phone_number: normalized)
+    # Match any equivalent form of the number, otherwise a differently-formatted
+    # one misses an existing contact and a duplicate is created (or the uniqueness
+    # validation later raises).
+    @existing_phone_number_contact ||= Contact.from_phone_number(params[:phone_number])
   end
 
   def merge_contacts?(existing_contact, key)

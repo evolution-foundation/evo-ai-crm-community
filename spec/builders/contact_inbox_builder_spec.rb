@@ -23,15 +23,47 @@ RSpec.describe ContactInboxBuilder do
   end
 
   describe '#perform with nil source_id on a phone-derived channel (flag-on round-trip)' do
-    let(:whatsapp_channel) { Channel::Whatsapp.new(phone_number: '+5511111111111', provider: 'whatsapp_cloud', provider_config: { 'api_key' => 'x', 'phone_number_id' => '1', 'business_account_id' => '1' }) }
+    let(:whatsapp_channel) do
+      Channel::Whatsapp.new(
+        phone_number: '+5511111111111',
+        provider: 'whatsapp_cloud',
+        provider_config: { 'api_key' => 'x', 'phone_number_id' => '1', 'business_account_id' => '1' }
+      )
+    end
     let(:whatsapp_inbox) do
-      whatsapp_channel.save(validate: false)
+      # Saving a cloud channel syncs its templates over HTTP; this spec is about the
+      # source_id, so the call never leaves the process.
+      allow(whatsapp_channel).to receive(:sync_templates)
+      whatsapp_channel.save!(validate: false)
       Inbox.create!(name: 'WA Inbox', channel: whatsapp_channel)
     end
 
     it 'regenerates the WhatsApp source_id from contact.phone_number' do
       contact_inbox = described_class.new(contact: contact, inbox: whatsapp_inbox, source_id: nil).perform
       expect(contact_inbox.source_id).to eq('5511999998888')
+    end
+
+    it 'derives the source_id in the form the channel reports, not the stored one' do
+      bh = Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person')
+
+      contact_inbox = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: nil).perform
+
+      expect(contact_inbox.source_id).to eq('553188887777')
+      expect(bh.reload.phone_number).to eq('+5531988887777')
+    end
+
+    # The "start conversation" screen and the stage-inactivity job take the source_id
+    # from ContactableInboxesService and hand it back to this builder explicitly.
+    it 'lands on the same ContactInbox whether the source_id comes from the contactable list or is derived here' do
+      bh = Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person')
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:whatsapp_contactable_inbox, whatsapp_inbox)
+
+      from_list = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: listed[:source_id]).perform
+      derived = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: nil).perform
+
+      expect(listed[:source_id]).to eq('553188887777')
+      expect(derived.id).to eq(from_list.id)
+      expect(ContactInbox.where(contact: bh, inbox: whatsapp_inbox).count).to eq(1)
     end
 
     it 'returns the existing ContactInbox when one already matches (idempotent)' do
@@ -46,6 +78,26 @@ RSpec.describe ContactInboxBuilder do
       explicit = "ws-#{SecureRandom.hex(4)}"
       contact_inbox = described_class.new(contact: contact, inbox: inbox, source_id: explicit).perform
       expect(contact_inbox.source_id).to eq(explicit)
+    end
+  end
+
+  describe 'the Twilio WhatsApp source_id' do
+    let(:twilio_inbox) { instance_double(Inbox, channel: instance_double(Channel::TwilioSms, medium: 'whatsapp')) }
+    let(:bh) { Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person') }
+
+    it 'is the channel form, from the builder and from the contactable list alike' do
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:twilio_contactable_inbox, twilio_inbox)
+
+      expect(described_class.twilio_whatsapp_source_id(bh.phone_number)).to eq('whatsapp:+553188887777')
+      expect(listed[:source_id]).to eq('whatsapp:+553188887777')
+    end
+
+    it 'keeps the informed number for the SMS medium' do
+      sms_inbox = instance_double(Inbox, channel: instance_double(Channel::TwilioSms, medium: 'sms'))
+
+      listed = Contacts::ContactableInboxesService.new(contact: bh).send(:twilio_contactable_inbox, sms_inbox)
+
+      expect(listed[:source_id]).to eq('+5531988887777')
     end
   end
 end

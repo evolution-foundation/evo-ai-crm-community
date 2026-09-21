@@ -142,4 +142,37 @@ RSpec.describe Whatsapp::EvolutionGoHandlers::MessagesUpsert do
       expect(service.send(:audio_voice_note?)).to be(false)
     end
   end
+
+  # An echo of a message sent from the phone reports the recipient in the form
+  # WhatsApp resolves; the contact keeps the number as informed.
+  describe '#set_contact_for_outgoing — RecipientAlt fallback' do
+    let(:channel) { Channel::WebWidget.create!(website_url: "https://go-#{SecureRandom.hex(4)}.example.com") }
+    let(:inbox) { Inbox.create!(name: 'Go', channel: channel) }
+    let(:contact) { Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person') }
+    let!(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: "lid-#{SecureRandom.hex(4)}") }
+    let(:info) { { RecipientAlt: '553188887777@s.whatsapp.net' } }
+
+    before do
+      go_inbox = inbox
+      service.define_singleton_method(:inbox) { go_inbox }
+      service.define_singleton_method(:conversation_id) { 'unknown-chat@lid' }
+    end
+
+    it 'finds the contact stored with the ninth digit from the channel form' do
+      service.send(:set_contact_for_outgoing)
+
+      expect(service.instance_variable_get(:@contact)).to eq(contact)
+    end
+
+    it 'prefers the form the channel reported when a legacy twin exists' do
+      twin = Contact.create!(name: 'Twin', email: "twin-#{SecureRandom.hex(4)}@example.com", type: 'person')
+      # Written past the validation on purpose: the twin is what legacy data looks like.
+      twin.update_column(:phone_number, '+553188887777') # rubocop:disable Rails/SkipsModelValidations
+      ContactInbox.create!(inbox: inbox, contact: twin, source_id: "lid-#{SecureRandom.hex(4)}")
+
+      service.send(:set_contact_for_outgoing)
+
+      expect(service.instance_variable_get(:@contact)).to eq(twin)
+    end
+  end
 end

@@ -107,6 +107,36 @@ RSpec.describe Public::Leads::CreationService do
     end
   end
 
+  describe 'phone number' do
+    it 'stores a DDD >= 31 mobile as informed, ninth digit included' do
+      perform(contact: { name: 'Lead BH', email: "bh-#{SecureRandom.hex(4)}@example.com", phone_number: '+55 (31) 98888-7777' })
+
+      expect(Contact.order(:created_at).last.phone_number).to eq('+5531988887777')
+    end
+
+    it 'refuses a phone that belongs to another contact in the other form of the number' do
+      Contact.create!(name: 'Do WhatsApp', email: 'dono@example.com', phone_number: '+553188887777', type: 'person')
+
+      result = nil
+      expect do
+        result = perform(contact: { name: 'Outro', email: "outro-#{SecureRandom.hex(4)}@example.com",
+                                    phone_number: '+5531988887777' })
+      end.not_to change(Contact, :count)
+
+      expect(result).to include(success: false)
+      expect(result[:error]).to match(/already registered to another contact/)
+    end
+
+    it 'restores the ninth digit on the same contact instead of reading it as someone else\'s' do
+      email = "mesmo-#{SecureRandom.hex(4)}@example.com"
+      contact = Contact.create!(name: 'Mesmo', email: email, phone_number: '+553188887777', type: 'person')
+
+      perform(contact: { name: 'Mesmo', email: email, phone_number: '+5531988887777' })
+
+      expect(contact.reload.phone_number).to eq('+5531988887777')
+    end
+  end
+
   describe 'archived destination pipeline' do
     let(:email) { "lead-#{SecureRandom.hex(4)}@example.com" }
 
