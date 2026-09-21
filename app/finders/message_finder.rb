@@ -1,6 +1,10 @@
 class MessageFinder
   class InvalidParams < StandardError; end
 
+  # Postgres takes OFFSET as a bigint, so an unbounded page overflows it before
+  # the query can return anything. Bound it here so it answers 422, not 500.
+  MAX_PAGE = 1_000_000
+
   def initialize(conversation, params, includes: nil)
     @conversation = conversation
     @params = params
@@ -30,10 +34,8 @@ class MessageFinder
       query = query.where('(messages.created_at, messages.id) < (?, ?)', before_message.created_at, before_message.id) if before_message
     end
 
-    # Aplicar paginação orientada por cursor:
-    # - sem cursor: últimas mensagens
-    # - before: página anterior
-    # - after: novas mensagens após cursor
+    # before: the page older than the cursor; after: everything newer than it.
+    # Without a cursor, page 1 is the newest block and page N the Nth block back.
     limit = limit_for_params
     messages =
       if @params[:before].present? && @params[:after].blank?
@@ -69,6 +71,7 @@ class MessageFinder
       raise InvalidParams, 'page cannot be combined with before/after; paginate with the cursor only'
     end
     raise InvalidParams, 'page must be a positive integer' unless @params[:page].to_s.match?(/\A[1-9]\d*\z/)
+    raise InvalidParams, "page must be at most #{MAX_PAGE}" if @params[:page].to_i > MAX_PAGE
   end
 
   def page

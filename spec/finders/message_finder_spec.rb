@@ -20,15 +20,29 @@ RSpec.describe MessageFinder do
     described_class.new(conversation, params).perform
   end
 
+  # Bounded on purpose: a cursor that stops advancing (a non-strict comparison,
+  # say) repeats the same page forever, and an unbounded loop answers that with a
+  # hang instead of a failure.
   def walk(direction, first_page, cursor_of)
     pages = [first_page]
-    loop do
+    messages.size.times do
       page = find(direction => cursor_of.call(pages.last).id)
-      break if page.empty?
+      return pages if page.empty?
 
       pages << page
     end
-    pages
+    raise "cursor did not exhaust after #{messages.size} pages - it is not advancing"
+  end
+
+  def oldest_message
+    page = find({})
+    messages.size.times do
+      older = find(before: page.first.id)
+      return page.first if older.empty?
+
+      page = older
+    end
+    raise 'before cursor did not exhaust - it is not advancing'
   end
 
   it 'walks backwards through messages sharing one timestamp without gaps or duplicates' do
@@ -40,18 +54,15 @@ RSpec.describe MessageFinder do
     expect(ids.uniq.size).to eq(45)
   end
 
-  it 'walks forwards through messages sharing one timestamp without gaps or duplicates' do
-    oldest = find({}).first
-    oldest = find(before: oldest.id).first until find(before: oldest.id).empty?
-
-    pages = walk(:after, [oldest], ->(page) { page.last })
+  it 'reaches every later message of the burst from the oldest cursor' do
+    pages = walk(:after, [oldest_message], ->(page) { page.last })
 
     ids = pages.flatten.map(&:id)
     expect(ids).to match_array(messages.map(&:id))
     expect(ids.uniq.size).to eq(45)
   end
 
-  it 'returns pages in a stable chronological order' do
+  it 'breaks the timestamp tie the same way on every call' do
     newest = find({})
 
     expect(find({}).map(&:id)).to eq(newest.map(&:id))
@@ -78,6 +89,11 @@ RSpec.describe MessageFinder do
       %w[0 -1 abc].each do |value|
         expect { find(page: value) }.to raise_error(described_class::InvalidParams, /positive integer/)
       end
+    end
+
+    it 'rejects a page whose offset would overflow the bigint OFFSET' do
+      expect { find(page: (described_class::MAX_PAGE + 1).to_s) }
+        .to raise_error(described_class::InvalidParams, /at most/)
     end
   end
 end
