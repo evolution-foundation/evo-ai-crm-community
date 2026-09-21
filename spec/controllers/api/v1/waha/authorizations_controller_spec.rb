@@ -16,25 +16,35 @@ RSpec.describe Api::V1::Waha::AuthorizationsController, type: :controller do
   after { Current.reset }
 
   describe 'POST #create' do
-    it 'creates a channel with provider waha and the given config' do
+    # Verify-only: this endpoint starts the WAHA session on the remote server
+    # and registers the webhook, but the CRM Channel::Whatsapp/Inbox is
+    # persisted separately by the frontend's generic InboxesService.createChannel
+    # call (same phone_number) — mirroring evolution_go's authorization#create,
+    # which only verifies/creates the remote instance. Persisting a channel
+    # here too would make that second call fail on the phone_number uniqueness
+    # constraint and leave a permanent orphaned Inbox behind.
+    it 'starts a WAHA session and returns session status, without creating a Channel::Whatsapp' do
       allow(HTTParty).to receive(:post).and_return(
-        instance_double(HTTParty::Response, success?: true, code: 200, body: '{}', parsed_response: {})
-      )
-      allow(HTTParty).to receive(:get).and_return(
-        instance_double(HTTParty::Response, success?: true, code: 200, body: '{}', parsed_response: {})
+        instance_double(HTTParty::Response, success?: true, code: 200, body: '{"status":"STARTING"}',
+                                             parsed_response: { 'status' => 'STARTING' })
       )
 
-      post :create, params: {
-        authorization: {
-          base_url: 'https://waha.example.com',
-          api_key: 'key',
-          session_name: 'default',
-          phone_number: '+5511999999999'
+      expect do
+        post :create, params: {
+          authorization: {
+            base_url: 'https://waha.example.com',
+            api_key: 'key',
+            session_name: 'default',
+            phone_number: '+5511999999999'
+          }
         }
-      }
+      end.not_to change(Channel::Whatsapp, :count)
 
       expect(response).to have_http_status(:success)
-      expect(Channel::Whatsapp.find_by(phone_number: '+5511999999999').provider).to eq('waha')
+      expect(Channel::Whatsapp.find_by(phone_number: '+5511999999999')).to be_nil
+      body = JSON.parse(response.body)
+      expect(body['session_name']).to eq('default')
+      expect(body['status']).to eq('STARTING')
     end
 
     it 'returns bad_request when required params are missing' do

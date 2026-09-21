@@ -38,18 +38,17 @@ class Api::V1::Waha::AuthorizationsController < Api::V1::BaseController
       return render json: { error: "Failed to create WAHA session: #{session_response.code}" }, status: :unprocessable_entity
     end
 
-    channel = Channel::Whatsapp.new(
-      phone_number: phone_number,
-      provider: 'waha',
-      provider_config: { 'base_url' => base_url, 'api_key' => api_key, 'session_name' => session_name }
-    )
+    # Verify-only: this endpoint's job is to create/start the WAHA session on
+    # the WAHA server (an external side effect) and register the webhook —
+    # exactly like evolution_go's /authorization#create only verifies/creates
+    # the remote instance. Persisting the CRM Channel::Whatsapp + Inbox is left
+    # entirely to the frontend's subsequent generic InboxesService.createChannel
+    # call (same phone_number). Persisting a channel here as well would make
+    # that second call fail on the phone_number uniqueness constraint and leave
+    # an orphaned Inbox with nothing to ever clean it up.
+    session_status = session_response.parsed_response.is_a?(Hash) ? session_response.parsed_response['status'] : nil
 
-    if channel.save
-      ::Inbox.create!(channel: channel, name: "WAHA #{phone_number}")
-      render json: { id: channel.id, session_name: session_name }, status: :ok
-    else
-      render json: { error: channel.errors.full_messages.join(', ') }, status: :unprocessable_entity
-    end
+    render json: { session_name: session_name, status: session_status }, status: :ok
   end
 
   def logout
