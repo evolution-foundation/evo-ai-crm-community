@@ -153,6 +153,45 @@ RSpec.describe AutomationRuleListener, '#pipeline_stage_updated' do
       expect(step_labels(runs_for(rule).last)).to include('Action skipped: send_message')
     end
 
+    it 'nao sai matched quando a unica acao foi pulada por falta de conversa' do
+      rule = build_rule(actions: [{ 'action_name' => 'send_message', 'action_params' => ['oi'] }])
+      item = contact_card
+      runs_for(rule).delete_all
+
+      dispatch(item)
+
+      run = runs_for(rule).last
+      expect(run.status).to eq('skipped')
+      skip_step = run.steps.find { |s| s['label'] == 'Action skipped: send_message' }
+      expect(skip_step['level']).to eq('warn')
+      expect(skip_step.dig('data', 'reason')).to include('requires a conversation')
+    end
+
+    it 'sai skipped tambem quando parte das acoes rodou, com o que rodou na timeline' do
+      rule = build_rule(actions: [{ 'action_name' => 'add_label', 'action_params' => [ia_label.title] },
+                                  { 'action_name' => 'send_message', 'action_params' => ['oi'] }])
+      item = contact_card
+      runs_for(rule).delete_all
+
+      dispatch(item)
+
+      run = runs_for(rule).last
+      expect(run.status).to eq('skipped')
+      expect(step_labels(run)).to include('Action: add_label')
+      expect(step_labels(run)).to include('Action skipped: send_message')
+      expect(contact.reload.label_list).to include(ia_label.title)
+    end
+
+    it 'segue matched quando toda acao roda no eixo do contato' do
+      rule = build_rule
+      item = contact_card
+      runs_for(rule).delete_all
+
+      dispatch(item)
+
+      expect(runs_for(rule).last.status).to eq('matched')
+    end
+
     it 'aceita condicao de pipeline_id resolvida pelo card do evento' do
       rule = build_rule(conditions: [{ 'attribute_key' => 'pipeline_id', 'filter_operator' => 'equal_to',
                                        'values' => [pipeline.id], 'query_operator' => nil }])
