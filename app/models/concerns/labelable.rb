@@ -39,10 +39,12 @@ module Labelable
   end
 
   # REMOVE `labels` from the existing set (idempotent). Symmetric counterpart
-  # to `add_labels`.
+  # to `add_labels`. Matches ignoring case, as the gem does when it resolves a
+  # name to a tag on write: otherwise `VIP` could be added onto `vip` but never
+  # removed from it.
   def remove_labels(labels = nil)
-    remaining = label_list.to_a - normalize_label_tokens(labels)
-    update!(label_list: remaining)
+    targets = normalize_label_tokens(labels).map(&:downcase)
+    update!(label_list: label_list.to_a.reject { |label| targets.include?(label.downcase) })
   end
 
   private

@@ -200,6 +200,16 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
       expect(contact.reload.label_list).to contain_exactly('vip', 'lead')
     end
 
+    it 'removes a label sent in a different case' do
+      contact.update_labels(%w[vip lead])
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labelId: 'VIP' }, headers: headers, as: :json
+
+      expect(json_response['data']).to contain_exactly('lead')
+      expect(contact.reload.label_list).to contain_exactly('lead')
+    end
+
     it 'ignores a label the contact does not have' do
       contact.update_labels(%w[vip])
 

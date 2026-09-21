@@ -10,6 +10,8 @@ class Api::V1::Contacts::LabelsController < Api::V1::Contacts::BaseController
 
   # `create` replaces the contact's whole label set; `add` and `remove` only
   # touch the labels sent, so a caller never has to read the set first.
+  # Both still rewrite the set, so the contact row is locked meanwhile: two
+  # concurrent adds would otherwise each save their own union and drop one.
   def add
     change_labels { |titles| model.add_labels(titles) }
   end
@@ -24,7 +26,7 @@ class Api::V1::Contacts::LabelsController < Api::V1::Contacts::BaseController
     titles = resolve_label_titles(incoming_label_tokens)
     return error_response(ApiErrorCodes::MISSING_REQUIRED_FIELD, 'labels is required', status: :unprocessable_entity) if titles.empty?
 
-    yield titles
+    model.with_lock { yield titles }
     render_labels
   end
 
