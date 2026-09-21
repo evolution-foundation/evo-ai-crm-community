@@ -34,6 +34,15 @@ RSpec.describe ContactInboxBuilder do
       expect(contact_inbox.source_id).to eq('5511999998888')
     end
 
+    it 'derives the source_id in the form the channel reports, not the stored one' do
+      bh = Contact.create!(name: 'BH', phone_number: '+5531988887777', type: 'person')
+
+      contact_inbox = described_class.new(contact: bh, inbox: whatsapp_inbox, source_id: nil).perform
+
+      expect(contact_inbox.source_id).to eq('553188887777')
+      expect(bh.reload.phone_number).to eq('+5531988887777')
+    end
+
     it 'returns the existing ContactInbox when one already matches (idempotent)' do
       first = described_class.new(contact: contact, inbox: whatsapp_inbox, source_id: nil).perform
       second = described_class.new(contact: contact, inbox: whatsapp_inbox, source_id: nil).perform

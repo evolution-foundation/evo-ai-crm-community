@@ -44,8 +44,10 @@ class ContactInboxBuilder
 
   def wa_source_id
     if @contact.phone_number.present?
-      # whatsapp doesn't want the + in e164 format
-      @contact.phone_number.delete('+').to_s
+      # The contact keeps the number as informed; the source_id is the form the
+      # channel reports (no '+', WhatsApp's digit quirks applied), or an inbound
+      # message from the same person would open a second contact_inbox.
+      Whatsapp::PhoneNumberNormalizer.call(@contact.phone_number).to_s
     elsif @source_id.present?
       # BSUID-only contact: source_id was already set externally
       @source_id
@@ -61,7 +63,7 @@ class ContactInboxBuilder
     when 'sms'
       @contact.phone_number
     when 'whatsapp'
-      "whatsapp:#{@contact.phone_number}"
+      "whatsapp:#{Whatsapp::PhoneNumberNormalizer.to_e164(@contact.phone_number)}"
     end
   end
 
