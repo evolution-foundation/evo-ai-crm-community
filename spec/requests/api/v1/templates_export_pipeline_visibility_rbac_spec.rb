@@ -207,15 +207,16 @@ RSpec.describe 'Template export pipeline visibility scope (CRM-206)', type: :req
     # Asserting what the router RETURNS, never a list of category names: a constant
     # nothing reads stays green while `for` quietly gains or loses a branch.
     it 'hands every account-wide category its untouched relation' do
-      %w[labels teams inboxes agents canned_responses message_templates custom_attributes].each do |category|
+      %w[labels teams agents canned_responses message_templates custom_attributes].each do |category|
         model = Templates::BundleBuilder::MODEL_MAP[category]
         expect(Templates::VisibilityScope.for(category, model, exporter).to_sql).to eq(model.all.to_sql)
       end
     end
 
-    it 'scopes the two categories that carry per-user visibility' do
+    it 'scopes the three categories that carry per-user visibility' do
       expect(Templates::VisibilityScope.for('pipelines', Pipeline, exporter).to_sql).not_to eq(Pipeline.all.to_sql)
       expect(Templates::VisibilityScope.for('macros', Macro, exporter).to_sql).not_to eq(Macro.all.to_sql)
+      expect(Templates::VisibilityScope.for('inboxes', Inbox, exporter).to_sql).not_to eq(Inbox.all.to_sql)
     end
 
     it 'delegates pipelines to the same rule the rest of the CRM reads through' do
