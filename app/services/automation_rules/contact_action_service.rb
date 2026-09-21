@@ -8,7 +8,9 @@
 # behaviour of `AutomationRuleListener#execute_contact_actions`, which only
 # handled `send_webhook_event` and left everything else as a no-op — they are
 # recorded on the run as `skipped` with a reason, so the outcome is observable
-# in the automation logs (`automation_rule_runs`).
+# in the automation logs (`automation_rule_runs`). A skipped action also
+# downgrades the run: it matched, but it must not read as a clean success
+# while an action the user configured did nothing.
 class AutomationRules::ContactActionService
   # EVO-1642: contact-level labels are the canonical implementations in the
   # shared module — included here so this executor stops hand-rolling its own
@@ -53,9 +55,8 @@ class AutomationRules::ContactActionService
   end
 
   def record_skip(action_name)
-    @recorder&.add_step(
+    @recorder&.action_skipped!(
       "Action skipped: #{action_name}",
-      level: 'warn',
       data: {
         action_name: action_name,
         reason: 'requires a conversation; contact trigger has no conversation in scope'

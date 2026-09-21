@@ -9,7 +9,7 @@ RSpec.describe AutomationRules::ContactActionService do
   let(:contact) { Contact.create!(name: 'Jane', email: "c-#{SecureRandom.hex(4)}@test.com") }
   let!(:label) { Label.create!(title: 'vip', color: '#abcdef') }
 
-  let(:recorder) { instance_double(AutomationRules::RunRecorder, add_step: nil) }
+  let(:recorder) { instance_double(AutomationRules::RunRecorder, add_step: nil, action_skipped!: nil) }
 
   def build_rule(actions:)
     rule = AutomationRule.new(
@@ -84,9 +84,9 @@ RSpec.describe AutomationRules::ContactActionService do
       expect_any_instance_of(Conversation).not_to receive(:update!)
       described_class.new(rule, contact, recorder: recorder).perform
 
-      expect(recorder).to have_received(:add_step).with(
+      expect(recorder).to have_received(:action_skipped!).with(
         'Action skipped: assign_team',
-        hash_including(level: 'warn', data: hash_including(reason: a_string_including('requires a conversation')))
+        data: hash_including(reason: a_string_including('requires a conversation'))
       )
     end
 
@@ -102,9 +102,9 @@ RSpec.describe AutomationRules::ContactActionService do
 
       described_class.new(rule, contact, recorder: recorder).perform
 
-      expect(recorder).to have_received(:add_step).with(
+      expect(recorder).to have_received(:action_skipped!).with(
         'Action skipped: update_custom_attribute',
-        hash_including(level: 'warn', data: hash_including(reason: a_string_including('requires a conversation')))
+        data: hash_including(reason: a_string_including('requires a conversation'))
       )
       expect(recorder).not_to have_received(:add_step).with('Action: update_custom_attribute', anything)
     end
