@@ -517,10 +517,16 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
     quoted_info
   end
 
+  # A participant is a WhatsApp JID, so it carries the form the gateway resolves the
+  # number to — the contact stores it as informed, which is not the same string.
+  def contact_channel_number(phone_number)
+    Whatsapp::PhoneNumberNormalizer.call(phone_number).to_s.presence
+  end
+
   def extract_participant_from_message(message)
     # For incoming messages, use the contact's phone in WhatsApp format
     if message.message_type == 'incoming' && message.sender.present?
-      phone_number = message.sender.phone_number&.delete('+')
+      phone_number = contact_channel_number(message.sender.phone_number)
       return "#{phone_number}@s.whatsapp.net" if phone_number.present?
     end
 
