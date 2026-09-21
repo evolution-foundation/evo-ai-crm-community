@@ -392,6 +392,7 @@ Rails.application.routes.draw do
           post 'whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
           post 'whatsapp/evolution', to: 'webhooks/whatsapp#process_payload'
           post 'whatsapp/evolution_go', to: 'webhooks/whatsapp#process_evolution_go_payload'
+          post 'whatsapp/waha', to: 'webhooks/whatsapp#process_waha_payload'
           post 'whatsapp/zapi', to: 'webhooks/whatsapp#process_payload'
 
           # Telegram webhooks
@@ -800,6 +801,7 @@ Rails.application.routes.draw do
   # param sobrescreveria o `event` do corpo). Mesmo process_payload, que le o evento do corpo.
   post 'webhooks/whatsapp/evolution/:sub_event', to: 'webhooks/whatsapp#process_payload'
   post 'webhooks/whatsapp/evolution_go', to: 'webhooks/whatsapp#process_evolution_go_payload'
+  post 'webhooks/whatsapp/waha', to: 'webhooks/whatsapp#process_waha_payload'
   post 'webhooks/whatsapp/zapi', to: 'webhooks/whatsapp#process_payload'
   post 'webhooks/evolution_hub', to: 'webhooks/evolution_hub#create'
 

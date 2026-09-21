@@ -32,7 +32,21 @@ class Webhooks::WhatsappController < ActionController::API
     head :ok
   end
 
+  def process_waha_payload
+    unless valid_waha_payload?
+      render json: { error: 'Invalid WAHA webhook payload' }, status: :bad_request
+      return
+    end
+
+    Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash.merge(waha: true))
+    head :ok
+  end
+
   private
+
+  def valid_waha_payload?
+    params[:event].present? && params[:session].present? && params[:payload].present?
+  end
 
   def valid_evolution_go_payload?
     # Evolution Go webhook must have: event, data, instanceId, instanceToken
