@@ -45,26 +45,37 @@ RSpec.describe ContactInboxWithContactBuilder do
   end
 
   context 'when the channel provider is waha' do
-    let(:inbox) { create(:inbox, channel: create(:channel_whatsapp, provider: 'waha', phone_number: '+551199999999x')) }
+    let(:waha_channel) do
+      Channel::Whatsapp.new(
+        phone_number: '+5511922223333',
+        provider: 'waha',
+        provider_config: { 'base_url' => 'https://waha.example.com', 'api_key' => 'key', 'session_name' => 'default' }
+      ).tap { |c| c.save(validate: false) }
+    end
+    let(:waha_inbox) { Inbox.create!(name: 'WAHA Inbox', channel: waha_channel) }
 
     it 'is reconcilable' do
-      builder = described_class.new(source_id: '5511988887777@c.us', inbox: inbox, contact_attributes: {})
+      builder = described_class.new(source_id: '5511933334444@c.us', inbox: waha_inbox, contact_attributes: {})
       expect(builder.reconcilable_whatsapp_channel?).to eq(true)
     end
 
     it 'reuses an existing ContactInbox for the same contact when source_id has drifted' do
-      contact = create(:contact, phone_number: '+5511988887777')
-      existing_contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox, source_id: '551188887777@c.us')
+      # WAHA can receive the same contact with source_id missing the country code prefix.
+      # Existing ContactInbox has source_id without full prefix ('551193333444@c.us'),
+      # but new message arrives with full prefix ('5511933334444@c.us').
+      # Both should match the contact by normalized phone_number.
+      contact = Contact.create!(name: 'WAHA contact', phone_number: '+5511933334444')
+      existing_contact_inbox = ContactInbox.create!(contact: contact, inbox: waha_inbox, source_id: '551193333444@c.us')
 
       builder = described_class.new(
-        source_id: '5511988887777@c.us',
-        inbox: inbox,
-        contact_attributes: { phone_number: '+5511988887777' }
+        source_id: '5511933334444@c.us',
+        inbox: waha_inbox,
+        contact_attributes: { phone_number: '+5511933334444' }
       )
       result = builder.perform
 
       expect(result.id).to eq(existing_contact_inbox.id)
-      expect(result.reload.source_id).to eq('5511988887777@c.us')
+      expect(result.reload.source_id).to eq('5511933334444@c.us')
     end
   end
 end
