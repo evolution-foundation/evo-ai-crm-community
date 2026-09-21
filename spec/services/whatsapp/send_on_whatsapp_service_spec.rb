@@ -72,9 +72,6 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
     end
   end
 
-  # EVO-1682: identifier is only a valid Evolution Go destination when it looks like
-  # a number/JID; non-numeric identifiers (imported lead labels) must fall back to
-  # phone_number / source_id instead of being sent as the recipient.
   # The contact keeps the number as informed; the channel is addressed by the form
   # WhatsApp resolves it to. The identifier and source_id paths are untouched.
   describe '#determine_target_number_for_sending — the stored number vs the channel form' do
@@ -106,6 +103,9 @@ RSpec.describe Whatsapp::SendOnWhatsappService do
     end
   end
 
+  # EVO-1682: identifier is only a valid Evolution Go destination when it looks like
+  # a number/JID; non-numeric identifiers (imported lead labels) must fall back to
+  # phone_number / source_id instead of being sent as the recipient.
   describe '#determine_target_number_for_sending — evolution_go identifier validation' do
     let(:provider) { 'evolution_go' }
     let(:additional_attributes) { nil }

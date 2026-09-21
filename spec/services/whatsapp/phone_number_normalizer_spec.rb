@@ -108,6 +108,7 @@ RSpec.describe Whatsapp::PhoneNumberNormalizer do
       end
     end
   end
+
   describe '.e164_variants' do
     it 'lists both Brazilian forms for a DDD >= 31 mobile, whichever one comes in' do
       expected = %w[+5531988887777 +553188887777]

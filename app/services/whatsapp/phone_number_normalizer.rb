@@ -2,29 +2,10 @@
 
 # Whatsapp::PhoneNumberNormalizer
 #
-# Single source of truth for the canonical form WhatsApp itself resolves a phone
-# number to. This is a faithful port of Evolution API's `createJid` logic
-# (evolution-api/src/utils/createJid.ts) — the same rules the gateway applies
-# before talking to WhatsApp.
-#
-# The canonical form is how the CHANNEL addresses a number, not how the contact
-# stores it: a contact keeps the number as informed. `.call` is for addressing the
-# channel; `.e164_variants` lists every form that resolves to the same canonical
-# one, so a lookup matches a contact whichever form it was stored in and the same
-# person does not land as two contacts.
-#
-# Covers the three countries with an "extra digit" quirk:
-#   - Brazil (+55):  the nono dígito. Kept for DDD <= 30 (or landline-leading
-#                    numbers); stripped for DDD >= 31 mobiles.
-#   - Mexico (+52):  the leading "1" after the country code on 13-digit numbers.
-#   - Argentina (+54): the leading "9" after the country code on 13-digit numbers.
-#
-# `.call` returns DIGITS ONLY (no '+', no '@s.whatsapp.net'); callers that build a
-# JID append the suffix.
-#
-# Numbers from any other country, group JIDs, or strings that don't match the
-# expected shape are returned with only cosmetic cleanup (non-digits removed),
-# i.e. the function is a safe pass-through — never raises.
+# Faithful port of Evolution API's `createJid` (evolution-api/src/utils/createJid.ts):
+# the digit quirks the gateway applies to BR/MX/AR before talking to WhatsApp, so it
+# says how the CHANNEL addresses a number, never how a contact stores it. Anything
+# that does not match passes through with cosmetic cleanup only — it never raises.
 class Whatsapp::PhoneNumberNormalizer
   def self.call(raw)
     new(raw).call
