@@ -21,7 +21,7 @@ module Templates
             'category' => CATEGORY,
             'slug' => item['slug'],
             'status' => 'skipped',
-            'reason' => "inbox slug '#{item['inbox_slug']}' not found in import set"
+            'reason' => skip_reason(item['inbox_slug'])
           }
           return
         end
@@ -46,6 +46,14 @@ module Templates
           'new_id' => record.id,
           'new_name' => attrs['name']
         }
+      end
+
+      # A blank slug is not a lookup miss: the bundle names no inbox for this template,
+      # because it is channel-less or the exporter could not read the one it is bound to.
+      def skip_reason(inbox_slug)
+        return 'the bundle names no inbox for this template' if inbox_slug.blank?
+
+        "inbox slug '#{inbox_slug}' not found in import set"
       end
     end
   end
