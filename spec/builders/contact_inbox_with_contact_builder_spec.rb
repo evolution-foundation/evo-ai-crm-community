@@ -43,4 +43,28 @@ RSpec.describe ContactInboxWithContactBuilder do
     expect(result.id).to eq(existing_contact_inbox.id)
     expect(ContactInbox.where(contact: contact, inbox: inbox).count).to eq(1)
   end
+
+  context 'when the channel provider is waha' do
+    let(:inbox) { create(:inbox, channel: create(:channel_whatsapp, provider: 'waha', phone_number: '+551199999999x')) }
+
+    it 'is reconcilable' do
+      builder = described_class.new(source_id: '5511988887777@c.us', inbox: inbox, contact_attributes: {})
+      expect(builder.reconcilable_whatsapp_channel?).to eq(true)
+    end
+
+    it 'reuses an existing ContactInbox for the same contact when source_id has drifted' do
+      contact = create(:contact, phone_number: '+5511988887777')
+      existing_contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox, source_id: '551188887777@c.us')
+
+      builder = described_class.new(
+        source_id: '5511988887777@c.us',
+        inbox: inbox,
+        contact_attributes: { phone_number: '+5511988887777' }
+      )
+      result = builder.perform
+
+      expect(result.id).to eq(existing_contact_inbox.id)
+      expect(result.reload.source_id).to eq('5511988887777@c.us')
+    end
+  end
 end
