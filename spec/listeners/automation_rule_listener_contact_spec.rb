@@ -54,11 +54,11 @@ RSpec.describe AutomationRuleListener do
   describe 'conversation-bound action on a contact trigger' do
     let!(:rule) { build_rule(actions: [{ 'action_name' => 'assign_team', 'action_params' => [SecureRandom.uuid] }]) }
 
-    it 'records a matched run with a skip step explaining the missing conversation' do
+    it 'records a skipped run with a skip step explaining the missing conversation' do
       expect { dispatch }.to change(AutomationRuleRun, :count).by(1)
 
       run = AutomationRuleRun.last
-      expect(run.status).to eq('matched')
+      expect(run.status).to eq('skipped')
       skip_step = run.steps.find { |s| s['label'] == 'Action skipped: assign_team' }
       expect(skip_step).to be_present
       expect(skip_step.dig('data', 'reason')).to include('requires a conversation')
