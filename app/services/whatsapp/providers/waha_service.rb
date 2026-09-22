@@ -12,7 +12,7 @@ class Whatsapp::Providers::WahaService < Whatsapp::Providers::BaseService
 
   def send_template(phone_number, template_info)
     Rails.logger.warn 'WAHA does not support template messages, sending as text'
-    send_text_message(phone_number, template_info)
+    send_text_message(phone_number, build_template_text(template_info))
   end
 
   def sync_templates
@@ -90,10 +90,32 @@ class Whatsapp::Providers::WahaService < Whatsapp::Providers::BaseService
   end
 
   def send_text_message(phone_number, message)
-    body = { session: session_name, chatId: to_chat_id(phone_number), text: html_to_whatsapp(message.content.to_s) }
+    # `message` is normally a Message record, but send_template hands us a plain
+    # String built by build_template_text (a template_info Hash has no #content) --
+    # mirror evolution_go_service.rb's send_text_message guard so either shape works.
+    text = message.respond_to?(:content) ? message.content.to_s : message.to_s
+    body = { session: session_name, chatId: to_chat_id(phone_number), text: html_to_whatsapp(text) }
 
     response = HTTParty.post("#{base_url}/api/sendText", headers: api_headers, body: body.to_json)
     process_waha_response(response)
+  end
+
+  # Converts a template_info Hash (name + optional positional parameters) into
+  # plain text, since WAHA has no HSM/template mechanism of its own. Mirrors
+  # evolution_service.rb's build_template_text.
+  def build_template_text(template_info)
+    return template_info.to_s unless template_info.is_a?(Hash)
+
+    template_info = template_info.with_indifferent_access
+    text = template_info[:name].presence || 'Template Message'
+
+    if template_info[:parameters].present?
+      template_info[:parameters].each_with_index do |param, index|
+        text = text.gsub("{{#{index + 1}}}", param.to_s)
+      end
+    end
+
+    text
   end
 
   def send_attachment_message(phone_number, message)
