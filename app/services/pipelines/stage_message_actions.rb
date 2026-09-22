@@ -218,8 +218,10 @@ module Pipelines::StageMessageActions
     # this Community fork has no seeded SuperAdmin (EVO-659 removed that STI
     # subclass, so the lookup always returns nil here) — PipelineTask#created_by
     # is required, so the create! was silently failing (swallowed by
-    # execute_action's rescue). Falls back to any user instead.
-    creator = Current.user || User.first
+    # execute_action's rescue). Falls back to the pipeline's own creator — a
+    # real user tied to this pipeline — instead of an arbitrary global user,
+    # which could be a stranger from another account on a shared install.
+    creator = Current.user || pipeline_item.pipeline.created_by
     pipeline_item.tasks.create!(
       created_by: creator,
       title: task_title.to_s.strip,
