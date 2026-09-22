@@ -26,8 +26,18 @@ class Api::V1::Waha::AuthorizationsController < Api::V1::BaseController
       }, status: :bad_request
     end
 
+    # Per-channel webhook secret (security fix): no Channel::Whatsapp exists yet
+    # at this point (see the verify-only note below), so it can't be persisted
+    # here. It's generated now, registered with WAHA as this session's webhook
+    # HMAC key, and returned to the frontend so it can be carried into
+    # provider_config on the subsequent InboxesService.createChannel call —
+    # that's what lets Webhooks::WhatsappController verify inbound WAHA
+    # webhooks against the channel resolved by session name, instead of
+    # trusting an unauthenticated payload.
+    webhook_hmac_key = SecureRandom.hex(32)
+
     begin
-      session_response = create_waha_session(base_url, api_key, session_name)
+      session_response = create_waha_session(base_url, api_key, session_name, webhook_hmac_key)
     rescue StandardError => e
       Rails.logger.error "WAHA API: Session creation error: #{e.class} - #{e.message}"
       return render json: { error: "Failed to create WAHA session: #{e.message}" }, status: :unprocessable_entity
@@ -48,7 +58,11 @@ class Api::V1::Waha::AuthorizationsController < Api::V1::BaseController
     # an orphaned Inbox with nothing to ever clean it up.
     session_status = session_response.parsed_response.is_a?(Hash) ? session_response.parsed_response['status'] : nil
 
-    render json: { session_name: session_name, status: session_status }, status: :ok
+    render json: {
+      session_name: session_name,
+      status: session_status,
+      webhook_hmac_key: webhook_hmac_key
+    }, status: :ok
   end
 
   def logout

@@ -66,6 +66,38 @@ RSpec.describe Whatsapp::Providers::WahaService do
     end
   end
 
+  describe '#send_template' do
+    it 'does not raise for a template_info Hash and sends the rendered name as text' do
+      template_info = { name: 'lead_abertura', parameters: ['Mateus'] }
+      response = instance_double(HTTParty::Response, success?: true, code: 201, body: '{}',
+                                                      parsed_response: { 'id' => 'true_5511999999999@c.us_ABCDEF' })
+
+      expect(HTTParty).to receive(:post).with(
+        'https://waha.example.com/api/sendText',
+        hash_including(
+          headers: { 'X-Api-Key' => 'secret-key', 'Content-Type' => 'application/json' },
+          body: { session: 'default', chatId: '5511999999999@c.us', text: 'lead_abertura' }.to_json
+        )
+      ).and_return(response)
+
+      expect(service.send_template('+5511999999999', template_info)).to eq('true_5511999999999@c.us_ABCDEF')
+    end
+
+    it 'substitutes {{n}} placeholders from template_info[:parameters]' do
+      template_info = { name: 'Hello {{1}}, your order {{2}} shipped', parameters: %w[Mateus 42] }
+      response = instance_double(HTTParty::Response, success?: true, code: 201, body: '{}', parsed_response: { 'id' => 'abc' })
+
+      expect(HTTParty).to receive(:post).with(
+        'https://waha.example.com/api/sendText',
+        hash_including(
+          body: { session: 'default', chatId: '5511999999999@c.us', text: 'Hello Mateus, your order 42 shipped' }.to_json
+        )
+      ).and_return(response)
+
+      service.send_template('+5511999999999', template_info)
+    end
+  end
+
   describe '#check_number_exists?' do
     it 'returns true when WAHA reports the number exists' do
       response = instance_double(

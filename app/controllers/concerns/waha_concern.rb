@@ -10,14 +10,24 @@ module WahaConcern
     "#{backend_url.chomp('/')}/webhooks/whatsapp/waha"
   end
 
-  def create_waha_session(base_url, api_key, session_name)
+  # webhook_hmac_key is registered with WAHA as this session webhook's HMAC
+  # signing secret (config.webhooks[].hmac.key) so Webhooks::WhatsappController
+  # can verify inbound payloads are genuinely from this WAHA instance/session
+  # instead of trusting an unauthenticated POST to a guessable session name.
+  def create_waha_session(base_url, api_key, session_name, webhook_hmac_key)
     HTTParty.post(
       "#{base_url.chomp('/')}/api/sessions",
       headers: { 'X-Api-Key' => api_key, 'Content-Type' => 'application/json' },
       body: {
         name: session_name,
         start: true,
-        config: { webhooks: [{ url: waha_webhook_url, events: ['message', 'session.status'] }] }
+        config: {
+          webhooks: [{
+            url: waha_webhook_url,
+            events: ['message', 'session.status'],
+            hmac: { key: webhook_hmac_key }
+          }]
+        }
       }.to_json,
       timeout: 30
     )

@@ -31,6 +31,19 @@ RSpec.describe Whatsapp::IncomingMessageWahaService do
 
       service_for('message', payload).perform
     end
+
+    # WAHA retries webhook delivery on any non-2xx response, so the same
+    # message id can arrive more than once. A second delivery must be a no-op
+    # instead of creating a duplicate Message.
+    it 'does not create a duplicate message when the same source_id was already processed' do
+      payload = { 'id' => 'true_5511988887777@c.us_ABC', 'from' => '5511988887777@c.us', 'fromMe' => false, 'body' => 'oi' }
+      existing_message = instance_double(Message, id: 'existing-msg-1')
+
+      expect(Message).to receive(:find_by).with(source_id: 'true_5511988887777@c.us_ABC').and_return(existing_message)
+      expect(ContactInboxWithContactBuilder).not_to receive(:new)
+
+      service_for('message', payload).perform
+    end
   end
 
   describe 'session.status event' do

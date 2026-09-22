@@ -47,6 +47,33 @@ RSpec.describe Api::V1::Waha::AuthorizationsController, type: :controller do
       expect(body['status']).to eq('STARTING')
     end
 
+    it 'generates a per-channel webhook_hmac_key, returns it, and registers it with WAHA' do
+      allow(HTTParty).to receive(:post).and_return(
+        instance_double(HTTParty::Response, success?: true, code: 200, body: '{"status":"STARTING"}',
+                                             parsed_response: { 'status' => 'STARTING' })
+      )
+
+      post :create, params: {
+        authorization: {
+          base_url: 'https://waha.example.com',
+          api_key: 'key',
+          session_name: 'default',
+          phone_number: '+5511999999999'
+        }
+      }
+
+      expect(response).to have_http_status(:success)
+      body = JSON.parse(response.body)
+      expect(body['webhook_hmac_key']).to be_present
+      expect(body['webhook_hmac_key']).to match(/\A[0-9a-f]{64}\z/) # SecureRandom.hex(32)
+
+      expect(HTTParty).to have_received(:post) do |_url, options|
+        sent_body = JSON.parse(options[:body])
+        sent_hmac_key = sent_body.dig('config', 'webhooks', 0, 'hmac', 'key')
+        expect(sent_hmac_key).to eq(body['webhook_hmac_key'])
+      end
+    end
+
     it 'returns bad_request when required params are missing' do
       post :create, params: { authorization: { base_url: '', api_key: '', session_name: '', phone_number: '' } }
 
