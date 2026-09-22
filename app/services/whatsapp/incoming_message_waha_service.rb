@@ -18,6 +18,13 @@ class Whatsapp::IncomingMessageWahaService < Whatsapp::IncomingMessageBaseServic
     payload = (processed_params[:payload] || {}).with_indifferent_access
     return if ActiveModel::Type::Boolean.new.cast(payload[:fromMe])
 
+    # WAHA retries webhook delivery on any non-2xx response (e.g. a transient
+    # error, or a rejected HMAC signature during a webhook_hmac_key rollout).
+    # Guard against creating a duplicate message for the same WAHA message id,
+    # mirroring the find_message_by_source_id dedup used by the other providers
+    # (see IncomingMessageBaseService#process_messages / evolution_handlers/messages_upsert.rb).
+    return if payload[:id].present? && find_message_by_source_id(payload[:id].to_s)
+
     set_contact(payload)
     return unless @contact
 
