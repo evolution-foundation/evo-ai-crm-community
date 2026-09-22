@@ -103,4 +103,32 @@ RSpec.describe 'Api::V1::PipelineItems owner', type: :request do
       expect(card['assigned_by']).to include('id' => other_user.id, 'email' => other_user.email)
     end
   end
+
+  describe 'POST a new card' do
+    it 'answers with the owner it stamped from the session' do
+      new_contact = Contact.create!(name: 'Fresh', email: "fresh-#{SecureRandom.hex(4)}@example.com")
+
+      post "/api/v1/pipelines/#{pipeline.id}/pipeline_items",
+           params: { type: 'contact', item_id: new_contact.id, pipeline_stage_id: stage.id }, as: :json
+
+      expect(response).to have_http_status(:created)
+      data = response.parsed_body['data']
+      expect(data['assigned_by_id']).to eq(user.id)
+      expect(data['assigned_by']).to include('id' => user.id, 'name' => user.name)
+    end
+  end
+
+  describe 'GET pipelines by_contact' do
+    it 'exposes the owner on the contact\'s cards' do
+      pipeline.update!(visibility: :public)
+      item.update!(assigned_by: other_user)
+
+      get "/api/v1/pipelines/by_contact/#{contact.id}"
+
+      expect(response).to have_http_status(:success)
+      cards = response.parsed_body['data'].flat_map { |p| p['stages'].to_a.flat_map { |s| s['items'].to_a } }
+      card = cards.find { |i| i['id'] == item.id }
+      expect(card['assigned_by']).to include('id' => other_user.id)
+    end
+  end
 end

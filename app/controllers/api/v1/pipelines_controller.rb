@@ -285,6 +285,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                               :pipeline_stage,
                               :contact,
                               :tasks,
+                              :assigned_by,
                               conversation: [
                                 :contact,
                                 :assignee,
@@ -537,6 +538,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                            pipeline_stages: [],
                            pipeline_items: [
                              :pipeline_stage,
+                             :assigned_by,
                              conversation: [
                                :contact,
                                :assignee,

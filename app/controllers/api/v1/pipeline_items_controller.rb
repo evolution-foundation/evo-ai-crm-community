@@ -147,6 +147,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       @pipeline_item = @pipeline.pipeline_items.includes(
         :conversation,
         :pipeline_stage,
+        :assigned_by,
         conversation: [
           :contact,
           :assignee,
