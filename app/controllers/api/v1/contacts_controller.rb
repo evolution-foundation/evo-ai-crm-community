@@ -237,6 +237,8 @@ class Api::V1::ContactsController < Api::V1::BaseController
       message: 'Contact created successfully',
       status: :created
     )
+  rescue ActiveRecord::RecordInvalid => e
+    render_contact_invalid(e)
   end
 
   def update
@@ -253,6 +255,8 @@ class Api::V1::ContactsController < Api::V1::BaseController
       data: ContactSerializer.serialize(@contact, include_contact_inboxes: @include_contact_inboxes, include_companies: true),
       message: 'Contact updated successfully'
     )
+  rescue ActiveRecord::RecordInvalid => e
+    render_contact_invalid(e)
   end
 
   def destroy
@@ -606,6 +610,47 @@ class Api::V1::ContactsController < Api::V1::BaseController
     contact.notes.destroy_all
     contact.csat_survey_responses.destroy_all
     contact.messages.destroy_all
+  end
+
+  # Groups are hidden from the default listing and search, so a client that syncs by
+  # reading can't find the contact that blocks a create; naming it lets the client
+  # update that record instead. Rescued here rather than by rescue_from, which runs
+  # after Current (needed for the permission check) is reset; the body keeps the
+  # installation locale that the rescue_from handler would have used.
+  def render_contact_invalid(exception)
+    raise exception unless exception.record.is_a?(Contact)
+
+    log_rescued_exception(exception)
+    I18n.with_locale(I18n.default_locale) do
+      error_response(
+        ApiErrorCodes::VALIDATION_ERROR,
+        I18n.t('errors.api.validation_failed'),
+        details: contact_validation_errors(exception.record),
+        status: :unprocessable_entity
+      )
+    end
+  end
+
+  def contact_validation_errors(contact)
+    errors = format_validation_errors(contact.errors)
+    return errors unless Current.service_authenticated == true || can_perform_action?('contacts', 'read')
+
+    errors.each do |error|
+      existing = conflicting_contact(contact, error[:field])
+      error[:existing_contact] = { id: existing.id, type: existing.type } if existing
+    end
+  end
+
+  def conflicting_contact(contact, field)
+    return unless %i[identifier email phone_number tax_id].include?(field) && contact.errors.of_kind?(field, :taken)
+
+    value = contact.public_send(field)
+    others = Contact.where.not(id: contact.id)
+    case field
+    when :email then others.find_by('LOWER(contacts.email) = ?', value.downcase)
+    when :phone_number then others.find_by(phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(value) | [value])
+    else others.find_by(field => value)
+    end
   end
 
   def render_error(error, error_status)
