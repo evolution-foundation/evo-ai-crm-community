@@ -74,6 +74,24 @@ RSpec.describe 'Contacts group filtering', type: :request do
       expect(taken_error('email')['existing_contact']).to eq('id' => person.id, 'type' => 'person')
     end
 
+    it 'points at the existing contact on a duplicated phone number in another e164 form' do
+      holder = Contact.create!(name: 'Zezinho', phone_number: '+5531988887777', type: 'person')
+
+      post '/api/v1/contacts', params: { name: 'Outro', phone_number: '+553188887777' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(taken_error('phone_number')['existing_contact']).to eq('id' => holder.id, 'type' => 'person')
+    end
+
+    it 'points at the existing company on a duplicated tax id' do
+      holder = Contact.create!(name: 'Acme LTDA', tax_id: '12345678000199', type: 'company')
+
+      post '/api/v1/contacts', params: { name: 'Outra', tax_id: '12345678000199' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(taken_error('tax_id')['existing_contact']).to eq('id' => holder.id, 'type' => 'company')
+    end
+
     it 'points at the existing group when an update takes its identifier' do
       put "/api/v1/contacts/#{person.id}", params: { identifier: '12345-9876@g.us' }, headers: headers, as: :json
 

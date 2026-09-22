@@ -612,11 +612,9 @@ class Api::V1::ContactsController < Api::V1::BaseController
     contact.messages.destroy_all
   end
 
-  # Groups are hidden from the default listing and search, so a client that syncs by
-  # reading can't find the contact that blocks a create; naming it lets the client
-  # update that record instead. Rescued here rather than by rescue_from, which runs
-  # after Current (needed for the permission check) is reset; the body keeps the
-  # installation locale that the rescue_from handler would have used.
+  # Rescued here rather than by rescue_from, which runs after Current (needed for the
+  # permission check) is reset; the body keeps the installation locale that the
+  # rescue_from handler would have used.
   def render_contact_invalid(exception)
     raise exception unless exception.record.is_a?(Contact)
 
@@ -646,11 +644,11 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
     value = contact.public_send(field)
     others = Contact.where.not(id: contact.id)
-    case field
-    when :email then others.find_by('LOWER(contacts.email) = ?', value.downcase)
-    when :phone_number then others.find_by(phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(value) | [value])
-    else others.find_by(field => value)
-    end
+    # Email needs no LOWER(): prepare_contact_attributes downcases it before validation,
+    # on the stored row too, so a plain match is exact and uses the unique index.
+    return others.find_by(field => value) unless field == :phone_number
+
+    others.find_by(phone_number: Whatsapp::PhoneNumberNormalizer.e164_variants(value) | [value])
   end
 
   def render_error(error, error_status)
