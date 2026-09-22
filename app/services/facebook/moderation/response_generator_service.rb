@@ -108,11 +108,7 @@ class Facebook::Moderation::ResponseGeneratorService
   def call_evo_ai_bot(payload)
     return nil if agent_bot.outgoing_url.blank?
 
-    # Delegates to HttpRequestService instead of hand-building the request, so
-    # the call inherits its build_http_request decorations — the licensing gem
-    # attaches the account header there, and without it the processor rejects
-    # the agent-key lookup under RLS. Auth moves from Authorization Bearer to
-    # X-API-Key: same resolved credential, same processor funnel.
+    # Never hand-build this request: it must inherit the service's request decorations.
     Rails.logger.info "[Facebook Moderation] Making JSON-RPC request to #{agent_bot.outgoing_url}"
     response = AgentBots::HttpRequestService.new(agent_bot, moderation_request_payload(payload)).execute_request
 

@@ -48,6 +48,20 @@ RSpec.describe Facebook::Moderation::ResponseGeneratorService do
       expect(stub).to have_been_requested
     end
 
+    # Header names alone don't prove the seam: a hand-rolled request can copy them.
+    it 'carries the decorations applied in build_http_request' do
+      allow_any_instance_of(AgentBots::HttpRequestService)
+        .to receive(:build_http_request).and_wrap_original do |original, *args|
+          original.call(*args).tap { |request| request['X-Test-Decoration'] = 'applied' }
+        end
+      stub = stub_request(:post, bot.outgoing_url)
+             .with(headers: { 'X-Test-Decoration' => 'applied' })
+             .to_return(status: 200, body: artifacts_body)
+
+      expect(service.generate).to eq('resposta do agente')
+      expect(stub).to have_been_requested
+    end
+
     it 'prefixes the configured signature' do
       bot.update!(message_signature: 'Equipe X')
       stub_request(:post, bot.outgoing_url).to_return(status: 200, body: artifacts_body)

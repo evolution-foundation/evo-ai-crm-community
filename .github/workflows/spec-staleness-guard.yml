@@ -157,8 +157,8 @@ on:
       - 'app/services/agent_bots/**'
       - 'spec/models/agent_bot_inbox_spec.rb'
       # The moderation reply must leave through HttpRequestService#build_http_request,
-      # the seam request decorations hang on. Reverting to a hand-rolled request keeps
-      # answering 200 everywhere and only this spec notices the dropped headers.
+      # the seam request decorations hang on. A hand-rolled request keeps answering
+      # 200 everywhere and only this spec notices the dropped decoration.
       - 'app/services/facebook/moderation/response_generator_service.rb'
       - 'spec/services/facebook/moderation/response_generator_service_spec.rb'
       # The export enumerates macros, pipelines and inboxes; these specs are the whole
