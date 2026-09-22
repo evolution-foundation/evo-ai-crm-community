@@ -107,6 +107,61 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
     end
   end
 
+  describe '#set_contact (individual branch — LID/phone dedup regression)' do
+    let(:phone_source_id) { '5511888888888' }
+    let(:lid_source_id) { '5511888888888@lid' }
+
+    let(:existing_contact) { instance_double(Contact, id: 55, name: 'Carol', identifier: nil, update!: true, group?: false) }
+    let(:existing_contact_inbox) do
+      instance_double(ContactInbox, id: 20, contact_id: 55, contact: existing_contact, source_id: phone_source_id,
+                                     update!: true)
+    end
+    let(:contact_inboxes_relation) { instance_double(ActiveRecord::Relation) }
+
+    before do
+      allow(inbox).to receive(:contact_inboxes).and_return(contact_inboxes_relation)
+      allow(service).to receive_messages(update_contact_profile_picture: nil, update_contact_information: nil)
+    end
+
+    context 'when the contact was previously created via the bare phone source_id and a later event arrives as @lid' do
+      let(:lid_info) { individual_info.merge(Chat: '5511888888888@lid', Sender: '5511888888888@lid') }
+
+      before do
+        service.instance_variable_set(:@evolution_go_info, lid_info)
+        service.instance_variable_set(:@evolution_go_data, {})
+        allow(contact_inboxes_relation).to receive(:where)
+          .with(source_id: array_including(phone_source_id, lid_source_id))
+          .and_return([existing_contact_inbox])
+      end
+
+      it 'reuses the existing ContactInbox instead of creating a second Contact/Conversation' do
+        expect(ContactInboxWithContactBuilder).not_to receive(:new)
+        expect(existing_contact_inbox).to receive(:update!).with(source_id: lid_source_id)
+
+        service.send(:set_contact)
+
+        expect(service.instance_variable_get(:@contact)).to eq(existing_contact)
+        expect(service.instance_variable_get(:@contact_inbox)).to eq(existing_contact_inbox)
+      end
+    end
+
+    context 'when no existing ContactInbox matches either the phone or @lid form' do
+      before do
+        service.instance_variable_set(:@evolution_go_info, individual_info)
+        service.instance_variable_set(:@evolution_go_data, {})
+        allow(contact_inboxes_relation).to receive(:where).and_return([])
+      end
+
+      it 'falls through to creating a new contact as before (no regression on the happy path)' do
+        expect(ContactInboxWithContactBuilder).to receive(:new) do |args|
+          expect(args[:source_id]).to eq(phone_source_id)
+          builder
+        end
+        service.send(:set_contact)
+      end
+    end
+  end
+
   describe '#message_content_attributes' do
     it 'includes the participant pushName as sender_name for group messages' do
       service.instance_variable_set(:@evolution_go_info, group_info)
