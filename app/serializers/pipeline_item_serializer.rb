@@ -80,6 +80,8 @@ module PipelineItemSerializer
       is_orphaned: is_orphaned
     }
 
+    return result if is_orphaned
+
     # Only when the caller eager-loaded the owner — reading it unconditionally would
     # fire one User query per card on the board.
     if pipeline_item.association(:assigned_by).loaded? && pipeline_item.assigned_by
@@ -90,8 +92,6 @@ module PipelineItemSerializer
         avatar_url: pipeline_item.assigned_by.avatar_url
       }
     end
-
-    return result if is_orphaned
     if include_entity && pipeline_item.conversation.present? && pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
       result[:conversation] = ConversationSerializer.serialize(
         pipeline_item.conversation,

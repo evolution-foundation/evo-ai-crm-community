@@ -89,6 +89,27 @@ RSpec.describe 'Api::V1::PipelineItems owner', type: :request do
 
       expect(item.reload.assigned_by_id).to eq(user.id)
     end
+
+    it 'applies a stage move and an owner change sent together' do
+      other_stage = pipeline.pipeline_stages.create!(name: 'Won', position: 2)
+
+      body = patch_item(pipeline_stage_id: other_stage.id, assigned_by_id: other_user.id)
+
+      expect(response).to have_http_status(:success)
+      expect(item.reload.pipeline_stage_id).to eq(other_stage.id)
+      expect(item.assigned_by_id).to eq(other_user.id)
+      expect(body['data']['assigned_by']).to include('id' => other_user.id)
+    end
+
+    it 'refuses an unknown owner before moving the stage, so nothing is half-applied' do
+      other_stage = pipeline.pipeline_stages.create!(name: 'Won', position: 2)
+
+      body = patch_item(pipeline_stage_id: other_stage.id, assigned_by_id: SecureRandom.uuid)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(body['error']['code']).to eq('VALIDATION_ERROR')
+      expect(item.reload.pipeline_stage_id).to eq(stage.id)
+    end
   end
 
   describe 'GET the item list' do

@@ -22,6 +22,11 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # the auth catalog-conformance guard still sees it (CRM-178 review LOW 9).
   EvoPermissionConcern.register_permission_key('pipeline_items.update')
 
+  # The add-item modal reads available_contacts without asking for a page, and it used
+  # to get 50 contacts, so 50 stays the default there instead of the app-wide 20.
+  AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE = 50
+  AVAILABLE_CONTACTS_MAX_PAGE_SIZE = 100
+
   before_action :set_pipeline
   before_action :set_pipeline_item, only: [:update, :destroy, :move_to_stage, :update_conversation, :update_custom_fields]
   before_action :ensure_authorized_user
@@ -189,6 +194,26 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     stage_changed = false
     wrote_anything = false
 
+    # Resolve the owner before any write: it is the one input still refusable at this
+    # point, and refusing it after move_to_stage would answer 422 with the stage move
+    # (and its automations) already committed.
+    # `key?` rather than `present?`: an explicit null is how a caller clears the owner,
+    # and present? would read that as "field absent" and silently keep the old one.
+    owner_provided = params.key?(:assigned_by_id)
+    if owner_provided
+      owner_id = params[:assigned_by_id].presence
+      owner = owner_id && User.find_by(id: owner_id)
+
+      if owner_id && owner.nil?
+        return error_response(
+          ApiErrorCodes::VALIDATION_ERROR,
+          "User with ID '#{owner_id}' not found",
+          details: { assigned_by_id: owner_id },
+          status: :unprocessable_entity
+        )
+      end
+    end
+
     if new_stage_id.present? && new_stage_id.to_s != @pipeline_item.pipeline_stage_id.to_s
       new_stage = @pipeline.pipeline_stages.find(new_stage_id)
 
@@ -209,21 +234,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       wrote_anything = true
     end
 
-    # `key?` rather than `present?`: an explicit null is how a caller clears the owner,
-    # and present? would read that as "field absent" and silently keep the old one.
-    if params.key?(:assigned_by_id)
-      owner_id = params[:assigned_by_id].presence
-      owner = owner_id && User.find_by(id: owner_id)
-
-      if owner_id && owner.nil?
-        return error_response(
-          ApiErrorCodes::VALIDATION_ERROR,
-          "User with ID '#{owner_id}' not found",
-          details: { assigned_by_id: owner_id },
-          status: :unprocessable_entity
-        )
-      end
-
+    if owner_provided
       @pipeline_item.update!(assigned_by: owner)
       wrote_anything = true
     end
@@ -571,11 +582,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   def reload_item_with_owner
     @pipeline.pipeline_items.includes(:assigned_by).find(@pipeline_item.id)
   end
-
-  # The add-item modal reads this endpoint without asking for a page, and it used to
-  # get 50 contacts, so 50 stays the default here instead of the app-wide 20.
-  AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE = 50
-  AVAILABLE_CONTACTS_MAX_PAGE_SIZE = 100
 
   def available_contacts_page
     page = params[:page].to_i
