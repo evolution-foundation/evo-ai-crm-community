@@ -222,9 +222,15 @@ class Api::V1::PipelinesController < Api::V1::BaseController
   end
 
   def by_contact
+    # A card is either contact-keyed (a lead) or conversation-keyed, and promoting a
+    # lead clears contact_id, so filtering on contact_id alone hides every opportunity
+    # the contact holds through a conversation.
+    contact_items = PipelineItem.where(contact_id: @contact.id)
+                                .or(PipelineItem.where(conversation_id: @contact.conversations.select(:id)))
+
     serialized_pipelines = fetch_pipelines_by_item_filter(
-      filter_condition: { contact_id: @contact.id },
-      item_filter: ->(item) { item.contact_id == @contact.id }
+      item_scope: contact_items,
+      item_filter: ->(item) { item.contact_id == @contact.id || item.conversation&.contact_id == @contact.id }
     )
 
     success_response(
@@ -242,7 +248,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
 
   def by_conversation
     serialized_pipelines = fetch_pipelines_by_item_filter(
-      filter_condition: { conversation_id: @conversation.id },
+      item_scope: PipelineItem.where(conversation_id: @conversation.id),
       item_filter: ->(item) { item.conversation_id == @conversation.id }
     )
 
@@ -516,12 +522,9 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     end
   end
 
-  def fetch_pipelines_by_item_filter(filter_condition:, item_filter:)
+  def fetch_pipelines_by_item_filter(item_scope:, item_filter:)
     # Buscar todos os pipelines que têm items que correspondem ao filtro
-    pipeline_ids_with_items = PipelineItem
-                                .where(filter_condition)
-                                .distinct
-                                .pluck(:pipeline_id)
+    pipeline_ids_with_items = item_scope.distinct.pluck(:pipeline_id)
 
     # Carregar pipelines com eager loading otimizado incluindo stages e items.
     # EVO-2222: escopar por visibilidade — o menu de pipelines na conversa/contato só

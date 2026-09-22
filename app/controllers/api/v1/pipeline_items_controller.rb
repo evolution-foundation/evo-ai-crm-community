@@ -33,6 +33,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     @pipeline_items = @pipeline.pipeline_items.includes(
       :conversation,
       :pipeline_stage,
+      :assigned_by,
       conversation: [
         :contact,
         :assignee,
@@ -207,6 +208,25 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       wrote_anything = true
     end
 
+    # `key?` rather than `present?`: an explicit null is how a caller clears the owner,
+    # and present? would read that as "field absent" and silently keep the old one.
+    if params.key?(:assigned_by_id)
+      owner_id = params[:assigned_by_id].presence
+      owner = owner_id && User.find_by(id: owner_id)
+
+      if owner_id && owner.nil?
+        return error_response(
+          ApiErrorCodes::VALIDATION_ERROR,
+          "User with ID '#{owner_id}' not found",
+          details: { assigned_by_id: owner_id },
+          status: :unprocessable_entity
+        )
+      end
+
+      @pipeline_item.update!(assigned_by: owner)
+      wrote_anything = true
+    end
+
     # Notes persist regardless of stage change: attach to the latest movement,
     # creating one if the item has none yet (mirrors #update_conversation).
     if params[:notes].present?
@@ -227,7 +247,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     dispatch_conversation_updated_event(@pipeline_item.conversation) if stage_changed
 
     success_response(
-      data: PipelineItemSerializer.serialize(@pipeline_item.reload, include_entity: true),
+      data: PipelineItemSerializer.serialize(reload_item_with_owner, include_entity: true),
       message: 'Pipeline item updated successfully'
     )
   rescue ActiveRecord::RecordNotFound
@@ -517,11 +537,12 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     # Get contacts that are NOT already in THIS specific pipeline
     contacts_in_current_pipeline = @pipeline.pipeline_items.where.not(contact_id: nil).select(:contact_id)
 
+    # Ordering breaks ties on id: contacts sharing a name would otherwise drift between
+    # pages, and the caller would see duplicates and gaps.
     current_contacts = Contact.non_groups
                        .includes(avatar_attachment: :blob)
                        .where.not(contacts: { id: contacts_in_current_pipeline })
-                       .order(name: :desc)
-                       .limit(50)
+                       .order(name: :desc, id: :asc)
 
     # Apply search filter if provided
     if params[:search].present?
@@ -533,15 +554,39 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       )
     end
 
-    Rails.logger.info "Current contacts: #{current_contacts.inspect}"
+    current_contacts = current_contacts.page(available_contacts_page).per(available_contacts_page_size)
 
-    success_response(
+    paginated_response(
       data: ContactSerializer.serialize_collection(current_contacts),
+      collection: current_contacts,
       message: 'Available contacts retrieved successfully'
     )
   end
 
   private
+
+  # The serializer only emits the owner block when the association is loaded, so the
+  # update response has to come back with it preloaded.
+  def reload_item_with_owner
+    @pipeline.pipeline_items.includes(:assigned_by).find(@pipeline_item.id)
+  end
+
+  # The add-item modal reads this endpoint without asking for a page, and it used to
+  # get 50 contacts, so 50 stays the default here instead of the app-wide 20.
+  AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE = 50
+  AVAILABLE_CONTACTS_MAX_PAGE_SIZE = 100
+
+  def available_contacts_page
+    page = params[:page].to_i
+    page.positive? ? page : 1
+  end
+
+  def available_contacts_page_size
+    requested = (params[:per_page] || params[:page_size] || params[:pageSize]).to_i
+    return AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE unless requested.positive?
+
+    [requested, AVAILABLE_CONTACTS_MAX_PAGE_SIZE].min
+  end
 
   def skip_missing_target_stage
     Rails.logger.warn(
