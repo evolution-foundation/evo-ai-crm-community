@@ -45,6 +45,17 @@ class AgentBots::HttpRequestService
     end
   end
 
+  # Runs the JSON-RPC call and returns the raw response for callers that consume
+  # the reply themselves (Facebook comment moderation) instead of going through
+  # ResponseProcessor. Requests MUST leave through build_http_request: decorations
+  # hook there (the licensing gem attaches the account header, without which the
+  # processor 401s under RLS). Raises on non-2xx, like perform's request path.
+  def execute_request
+    return nil if @agent_bot.outgoing_url.blank?
+
+    make_http_request
+  end
+
   private
 
   def should_process_message?
