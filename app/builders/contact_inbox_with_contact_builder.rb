@@ -46,7 +46,7 @@ class ContactInboxWithContactBuilder
   end
 
   def reconcilable_whatsapp_channel?
-    inbox.channel_type == 'Channel::Whatsapp' && inbox.channel.provider.in?(%w[evolution_go evolution])
+    inbox.channel_type == 'Channel::Whatsapp' && inbox.channel.provider.in?(%w[evolution_go evolution waha])
   end
 
   private

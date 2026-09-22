@@ -280,4 +280,32 @@ RSpec.describe Webhooks::WhatsappEventsJob, type: :job do
       described_class.new.perform({ event: 'contacts.update', instance: 'reconnect-test', data: [] }.with_indifferent_access)
     end
   end
+
+  describe 'waha dispatch' do
+    let(:waha_channel) do
+      Channel::Whatsapp.new(
+        phone_number: "+5511#{SecureRandom.hex(4)}",
+        provider: 'waha',
+        provider_config: { 'session_name' => 'default' }
+      ).tap { |c| c.save(validate: false) }
+    end
+
+    before { Inbox.create!(name: 'WAHA Inbox', channel: waha_channel) }
+
+    it 'routes message events for a waha channel to IncomingMessageWahaService' do
+      params = { event: 'message', session: 'default', payload: { from: '5511999999999@c.us', fromMe: false, body: 'oi', id: 'msg1' }, waha: true }.with_indifferent_access
+
+      expect(Whatsapp::IncomingMessageWahaService).to receive(:new).with(inbox: waha_channel.inbox, params: anything).and_call_original
+
+      described_class.new.perform(params)
+    end
+
+    it 'finds a waha channel by session name' do
+      params = { event: 'session.status', session: 'default', payload: { name: 'default', status: 'WORKING' }, waha: true }.with_indifferent_access
+
+      described_class.new.perform(params)
+
+      expect(waha_channel.reload.provider_connection['connection']).to eq('open')
+    end
+  end
 end

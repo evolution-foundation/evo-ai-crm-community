@@ -1,6 +1,11 @@
 class Webhooks::WhatsappController < ActionController::API
   include MetaTokenVerifyConcern
 
+  # NOTE: this header name has NOT been verified against a live WAHA instance —
+  # WAHA's docs commonly reference `X-Webhook-Hmac`, but if that turns out to
+  # be wrong once we have a real instance to test against, change it here only.
+  WAHA_WEBHOOK_HMAC_HEADER = 'X-Webhook-Hmac'.freeze
+
   def process_payload
     # Check if this is an Evolution Go webhook payload
     if evolution_go_payload?
@@ -32,7 +37,61 @@ class Webhooks::WhatsappController < ActionController::API
     head :ok
   end
 
+  def process_waha_payload
+    unless valid_waha_payload?
+      render json: { error: 'Invalid WAHA webhook payload' }, status: :bad_request
+      return
+    end
+
+    # Resolve the channel by session name FIRST, then verify the HMAC using
+    # THAT channel's own stored secret. This also disambiguates two channels
+    # that happen to share a session name: only the right channel's secret
+    # will make the signature match.
+    channel = find_channel_by_waha_session(params[:session])
+    unless waha_signature_valid?(channel)
+      Rails.logger.warn "WAHA webhook rejected: missing/invalid signature for session #{params[:session]}"
+      head :unauthorized
+      return
+    end
+
+    Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash.merge(waha: true))
+    head :ok
+  end
+
   private
+
+  def valid_waha_payload?
+    params[:event].present? && params[:session].present? && params[:payload].present?
+  end
+
+  def find_channel_by_waha_session(session_name)
+    return nil if session_name.blank?
+
+    Channel::Whatsapp.joins(:inbox)
+                      .where(provider: 'waha')
+                      .where("provider_config ->> 'session_name' = ?", session_name.to_s)
+                      .first
+  end
+
+  # WAHA signs its webhook body with HMAC-SHA512, sent in a request header
+  # (see WAHA_WEBHOOK_HMAC_HEADER). Verified with a timing-safe compare against
+  # the per-channel secret generated at session-creation time
+  # (provider_config['webhook_hmac_key']) — never a plain `==`.
+  def waha_signature_valid?(channel)
+    return false if channel.blank?
+
+    secret = channel.provider_config&.dig('webhook_hmac_key')
+    return false if secret.blank?
+
+    signature = request.headers[WAHA_WEBHOOK_HMAC_HEADER]
+    return false if signature.blank?
+
+    expected_signature = OpenSSL::HMAC.hexdigest('SHA512', secret, request.raw_post)
+    ActiveSupport::SecurityUtils.secure_compare(expected_signature, signature)
+  rescue StandardError => e
+    Rails.logger.error "WAHA webhook signature verification error: #{e.message}"
+    false
+  end
 
   def valid_evolution_go_payload?
     # Evolution Go webhook must have: event, data, instanceId, instanceToken

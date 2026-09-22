@@ -28,9 +28,9 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
 
   # Providers with no true approved-template delivery mechanism. WhatsApp Cloud
   # and 360dialog still need the send_template_message path (real HSM templates
-  # outside the 24h session window); these two render everything as plain text.
+  # outside the 24h session window); these render everything as plain text.
   def unofficial_template_provider?
-    channel.provider.in?(%w[evolution evolution_go])
+    channel.provider.in?(%w[evolution evolution_go waha])
   end
 
   def send_template_message

@@ -212,4 +212,21 @@ RSpec.describe Channel::Whatsapp, type: :model do
       expect(channel).to be_valid
     end
   end
+
+  describe '#provider_service' do
+    it 'returns a WahaService when provider is waha' do
+      channel = Channel::Whatsapp.new(
+        phone_number: '+5511999991234',
+        provider: 'waha',
+        provider_config: { 'base_url' => 'https://waha.example.com', 'api_key' => 'key', 'session_name' => 'default' }
+      ).tap { |c| c.save(validate: false) }
+      expect(channel.provider_service).to be_a(Whatsapp::Providers::WahaService)
+    end
+  end
+
+  describe 'PROVIDERS' do
+    it 'includes waha' do
+      expect(described_class::PROVIDERS).to include('waha')
+    end
+  end
 end
