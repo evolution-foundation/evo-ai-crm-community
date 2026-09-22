@@ -43,6 +43,10 @@ on:
       - 'app/controllers/api/v1/contacts_controller.rb'
       - 'app/jobs/delete_object_job.rb'
       - 'spec/jobs/delete_object_job_spec.rb'
+      # The group filter and the duplicate-conflict disclosure share this controller,
+      # and a spec outside the run: list below never executes — which is how this one
+      # rotted unnoticed, its helper raising on every example.
+      - 'spec/requests/api/v1/contacts_groups_spec.rb'
       # EVO-2122: dropping is_active from the update permit made deactivation a
       # silent no-op that still answered 200. The regression is invisible to every
       # other lane, so the controller has to trigger the spec that proves it.
@@ -495,6 +499,7 @@ jobs:
             spec/models/pipeline_spec.rb \
             spec/models/role_spec.rb \
             spec/requests/api/v1/contacts_spec.rb \
+            spec/requests/api/v1/contacts_groups_spec.rb \
             spec/requests/api/v1/pipelines_activation_spec.rb \
             spec/requests/api/v1/pipelines_team_visibility_spec.rb \
             spec/policies/pipeline_policy/scope_spec.rb \
