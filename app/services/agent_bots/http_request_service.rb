@@ -45,6 +45,14 @@ class AgentBots::HttpRequestService
     end
   end
 
+  # Returns the raw response, skipping ResponseProcessor; raises on 4xx/5xx.
+  # Goes through build_http_request, where extensions decorate outgoing calls.
+  def execute_request
+    return nil if @agent_bot.outgoing_url.blank?
+
+    make_http_request
+  end
+
   private
 
   def should_process_message?
