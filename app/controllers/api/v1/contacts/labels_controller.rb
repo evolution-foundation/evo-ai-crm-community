@@ -24,16 +24,21 @@ class Api::V1::Contacts::LabelsController < Api::V1::Contacts::BaseController
 
   def change_labels
     titles = resolve_label_titles(incoming_label_tokens)
-    return error_response(ApiErrorCodes::MISSING_REQUIRED_FIELD, 'labels is required', status: :unprocessable_entity) if titles.empty?
+    if titles.empty?
+      return error_response(
+        ApiErrorCodes::MISSING_REQUIRED_FIELD,
+        'labels is required',
+        details: { field: 'labels', message: 'must list at least one label' },
+        status: :unprocessable_entity
+      )
+    end
 
     model.with_lock { yield titles }
     render_labels
   end
 
-  # `payload` mirrors `data` for integrations written against the old shape.
   def render_labels
-    labels = model.label_list.to_a
-    render json: { success: true, data: labels, payload: labels, meta: { timestamp: Time.current.iso8601 } }
+    success_response(data: model.label_list.to_a)
   end
 
   def model

@@ -129,7 +129,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
   end
 
   describe 'GET /api/v1/contacts/:contact_id/labels' do
-    it 'answers in the standard envelope, keeping payload for older clients' do
+    it 'answers in the standard envelope' do
       contact.update_labels(%w[vip support])
 
       get "/api/v1/contacts/#{contact.id}/labels", headers: headers, as: :json
@@ -137,7 +137,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
       expect(response).to have_http_status(:ok)
       expect(json_response['success']).to be(true)
       expect(json_response['data']).to contain_exactly('vip', 'support')
-      expect(json_response['payload']).to eq(json_response['data'])
+      expect(json_response).not_to have_key('payload')
       expect(json_response['meta']).to include('timestamp')
     end
 
@@ -184,6 +184,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(json_response['success']).to be(false)
+      expect(json_response['error']).to include('code' => 'MISSING_REQUIRED_FIELD', 'details' => include('field' => 'labels'))
       expect(contact.reload.label_list).to contain_exactly('vip')
     end
   end
