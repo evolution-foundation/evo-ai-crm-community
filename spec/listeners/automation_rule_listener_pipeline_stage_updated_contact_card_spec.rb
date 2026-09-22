@@ -153,7 +153,7 @@ RSpec.describe AutomationRuleListener, '#pipeline_stage_updated' do
       expect(step_labels(runs_for(rule).last)).to include('Action skipped: send_message')
     end
 
-    it 'nao sai matched quando a unica acao foi pulada por falta de conversa' do
+    it 'does not stay matched when the only action was skipped for lack of a conversation' do
       rule = build_rule(actions: [{ 'action_name' => 'send_message', 'action_params' => ['oi'] }])
       item = contact_card
       runs_for(rule).delete_all
@@ -167,7 +167,7 @@ RSpec.describe AutomationRuleListener, '#pipeline_stage_updated' do
       expect(skip_step.dig('data', 'reason')).to include('requires a conversation')
     end
 
-    it 'sai skipped tambem quando parte das acoes rodou, com o que rodou na timeline' do
+    it 'goes skipped even when some actions ran, keeping what ran in the timeline' do
       rule = build_rule(actions: [{ 'action_name' => 'add_label', 'action_params' => [ia_label.title] },
                                   { 'action_name' => 'send_message', 'action_params' => ['oi'] }])
       item = contact_card
@@ -182,7 +182,7 @@ RSpec.describe AutomationRuleListener, '#pipeline_stage_updated' do
       expect(contact.reload.label_list).to include(ia_label.title)
     end
 
-    it 'segue matched quando toda acao roda no eixo do contato' do
+    it 'stays matched when every action runs on the contact axis' do
       rule = build_rule
       item = contact_card
       runs_for(rule).delete_all
