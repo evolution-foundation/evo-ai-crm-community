@@ -107,21 +107,53 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
 
     Rails.logger.info "Evolution Go API: Incoming contact - source_id: #{source_id}, phone_number: #{phone_number}, push_name: #{push_name}"
 
-    contact_attributes = build_contact_attributes(push_name, phone_number, sender_alt_value, is_whatsapp_number)
+    # EVO-DEDUP: the same WhatsApp account can be addressed by two different
+    # identifiers depending on which addressing mode a given event arrives
+    # in — the bare numeric JID ("<id>") and the LID form ("<id>@lid").
+    # ContactInboxWithContactBuilder's Evolution Go lookup only matches on
+    # an *exact* source_id, so when the two forms alternate across events it
+    # creates a second Contact + Conversation for the same person. That, in
+    # turn, causes duplicate AI replies (e.g. two different inactivity
+    # re-engagement messages sent to the same customer within the same
+    # minute). Reuse the existing ContactInbox for either form before
+    # falling through to create a new contact.
+    existing_contact_inbox = find_existing_evolution_go_contact_inbox(phone_number, sender_alt_value)
 
-    contact_inbox = ::ContactInboxWithContactBuilder.new(
-      source_id: source_id,
-      inbox: inbox,
-      contact_attributes: contact_attributes
-    ).perform
+    if existing_contact_inbox && existing_contact_inbox.source_id != source_id
+      Rails.logger.info "Evolution Go API: Dedup - contact #{existing_contact_inbox.contact_id} already known via source_id " \
+                         "'#{existing_contact_inbox.source_id}', reusing for new source_id '#{source_id}' instead of creating a duplicate contact"
+      existing_contact_inbox.update!(source_id: source_id) if source_id.present?
+      @contact_inbox = existing_contact_inbox
+      @contact = existing_contact_inbox.contact
+    else
+      contact_attributes = build_contact_attributes(push_name, phone_number, sender_alt_value, is_whatsapp_number)
 
-    @contact_inbox = contact_inbox
-    @contact = contact_inbox.contact
+      contact_inbox = ::ContactInboxWithContactBuilder.new(
+        source_id: source_id,
+        inbox: inbox,
+        contact_attributes: contact_attributes
+      ).perform
+
+      @contact_inbox = contact_inbox
+      @contact = contact_inbox.contact
+    end
 
     update_contact_information(push_name, phone_number, sender_alt_value, is_whatsapp_number)
     update_contact_profile_picture(@contact, phone_number)
 
     Rails.logger.info "Evolution Go API: Contact set - ID: #{@contact.id}, Name: #{@contact.name}, Identifier: #{@contact.identifier}, Source ID: #{@contact_inbox.source_id}"
+  end
+
+  # EVO-DEDUP: looks for an existing ContactInbox in this same inbox under
+  # either the bare-numeric or the "@lid"-suffixed form of the id seen in
+  # this event, so the LID and JID variants of one WhatsApp account resolve
+  # to a single Contact/Conversation instead of two.
+  def find_existing_evolution_go_contact_inbox(phone_number, sender_alt_value)
+    base_ids = [phone_number, sender_alt_value].compact.map { |id| id.to_s.sub(/@lid\z/, '') }.uniq
+    return nil if base_ids.empty?
+
+    candidate_source_ids = base_ids.flat_map { |id| [id, "#{id}@lid"] }.uniq
+    inbox.contact_inboxes.where(source_id: candidate_source_ids).first
   end
 
   def set_contact_for_outgoing
