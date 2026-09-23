@@ -67,8 +67,16 @@ class Webhooks::BotRuntimeController < ActionController::API
       return
     end
 
+    unless find_active_agent_bot(conversation)
+      render json: { error: 'No active agent bot for this conversation' }, status: :not_found
+      return
+    end
+
     mapped_event = TYPING_STATUS_MAP[params[:typing_status].to_s]
-    conversation.inbox.channel.toggle_typing_status(mapped_event, conversation: conversation) if mapped_event
+    channel = conversation.inbox.channel
+    if mapped_event && channel.respond_to?(:toggle_typing_status)
+      channel.toggle_typing_status(mapped_event, conversation: conversation)
+    end
 
     render json: { status: 'ok' }, status: :ok
   end

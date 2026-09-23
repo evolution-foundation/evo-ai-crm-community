@@ -25,6 +25,8 @@ RSpec.describe 'Webhooks::BotRuntime#presence', type: :request do
   # contain a-f letters and fails that check here.
   let!(:contact_inbox) { ContactInbox.create!(contact: contact, inbox: inbox, source_id: '5511999999999') }
   let!(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+  let!(:agent_bot) { AgentBot.create!(name: "Presence Spec Bot #{SecureRandom.hex(2)}", outgoing_url: 'https://bot.example.com/webhook') }
+  let!(:agent_bot_inbox) { AgentBotInbox.create!(inbox: inbox, agent_bot: agent_bot, status: :active) }
 
   before do
     allow(BotRuntime::Config).to receive(:secret).and_return(secret)
@@ -68,5 +70,47 @@ RSpec.describe 'Webhooks::BotRuntime#presence', type: :request do
 
     post_presence(conversation.display_id, typing_status: 'bogus')
     expect(response).to have_http_status(:ok)
+  end
+
+  context 'when the inbox has no active agent bot' do
+    before { agent_bot_inbox.destroy! }
+
+    it 'returns 404 and never calls toggle_typing_status' do
+      expect_any_instance_of(Channel::Whatsapp).not_to receive(:toggle_typing_status)
+
+      post_presence(conversation.display_id, typing_status: 'on')
+
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)).to eq('error' => 'No active agent bot for this conversation')
+    end
+  end
+
+  context 'when the agent bot inbox is inactive' do
+    before { agent_bot_inbox.update!(status: :inactive) }
+
+    it 'returns 404 and never calls toggle_typing_status' do
+      expect_any_instance_of(Channel::Whatsapp).not_to receive(:toggle_typing_status)
+
+      post_presence(conversation.display_id, typing_status: 'on')
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  context 'when the inbox channel does not implement toggle_typing_status (non-WhatsApp channel)' do
+    let!(:web_widget_channel) { Channel::WebWidget.create!(website_url: "https://widget-#{SecureRandom.hex(4)}.example.com") }
+    let!(:web_widget_inbox) { Inbox.create!(name: "Presence Webhook Spec WebWidget Inbox #{SecureRandom.hex(2)}", channel: web_widget_channel) }
+    let!(:web_widget_contact) { Contact.create!(name: 'Widget Lead') }
+    let!(:web_widget_contact_inbox) { ContactInbox.create!(contact: web_widget_contact, inbox: web_widget_inbox, source_id: SecureRandom.hex(4)) }
+    let!(:web_widget_conversation) { Conversation.create!(inbox: web_widget_inbox, contact: web_widget_contact, contact_inbox: web_widget_contact_inbox) }
+    let!(:web_widget_agent_bot) { AgentBot.create!(name: "Presence Spec WebWidget Bot #{SecureRandom.hex(2)}", outgoing_url: 'https://bot.example.com/webhook') }
+    let!(:web_widget_agent_bot_inbox) { AgentBotInbox.create!(inbox: web_widget_inbox, agent_bot: web_widget_agent_bot, status: :active) }
+
+    it 'does not raise and still returns ok' do
+      expect { post_presence(web_widget_conversation.display_id, typing_status: 'on') }.not_to raise_error
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to eq('status' => 'ok')
+    end
   end
 end
