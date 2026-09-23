@@ -38,6 +38,7 @@ module BotRuntime
         outgoing_url: @agent_bot.outgoing_url.to_s,
         bot_config: build_bot_config,
         postback_url: build_postback_url,
+        presence_url: build_presence_url,
         metadata: build_metadata
       }
     end
@@ -116,6 +117,10 @@ module BotRuntime
 
     def build_postback_url
       "#{BotRuntime::Config.postback_base_url}/webhooks/bot_runtime/postback/#{@conversation.display_id}"
+    end
+
+    def build_presence_url
+      "#{BotRuntime::Config.postback_base_url}/webhooks/bot_runtime/presence/#{@conversation.display_id}"
     end
 
     def build_metadata
