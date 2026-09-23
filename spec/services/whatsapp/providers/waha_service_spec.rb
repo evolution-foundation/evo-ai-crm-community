@@ -133,4 +133,45 @@ RSpec.describe Whatsapp::Providers::WahaService do
       service.disconnect_channel_provider
     end
   end
+
+  describe '#toggle_typing_status' do
+    it 'POSTs typing presence to /api/{session}/presence for typing_on' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        'https://waha.example.com/api/default/presence',
+        hash_including(
+          headers: { 'X-Api-Key' => 'secret-key', 'Content-Type' => 'application/json' },
+          body: { chatId: '5511999999999@c.us', presence: 'typing' }.to_json
+        )
+      ).and_return(response)
+
+      expect(service.toggle_typing_status('+5511999999999', 'conversation.typing_on')).to eq(true)
+    end
+
+    it 'maps conversation.recording to the recording presence' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { chatId: '5511999999999@c.us', presence: 'recording' }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status('+5511999999999', 'conversation.recording')
+    end
+
+    it 'maps conversation.typing_off to the paused presence' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { chatId: '5511999999999@c.us', presence: 'paused' }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status('+5511999999999', 'conversation.typing_off')
+    end
+
+    it 'returns false and swallows the error when the HTTP call raises' do
+      allow(HTTParty).to receive(:post).and_raise(Errno::ECONNREFUSED)
+
+      expect(service.toggle_typing_status('+5511999999999', 'conversation.typing_on')).to eq(false)
+    end
+  end
 end
