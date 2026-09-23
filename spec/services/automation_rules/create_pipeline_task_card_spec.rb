@@ -38,6 +38,17 @@ RSpec.describe 'Automation rule create_pipeline_task card selection' do
 
   after { Current.reset }
 
+  # PipelineTask has `created_by_id NOT NULL`; production code reads it via
+  # `User.where(type: 'SuperAdmin').first&.id`. The Community fork removed the
+  # SuperAdmin class (EVO-659), so a real STI row of that type cannot exist —
+  # stub the lookup the same way spec/services/automation_rules/
+  # flow_execution_service_spec.rb does, or every task creation here silently
+  # fails on the NOT NULL constraint (swallowed by create_pipeline_task's rescue).
+  before do
+    allow(User).to receive(:where).and_call_original
+    allow(User).to receive(:where).with(type: 'SuperAdmin').and_return(double(first: user))
+  end
+
   describe 'a conversation living in two funnels' do
     # The id is pinned to the lowest possible uuid on purpose. An unordered `.first` resolves to
     # `ORDER BY id LIMIT 1`, so without this the wrong card wins only about half the runs and the
