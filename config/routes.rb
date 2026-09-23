@@ -822,6 +822,7 @@ Rails.application.routes.draw do
 
   # Bot Runtime postback
   post 'webhooks/bot_runtime/postback/:conversation_display_id', to: 'webhooks/bot_runtime#postback'
+  post 'webhooks/bot_runtime/presence/:conversation_display_id', to: 'webhooks/bot_runtime#presence'
 
   namespace :linear do
     resource :callback, only: [:show]

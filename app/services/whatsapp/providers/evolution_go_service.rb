@@ -26,6 +26,30 @@ class Whatsapp::Providers::EvolutionGoService < Whatsapp::Providers::BaseService
     send_text_message(phone_number, build_template_text(template_info))
   end
 
+  PRESENCE_MAP = {
+    'conversation.typing_on' => 'composing',
+    'conversation.recording' => 'composing',
+    'conversation.typing_off' => 'paused'
+  }.freeze
+
+  def toggle_typing_status(phone_number, typing_status)
+    return false if api_base_path.blank?
+
+    state = PRESENCE_MAP[typing_status]
+    return false if state.blank?
+
+    response = HTTParty.post(
+      "#{api_base_path}/message/presence",
+      headers: instance_headers,
+      body: { number: phone_number, state: state, isAudio: typing_status == 'conversation.recording' }.to_json,
+      timeout: 5
+    )
+    response.success?
+  rescue StandardError => e
+    Rails.logger.warn "Evolution Go: toggle_typing_status failed - #{e.message}"
+    false
+  end
+
   def sync_templates
     # Evolution Go API doesn't have template syncing like WhatsApp Cloud
     # Templates are managed internally via create_template

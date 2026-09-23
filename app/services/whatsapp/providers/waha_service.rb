@@ -64,6 +64,31 @@ class Whatsapp::Providers::WahaService < Whatsapp::Providers::BaseService
     Rails.logger.error "WAHA disconnect error: #{e.message}"
   end
 
+  PRESENCE_MAP = {
+    'conversation.typing_on' => 'typing',
+    'conversation.recording' => 'recording',
+    'conversation.typing_off' => 'paused'
+  }.freeze
+
+  def toggle_typing_status(phone_number, typing_status)
+    chat_id = to_chat_id(phone_number)
+    return false if chat_id.blank? || base_url.blank?
+
+    presence = PRESENCE_MAP[typing_status]
+    return false if presence.blank?
+
+    response = HTTParty.post(
+      "#{base_url}/api/#{session_name}/presence",
+      headers: api_headers,
+      body: { chatId: chat_id, presence: presence }.to_json,
+      timeout: 5
+    )
+    response.success?
+  rescue StandardError => e
+    Rails.logger.warn "WAHA: toggle_typing_status failed - #{e.message}"
+    false
+  end
+
   private
 
   def base_url

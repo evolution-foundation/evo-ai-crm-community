@@ -54,6 +54,33 @@ class Webhooks::BotRuntimeController < ActionController::API
     end
   end
 
+  TYPING_STATUS_MAP = {
+    'on' => Events::Types::CONVERSATION_TYPING_ON,
+    'recording' => Events::Types::CONVERSATION_RECORDING,
+    'off' => Events::Types::CONVERSATION_TYPING_OFF
+  }.freeze
+
+  def presence
+    conversation = Conversation.find_by(display_id: params[:conversation_display_id])
+    unless conversation
+      render json: { error: 'Conversation not found' }, status: :not_found
+      return
+    end
+
+    unless find_active_agent_bot(conversation)
+      render json: { error: 'No active agent bot for this conversation' }, status: :not_found
+      return
+    end
+
+    mapped_event = TYPING_STATUS_MAP[params[:typing_status].to_s]
+    channel = conversation.inbox.channel
+    if mapped_event && channel.respond_to?(:toggle_typing_status)
+      channel.toggle_typing_status(mapped_event, conversation: conversation)
+    end
+
+    render json: { status: 'ok' }, status: :ok
+  end
+
   private
 
   VALID_MEDIA_FILE_TYPES = %w[image audio video file].freeze

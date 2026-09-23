@@ -54,4 +54,52 @@ RSpec.describe Whatsapp::Providers::EvolutionGoService do
       expect(service.send_message('5511999999999', message)).to be_nil
     end
   end
+
+  describe '#toggle_typing_status' do
+    let(:whatsapp_channel) do
+      instance_double(Channel::Whatsapp, provider_config: {
+                         'api_url' => 'https://evo-go.example.com',
+                         'instance_token' => 'inst-token'
+                       })
+    end
+
+    it 'POSTs composing state to /message/presence for typing_on' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        'https://evo-go.example.com/message/presence',
+        hash_including(
+          headers: { 'apikey' => 'inst-token', 'Content-Type' => 'application/json' },
+          body: { number: '+5511999999999', state: 'composing', isAudio: false }.to_json
+        )
+      ).and_return(response)
+
+      expect(service.toggle_typing_status('+5511999999999', 'conversation.typing_on')).to eq(true)
+    end
+
+    it 'sets isAudio true and state composing for conversation.recording' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { number: '+5511999999999', state: 'composing', isAudio: true }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status('+5511999999999', 'conversation.recording')
+    end
+
+    it 'maps conversation.typing_off to state paused' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { number: '+5511999999999', state: 'paused', isAudio: false }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status('+5511999999999', 'conversation.typing_off')
+    end
+
+    it 'returns false and swallows the error when the HTTP call raises' do
+      allow(HTTParty).to receive(:post).and_raise(Errno::ECONNREFUSED)
+
+      expect(service.toggle_typing_status('+5511999999999', 'conversation.typing_on')).to eq(false)
+    end
+  end
 end

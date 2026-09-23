@@ -181,7 +181,16 @@ RSpec.describe BotRuntime::DelegationService do
         [{ url: 'https://crm.example.com/img.png', content_type: 'image/png', file_type: 'image' }]
       )
       expect(event.keys).to include(:agent_bot_id, :conversation_id, :contact_id, :message_id, :message_content,
-                                    :attachments, :api_key, :outgoing_url, :bot_config, :postback_url, :metadata)
+                                    :attachments, :api_key, :outgoing_url, :bot_config, :postback_url,
+                                    :presence_url, :metadata)
+    end
+
+    it 'builds presence_url from postback_base_url and the conversation display_id' do
+      stub_persisted_with([])
+
+      event = service.send(:build_message_event)
+
+      expect(event[:presence_url]).to eq('https://crm.example.com/webhooks/bot_runtime/presence/7')
     end
 
     it 'sends an empty list when the message has no attachments' do
