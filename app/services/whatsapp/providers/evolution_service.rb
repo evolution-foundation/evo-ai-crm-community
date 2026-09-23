@@ -44,19 +44,33 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     'conversation.typing_off' => 'paused'
   }.freeze
 
+  # Delay (ms) the presence stays visible before WhatsApp reverts it on its own.
+  # bot_runtime's KeepAlive re-sends "composing" every 8s (presenceKeepAliveInterval
+  # in evo-bot-runtime/pkg/pipeline/service/pipeline_service.go) — this only needs
+  # to outlast that refresh cadence, not the whole AI turn.
+  TYPING_PRESENCE_DELAY_MS = 9_000
+
   def toggle_typing_status(phone_number, typing_status)
     return false if api_base_path.blank? || instance_name.blank?
 
     presence = PRESENCE_MAP[typing_status]
     return false if presence.blank?
 
+    # Evolution API's per-chat presence route is POST /chat/sendPresence/{instance},
+    # not /chat/setPresence/{instance} — that path 404s (confirmed against
+    # evolution-api's chat.router.ts / SendPresenceDto). The DTO also requires
+    # `delay`; omitting it left this failing silently since the response was
+    # never inspected beyond `success?` on a call that was hitting the wrong URL.
     response = HTTParty.post(
-      "#{api_base_path}/chat/setPresence/#{instance_name}",
+      "#{api_base_path}/chat/sendPresence/#{instance_name}",
       headers: api_headers,
-      body: { number: phone_number, presence: presence }.to_json,
+      body: { number: phone_number, presence: presence, delay: TYPING_PRESENCE_DELAY_MS }.to_json,
       timeout: 5
     )
-    response.success?
+    return true if response.success?
+
+    Rails.logger.warn "Evolution API: toggle_typing_status non-2xx (#{response.code}) - #{response.body}"
+    false
   rescue StandardError => e
     Rails.logger.warn "Evolution API: toggle_typing_status failed - #{e.message}"
     false

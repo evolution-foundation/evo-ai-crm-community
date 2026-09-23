@@ -365,13 +365,16 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
   end
 
   describe '#toggle_typing_status' do
-    it 'POSTs composing presence to /chat/setPresence/{instance} for typing_on' do
+    # Evolution API's per-chat presence route is POST /chat/sendPresence/{instance}
+    # (confirmed against evolution-api's chat.router.ts / SendPresenceDto) — not
+    # /chat/setPresence/{instance}, which 404s. The DTO also requires `delay`.
+    it 'POSTs composing presence to /chat/sendPresence/{instance} for typing_on' do
       response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
       expect(HTTParty).to receive(:post).with(
-        'https://evo.example.com/chat/setPresence/test-instance',
+        'https://evo.example.com/chat/sendPresence/test-instance',
         hash_including(
           headers: { 'apikey' => 'test-token', 'Content-Type' => 'application/json' },
-          body: { number: phone_number, presence: 'composing' }.to_json
+          body: { number: phone_number, presence: 'composing', delay: described_class::TYPING_PRESENCE_DELAY_MS }.to_json
         )
       ).and_return(response)
 
@@ -382,7 +385,7 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
       response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
       expect(HTTParty).to receive(:post).with(
         anything,
-        hash_including(body: { number: phone_number, presence: 'recording' }.to_json)
+        hash_including(body: { number: phone_number, presence: 'recording', delay: described_class::TYPING_PRESENCE_DELAY_MS }.to_json)
       ).and_return(response)
 
       service.toggle_typing_status(phone_number, 'conversation.recording')
@@ -392,10 +395,18 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
       response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
       expect(HTTParty).to receive(:post).with(
         anything,
-        hash_including(body: { number: phone_number, presence: 'paused' }.to_json)
+        hash_including(body: { number: phone_number, presence: 'paused', delay: described_class::TYPING_PRESENCE_DELAY_MS }.to_json)
       ).and_return(response)
 
       service.toggle_typing_status(phone_number, 'conversation.typing_off')
+    end
+
+    it 'logs a warning and returns false on a non-2xx response' do
+      response = instance_double(HTTParty::Response, success?: false, code: 404, body: 'Not Found')
+      allow(HTTParty).to receive(:post).and_return(response)
+      expect(Rails.logger).to receive(:warn).with(/non-2xx \(404\)/)
+
+      expect(service.toggle_typing_status(phone_number, 'conversation.typing_on')).to eq(false)
     end
 
     it 'returns false and swallows the error when the HTTP call raises' do
