@@ -416,11 +416,22 @@ class AgentBotListener < BaseListener
   end
 
   def process_message_event(method_name, agent_bot, message, _event)
+    stamp_turn_eligible(message.conversation)
+
     # Only webhook bots are supported
     payload = message.webhook_data.merge(event: method_name)
     process_webhook_bot_event(agent_bot, payload)
   end
 
+  # CRM-212: reached only once every skip_for_gate? check above already passed,
+  # i.e. exactly when a turn is dispatched. Delivery may come back long after a
+  # label changes mid-turn (a stage automation, or the bot's own tool call);
+  # this grace window lets MessageCreator trust "was eligible when dispatched"
+  # instead of re-deriving eligibility from the conversation's state then.
+  def stamp_turn_eligible(conversation)
+    key = format(Redis::RedisKeys::AGENT_BOT_TURN_ELIGIBLE_KEY, conversation_id: conversation.id)
+    Redis::Alfred.setex(key, true, 10.minutes)
+  end
 
   def find_conversation_from_payload(payload)
     # Handle both ActiveRecord object and hash

@@ -35,6 +35,11 @@ module Redis::RedisKeys
   LATEST_EVOLUTION_VERSION = 'LATEST_EVOLUTION_VERSION'.freeze
   # Check if a message create with same source-id is in progress?
   MESSAGE_SOURCE_KEY = 'MESSAGE_SOURCE_KEY::%<id>s'.freeze
+  # CRM-212: marks a conversation as eligible for a bot reply at the moment a
+  # turn is dispatched, so delivery (which can arrive long after a label
+  # changed mid-turn) has a grace window instead of re-deriving eligibility
+  # from the conversation's current state.
+  AGENT_BOT_TURN_ELIGIBLE_KEY = 'AGENT_BOT_TURN_ELIGIBLE::%<conversation_id>s'.freeze
   OPENAI_CONVERSATION_KEY = 'OPEN_AI_CONVERSATION_KEY::V1::%<event_name>s::%<conversation_id>s::%<updated_at>d'.freeze
 
   ## Sempahores / Locks

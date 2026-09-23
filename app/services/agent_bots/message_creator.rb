@@ -1,4 +1,6 @@
 class AgentBots::MessageCreator
+  include AgentBots::TurnEligibility
+
   def initialize(agent_bot)
     @agent_bot = agent_bot
   end
@@ -62,6 +64,16 @@ class AgentBots::MessageCreator
     # AFTER the LLM already ran — so the log has to name the rule that rejected.
     skip_reason = agent_bot_inbox.processing_block_reason(conversation)
     return true if skip_reason.nil?
+
+    # CRM-212 (reopened): a label removed mid-turn (e.g. by a stage automation,
+    # or the bot's own tool call) must not silently drop a reply the turn was
+    # already eligible for when it started. AgentBotListener stamps that grace
+    # window at dispatch time.
+    if turn_was_eligible_at_dispatch?(conversation)
+      Rails.logger.info "[AgentBot HTTP] delivering despite current rejection (#{skip_reason}) - " \
+                        "conv #{conversation.id} was eligible when the turn started"
+      return true
+    end
 
     Rails.logger.warn "[AgentBot HTTP] ❌ reply discarded - conv #{conversation.id}: #{skip_reason}"
     false
