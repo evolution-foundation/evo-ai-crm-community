@@ -13,6 +13,10 @@ RSpec.describe RegexHelper do
       expect(described_class::WHATSAPP_CHANNEL_REGEX.match?('12345678@lid')).to be true
     end
 
+    it 'accepts @c.us identifiers (WAHA/Baileys individual contact JID)' do
+      expect(described_class::WHATSAPP_CHANNEL_REGEX.match?('551193333444@c.us')).to be true
+    end
+
     it 'accepts BSUID-style identifiers' do
       expect(described_class::WHATSAPP_CHANNEL_REGEX.match?('BR.123abc')).to be true
     end

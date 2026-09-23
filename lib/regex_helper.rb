@@ -20,5 +20,8 @@ module RegexHelper
   #   * legacy: creator phone + creation epoch joined by hyphen,
   #     e.g. "553184455827-1593702061@g.us"
   WHATSAPP_GROUP_JID_REGEX = /\d+(?:-\d+)?@g\.us/
-  WHATSAPP_CHANNEL_REGEX = Regexp.new("\\A(?:\\+?\\d{1,15}|\\+?\\d+@lid|#{WHATSAPP_GROUP_JID_REGEX.source}|[A-Z]{2}\\.[a-zA-Z0-9]+)\\z")
+  # @c.us: WAHA/Baileys individual contact JID (phone + this suffix).
+  WHATSAPP_CHANNEL_REGEX = Regexp.new(
+    "\\A(?:\\+?\\d{1,15}|\\+?\\d+@lid|\\+?\\d+@c\\.us|#{WHATSAPP_GROUP_JID_REGEX.source}|[A-Z]{2}\\.[a-zA-Z0-9]+)\\z"
+  )
 end
