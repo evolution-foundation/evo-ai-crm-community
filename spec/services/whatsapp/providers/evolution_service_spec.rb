@@ -364,6 +364,47 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
     end
   end
 
+  describe '#toggle_typing_status' do
+    it 'POSTs composing presence to /chat/setPresence/{instance} for typing_on' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        'https://evo.example.com/chat/setPresence/test-instance',
+        hash_including(
+          headers: { 'apikey' => 'test-token', 'Content-Type' => 'application/json' },
+          body: { number: phone_number, presence: 'composing' }.to_json
+        )
+      ).and_return(response)
+
+      expect(service.toggle_typing_status(phone_number, 'conversation.typing_on')).to eq(true)
+    end
+
+    it 'maps conversation.recording to the recording presence' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { number: phone_number, presence: 'recording' }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status(phone_number, 'conversation.recording')
+    end
+
+    it 'maps conversation.typing_off to the paused presence' do
+      response = instance_double(HTTParty::Response, success?: true, code: 200, body: '{}')
+      expect(HTTParty).to receive(:post).with(
+        anything,
+        hash_including(body: { number: phone_number, presence: 'paused' }.to_json)
+      ).and_return(response)
+
+      service.toggle_typing_status(phone_number, 'conversation.typing_off')
+    end
+
+    it 'returns false and swallows the error when the HTTP call raises' do
+      allow(HTTParty).to receive(:post).and_raise(Errno::ECONNREFUSED)
+
+      expect(service.toggle_typing_status(phone_number, 'conversation.typing_on')).to eq(false)
+    end
+  end
+
   describe '#send_message — unsupported content (CRM-448)' do
     it 'flags the message is_unsupported and returns nil (the caller turns it into failed)' do
       message = instance_double(Message, attachments: [], content_type: 'text', content: nil)

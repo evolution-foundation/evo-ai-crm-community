@@ -38,6 +38,30 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     false
   end
 
+  PRESENCE_MAP = {
+    'conversation.typing_on' => 'composing',
+    'conversation.recording' => 'recording',
+    'conversation.typing_off' => 'paused'
+  }.freeze
+
+  def toggle_typing_status(phone_number, typing_status)
+    return false if api_base_path.blank? || instance_name.blank?
+
+    presence = PRESENCE_MAP[typing_status]
+    return false if presence.blank?
+
+    response = HTTParty.post(
+      "#{api_base_path}/chat/setPresence/#{instance_name}",
+      headers: api_headers,
+      body: { number: phone_number, presence: presence }.to_json,
+      timeout: 5
+    )
+    response.success?
+  rescue StandardError => e
+    Rails.logger.warn "Evolution API: toggle_typing_status failed - #{e.message}"
+    false
+  end
+
   def send_template(phone_number, template_info)
     # Evolution API doesn't support template messages in the same way
     # For now, we'll send a regular text message
