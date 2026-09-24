@@ -123,6 +123,28 @@ RSpec.describe 'Api::V1::PipelineItems owner', type: :request do
       expect(card['assigned_by_id']).to eq(other_user.id)
       expect(card['assigned_by']).to include('id' => other_user.id, 'email' => other_user.email)
     end
+
+    it 'exposes the owner on the board card view' do
+      item.update!(assigned_by: other_user)
+
+      get "/api/v1/pipelines/#{pipeline.id}/pipeline_items", params: { view: 'card' }
+
+      card = response.parsed_body['data'].find { |i| i['id'] == item.id }
+      expect(card['assigned_by']).to include('id' => other_user.id)
+    end
+  end
+
+  describe 'GET the pipeline board' do
+    it 'exposes the owner on the cards of each stage' do
+      allow_any_instance_of(PipelinePolicy).to receive(:show?).and_return(true)
+      item.update!(assigned_by: other_user)
+
+      get "/api/v1/pipelines/#{pipeline.id}"
+
+      expect(response).to have_http_status(:success)
+      card = response.parsed_body['data']['stages'].flat_map { |st| st['items'].to_a }.find { |i| i['id'] == item.id }
+      expect(card['assigned_by']).to include('id' => other_user.id)
+    end
   end
 
   describe 'POST a new card' do

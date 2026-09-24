@@ -231,9 +231,8 @@ class Api::V1::PipelinesController < Api::V1::BaseController
   end
 
   def by_contact
-    # A card is either contact-keyed (a lead) or conversation-keyed, and promoting a
-    # lead clears contact_id, so filtering on contact_id alone hides every opportunity
-    # the contact holds through a conversation.
+    # A card is keyed by contact (a lead) or by conversation, and promoting a lead clears
+    # contact_id, so both keys have to match.
     contact_items = PipelineItem.where(contact_id: @contact.id)
                                 .or(PipelineItem.where(conversation_id: @contact.conversations.select(:id)))
 

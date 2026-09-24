@@ -26,11 +26,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # the auth catalog-conformance guard still sees it (CRM-178 review LOW 9).
   EvoPermissionConcern.register_permission_key('pipeline_items.update')
 
-  # The add-item modal reads available_contacts without asking for a page, and it used
-  # to get 50 contacts, so 50 stays the default there instead of the app-wide 20.
-  AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE = 50
-  AVAILABLE_CONTACTS_MAX_PAGE_SIZE = 100
-
   before_action :set_pipeline
   before_action :set_pipeline_item, only: [:update, :destroy, :move_to_stage, :update_conversation, :update_custom_fields]
   before_action :ensure_authorized_user
@@ -209,9 +204,8 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     stage_changed = false
     wrote_anything = false
 
-    # Resolve the owner before any write: it is the one input still refusable at this
-    # point, and refusing it after move_to_stage would answer 422 with the stage move
-    # (and its automations) already committed.
+    # Resolve the owner before any write, or a 422 for an unknown user would come back
+    # with the stage move (and its automations) already committed.
     # `key?` rather than `present?`: an explicit null is how a caller clears the owner,
     # and present? would read that as "field absent" and silently keep the old one.
     owner_provided = params.key?(:assigned_by_id)
@@ -581,7 +575,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       )
     end
 
-    current_contacts = current_contacts.page(available_contacts_page).per(available_contacts_page_size)
+    current_contacts = current_contacts.page(params[:page]).per(items_per_page)
 
     paginated_response(
       data: ContactSerializer.serialize_collection(current_contacts),
@@ -596,18 +590,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # update response has to come back with it preloaded.
   def reload_item_with_owner
     @pipeline.pipeline_items.includes(:assigned_by).find(@pipeline_item.id)
-  end
-
-  def available_contacts_page
-    page = params[:page].to_i
-    page.positive? ? page : 1
-  end
-
-  def available_contacts_page_size
-    requested = (params[:per_page] || params[:page_size] || params[:pageSize]).to_i
-    return AVAILABLE_CONTACTS_DEFAULT_PAGE_SIZE unless requested.positive?
-
-    [requested, AVAILABLE_CONTACTS_MAX_PAGE_SIZE].min
   end
 
   def skip_missing_target_stage

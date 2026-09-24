@@ -62,7 +62,7 @@ RSpec.describe 'Api::V1::PipelineItems available_contacts pagination', type: :re
     it 'covers every contact across the pages, without duplicates' do
       seen = (1..3).flat_map { |page| get_available_contacts(page: page, per_page: 3)['data'].pluck('id') }
 
-      expect(seen.uniq).to match_array(contacts.map(&:id))
+      expect(seen).to match_array(contacts.map(&:id))
     end
 
     it 'keeps the search filter working page by page' do
@@ -70,6 +70,18 @@ RSpec.describe 'Api::V1::PipelineItems available_contacts pagination', type: :re
 
       expect(body['data'].size).to eq(2)
       expect(body['meta']['pagination']['total']).to eq(7)
+    end
+  end
+
+  describe 'with contacts sharing a name' do
+    let!(:contacts) do
+      Array.new(30) { |i| Contact.create!(name: 'Same Name', email: "same-#{i}-#{SecureRandom.hex(4)}@example.com") }
+    end
+
+    it 'still pages without duplicates or gaps' do
+      seen = (1..5).flat_map { |page| get_available_contacts(page: page, per_page: 7)['data'].pluck('id') }
+
+      expect(seen).to match_array(contacts.map(&:id))
     end
   end
 
