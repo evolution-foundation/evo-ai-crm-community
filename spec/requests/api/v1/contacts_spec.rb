@@ -420,6 +420,72 @@ RSpec.describe 'Api::V1::ContactsController', type: :request do
   end
 end
 
+RSpec.describe 'GET /api/v1/contacts listing', type: :request do
+  let(:user) { User.create!(email: "contacts-list-#{SecureRandom.hex(4)}@example.com", name: 'Test User') }
+  let(:headers) { { 'X-Service-Token' => 'spec-service-token' } }
+  let(:inbox_a) { Inbox.create!(name: 'Inbox A', channel: Channel::Api.create!) }
+  let(:inbox_b) { Inbox.create!(name: 'Inbox B', channel: Channel::Api.create!) }
+
+  before do
+    ENV['EVOAI_CRM_API_TOKEN'] = 'spec-service-token'
+    Current.user = user
+    Rails.cache.clear
+  end
+
+  after do
+    ENV.delete('EVOAI_CRM_API_TOKEN')
+    Current.reset
+  end
+
+  def json_response
+    JSON.parse(response.body)
+  end
+
+  def add_to_inboxes(contact, *inboxes)
+    inboxes.each { |inbox| ContactInbox.create!(contact: contact, inbox: inbox, source_id: SecureRandom.hex(8)) }
+  end
+
+  context 'when a contact belongs to two inboxes' do
+    let!(:multi_inbox) { Contact.create!(name: 'Multi Inbox', email: "multi-#{SecureRandom.hex(4)}@example.com") }
+    let!(:unnamed_multi_inbox) { Contact.create!(name: '') }
+    let!(:single) { Contact.create!(name: 'Single', email: "single-#{SecureRandom.hex(4)}@example.com") }
+
+    before do
+      add_to_inboxes(multi_inbox, inbox_a, inbox_b)
+      add_to_inboxes(unnamed_multi_inbox, inbox_a, inbox_b)
+    end
+
+    it 'lists each contact once and counts contacts in meta total' do
+      get '/api/v1/contacts', headers: headers
+
+      expect(response).to have_http_status(:ok)
+      ids = json_response['data'].map { |c| c['id'] }
+      expect(ids).to contain_exactly(multi_inbox.id, unnamed_multi_inbox.id, single.id)
+      expect(json_response.dig('meta', 'pagination', 'total')).to eq(3)
+    end
+
+    it 'returns each match once when searching' do
+      get '/api/v1/contacts/search', params: { q: 'Multi Inbox' }, headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data'].map { |c| c['id'] }).to eq([multi_inbox.id])
+      expect(json_response.dig('meta', 'pagination', 'total')).to eq(1)
+    end
+  end
+
+  it 'paginates without repeating or skipping contacts when sort values tie' do
+    contacts = Array.new(7) { |i| Contact.create!(name: 'Same Name', email: "tie-#{i}-#{SecureRandom.hex(4)}@example.com") }
+    contacts.first(3).each { |contact| add_to_inboxes(contact, inbox_a, inbox_b) }
+
+    seen = (1..4).flat_map do |page|
+      get '/api/v1/contacts', params: { sort: 'name', page: page, per_page: 2 }, headers: headers
+      json_response['data'].map { |c| c['id'] }
+    end
+
+    expect(seen).to eq(contacts.map(&:id).sort)
+  end
+end
+
 RSpec.describe 'GET /api/v1/contacts/companies_list', type: :request do
   let(:user) { User.create!(email: "companies-list-#{SecureRandom.hex(4)}@example.com", name: 'Test User') }
   let(:headers) { { 'X-Service-Token' => 'spec-service-token' } }
