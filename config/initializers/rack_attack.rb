@@ -271,6 +271,13 @@ class Rack::Attack
     end
   end
 
+  ## Instagram webhook ingress. Meta posts from a pool of addresses and redelivers in bursts after
+  ## an outage, so the ceiling sits well above real traffic; it still stops a forged flood long
+  ## before the general per-IP limit. The GET handshake is not counted.
+  throttle('webhooks/instagram', limit: ENV.fetch('RATE_LIMIT_INSTAGRAM_WEBHOOK', '600').to_i, period: 1.minute) do |req|
+    "instagram_webhook:#{req.ip}" if req.post? && req.path_without_extentions == '/webhooks/instagram'
+  end
+
   ## Prevent abuse of conversations history import (EVO-1557)
   ## Each request can ingest up to 50k rows; default 5 reqs/min/key.
   throttle('api/v1/conversations/import', limit: ENV.fetch('RATE_LIMIT_CONVERSATIONS_IMPORT', '5').to_i, period: 1.minute) do |req|
