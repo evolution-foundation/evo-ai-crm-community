@@ -427,7 +427,9 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
   def fetch_contacts(contacts)
     # Eager load conversations and pipeline items to avoid N+1 queries
+    # Tie-break on id so OFFSET pagination is deterministic when sort values repeat (or no sort is given)
     contacts_with_associations = filtrate(contacts)
+                                   .order(:id)
                                    .includes([
                                                { avatar_attachment: [:blob] },
                                                { conversations: { pipeline_items: [:pipeline, :pipeline_stage] } }
