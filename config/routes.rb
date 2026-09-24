@@ -234,7 +234,12 @@ Rails.application.routes.draw do
         scope module: 'contacts' do
           resources :conversations, only: [:index]
           resources :contact_inboxes, only: [:create]
-          resources :labels, only: [:create, :index]
+          resources :labels, only: [:create, :index] do
+            collection do
+              post :add
+              post :remove
+            end
+          end
           resources :notes
         end
       end

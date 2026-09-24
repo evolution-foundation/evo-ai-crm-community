@@ -61,6 +61,15 @@ RSpec.describe Labelable, type: :model do
   end
 
   describe '#add_labels' do
+    it 'does not duplicate a label sent in a different case' do
+      contact.update_labels(['vip'])
+      contact.add_labels(['VIP'])
+
+      reloaded = Contact.find(contact.id)
+      expect(reloaded.label_list.map(&:downcase)).to eq(['vip'])
+      expect(reloaded.taggings.count).to eq(1)
+    end
+
     it 'persists a tagging when adding to a contact with no labels' do
       contact.add_labels(['alpha'])
 
@@ -103,6 +112,13 @@ RSpec.describe Labelable, type: :model do
       reloaded = Contact.find(contact.id)
       expect(reloaded.label_list).to contain_exactly('keep')
       expect(reloaded.taggings.count).to eq(1)
+    end
+
+    it 'removes a label sent in a different case' do
+      contact.update_labels(%w[vip keep])
+      contact.remove_labels(['VIP'])
+
+      expect(Contact.find(contact.id).label_list).to contain_exactly('keep')
     end
 
     it 'is a no-op when removing a label that is not present' do
