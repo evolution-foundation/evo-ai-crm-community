@@ -647,9 +647,12 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   def set_pipeline_item
     # For destroy and move_to_stage actions, try to find by conversation_id first, then by pipeline_item id
     if %w[destroy move_to_stage update_conversation].include?(action_name)
-      # First try to find by conversation display_id
-      conversation = Conversation.find_by(display_id: params[:id])
-      @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
+      # First try to find by conversation display_id. Only a plain number is one: a UUID
+      # such as "089edd02-..." would cast to 89 and pick another conversation's card.
+      if params[:id].to_s.match?(/\A\d+\z/)
+        conversation = Conversation.find_by(display_id: params[:id])
+        @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
+      end
 
       # If not found, try by conversation id (UUID)
       if @pipeline_item.nil?

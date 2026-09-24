@@ -98,6 +98,38 @@ RSpec.describe 'Pipeline board', type: :request do
     end
   end
 
+  describe 'PATCH /pipeline_items/:id/move_to_stage' do
+    before { allow_any_instance_of(PipelinePolicy).to receive(:update_items?).and_return(true) }
+
+    def move(id)
+      patch "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{id}/move_to_stage",
+            params: { new_stage_id: second_stage.id }, as: :json
+    end
+
+    # A card id such as "1aaaaaaa-..." casts to the integer 1 on an integer column, and
+    # the conversation #1 of the same funnel must not be the one that moves.
+    it 'moves the card whose id was sent even when its id starts with a conversation number' do
+      other = conversation_card
+      card_id = "#{other.conversation.display_id.to_s.ljust(8, 'a')}-0000-4000-8000-000000000000"
+      card = PipelineItem.create!(id: card_id, pipeline: pipeline, pipeline_stage: first_stage,
+                                  contact: Contact.create!(name: 'Lead'))
+
+      move(card.id)
+
+      expect(response).to have_http_status(:ok)
+      expect(card.reload.pipeline_stage_id).to eq(second_stage.id)
+      expect(other.reload.pipeline_stage_id).to eq(first_stage.id)
+    end
+
+    it 'still finds a conversation card by its conversation number' do
+      item = conversation_card
+
+      move(item.conversation.display_id)
+
+      expect(item.reload.pipeline_stage_id).to eq(second_stage.id)
+    end
+  end
+
   describe 'GET /pipelines/:id/pipeline_items' do
     let(:url) { "/api/v1/pipelines/#{pipeline.id}/pipeline_items" }
 
