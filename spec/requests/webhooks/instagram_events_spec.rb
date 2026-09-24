@@ -171,7 +171,10 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       ['messaging is a string', { 'messaging' => 'oops' }],
       ['messaging is an array of strings', { 'messaging' => %w[a b] }],
       ['messaging is an object', { 'messaging' => { 'sender' => { 'id' => '1' } } }],
-      ['standby is a string', { 'standby' => 'oops' }]
+      ['standby is a string', { 'standby' => 'oops' }],
+      ['changes is a string', { 'changes' => 'oops' }],
+      ['changes is an array of strings', { 'changes' => %w[a b] }],
+      ['changes is an object', { 'changes' => { 'field' => 'comments' } }]
     ].each do |label, extra|
       it "answers 422 without enqueueing when #{label}" do
         expect(Webhooks::InstagramEventsJob).not_to receive(:perform_later)

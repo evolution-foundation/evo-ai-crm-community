@@ -26,6 +26,8 @@ module MetaWebhookSignatureConcern
     return refuse_meta_signature('missing or malformed signature header') unless provided.start_with?(SIGNATURE_PREFIX)
 
     body = request.raw_post
+    # `map` before `any?` on purpose: every configured secret is tried, so the time spent
+    # does not say which one matched. Short-circuiting here would put that back.
     valid = secrets.map { |secret| meta_signature_matches?(secret, body, provided) }.any?
     refuse_meta_signature('signature mismatch') unless valid
   end

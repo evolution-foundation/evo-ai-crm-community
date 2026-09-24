@@ -2,13 +2,14 @@ class Webhooks::InstagramController < ActionController::API
   include MetaTokenVerifyConcern
   include MetaWebhookSignatureConcern
 
-  EVENT_KEYS = %i[messaging standby].freeze
+  # Every key of an entry that Meta fills with a list of objects. A signed body is still
+  # a body off the wire, so each one is checked before the job reads it.
+  EVENT_KEYS = %i[messaging standby changes].freeze
 
   before_action :verify_meta_signature!, only: :events
 
   def events
     Rails.logger.info('Instagram webhook received events')
-    Rails.logger.info("Instagram webhook params object: #{params['object'].inspect}")
 
     entries = params.to_unsafe_hash[:entry]
     return refuse_envelope unless instagram_object? && valid_entries?(entries)
