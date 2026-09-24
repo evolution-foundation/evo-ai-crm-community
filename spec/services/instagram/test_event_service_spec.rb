@@ -13,6 +13,20 @@ RSpec.describe Instagram::TestEventService do
       'media' => { 'id' => '18100000000000000', 'media_product_type' => 'FEED' }, 'text' => 'Que top hein 🔥🔥' }
   end
 
+  describe '.messaging_from' do
+    it 'returns the value of the first change when it is an object' do
+      expect(described_class.messaging_from([{ 'field' => 'messages', 'value' => test_messaging }])).to eq(test_messaging)
+      expect(described_class.messaging_from([{ field: 'messages', value: test_messaging }])).to eq(test_messaging)
+    end
+
+    it 'is nil for every shape that cannot carry one, and never raises' do
+      [nil, [], {}, { 'field' => 'messages', 'value' => test_messaging }, 'oops', %w[a b],
+       [{ 'field' => 'comments' }], [{ 'value' => 'text' }], [{ 'value' => nil }], [nil]].each do |changes|
+        expect(described_class.messaging_from(changes)).to be_nil
+      end
+    end
+  end
+
   describe '.test_event?' do
     it "is true only for Meta's fixed sender/recipient pair" do
       expect(described_class.test_event?(test_messaging)).to be(true)
