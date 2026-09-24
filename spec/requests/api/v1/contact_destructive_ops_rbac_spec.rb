@@ -142,6 +142,7 @@ RSpec.describe 'Contact destructive operations RBAC', type: :request do
 
       get "/api/v1/contacts/#{contact.id}/labels", as: :json
       expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to eq([])
       expect(json_response['payload']).to eq([])
     end
 
@@ -151,6 +152,7 @@ RSpec.describe 'Contact destructive operations RBAC', type: :request do
       post "/api/v1/contacts/#{contact.id}/labels", params: { labels: ['vip'] }, as: :json
 
       expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to eq(['vip'])
       expect(json_response['payload']).to eq(['vip'])
     end
   end

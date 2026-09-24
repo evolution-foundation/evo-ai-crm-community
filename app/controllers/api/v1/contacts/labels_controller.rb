@@ -37,8 +37,12 @@ class Api::V1::Contacts::LabelsController < Api::V1::Contacts::BaseController
     render_labels
   end
 
+  # Shaped like `success_response`, with `payload` kept beside `data`: this is a
+  # public API and an integration written against the older shape would read a
+  # missing set and post it back, wiping the labels the same way.
   def render_labels
-    success_response(data: model.label_list.to_a)
+    labels = model.label_list.to_a
+    render json: { success: true, data: labels, payload: labels, meta: { timestamp: Time.current.iso8601 } }
   end
 
   def model

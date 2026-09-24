@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CRM-659** — `POST /api/v1/contacts/:id/labels/add` e `POST /api/v1/contacts/:id/labels/remove`: alteram apenas as etiquetas enviadas, sem substituir o conjunto, com o mesmo corpo (`{labels: [...]}`) e a mesma resolução de id → título do `POST` existente. Um corpo sem etiquetas responde `422 MISSING_REQUIRED_FIELD` em vez de `200`.
 - **EVO-1239** — Wisper `:message_status_changed` agora é emitido por todos os providers WhatsApp (Cloud, 360-dialog, Evolution API, Evolution Go single/bulk, Baileys), Telegram (delivered + failed) e Email/SMTP (delivered + bounce DSN). Inclui novo `BounceMailbox` parseando DSN RFC 3464 (Status `5.x.x` → failed; `4.x.x` apenas logado).
 
 ### Changed
 
+- **CRM-659 — etiquetas do contato respondiam fora do envelope** — `GET` e `POST /api/v1/contacts/:id/labels` respondiam `{ payload: [...] }`. Um cliente que lê o envelope padrão via o conjunto vazio e, ao postar de volta o que leu, apagava todas as etiquetas do contato com `200` — o relato do SUPORTEEVO-33. As duas rotas passam a responder `{ success, data, meta }`, **com `payload` mantido como cópia de `data`**, então nenhuma integração escrita contra a forma antiga quebra. O `POST` continua substituindo o conjunto inteiro, agora com as rotas `/add` e `/remove` como alternativa; `add` e `remove` travam a linha do contato enquanto regravam o conjunto, porque duas chamadas simultâneas perdiam etiquetas.
+- **CRM-659** — `Labelable#remove_labels` passa a comparar sem diferenciar maiúsculas de minúsculas, como a gem de etiquetas já faz ao gravar: `VIP` podia ser adicionada sobre `vip`, mas removê-la respondia sucesso e mantinha a etiqueta. Afeta apenas a rota nova de remoção; o `BulkActionsJob` continua com a subtração literal.
 - **EVO-1239** — Telegram `send_on_telegram` passa a registrar status `delivered` após envio bem-sucedido. Read receipts não são suportados pela Bot API (Telegram limitation) e portanto `read` permanece n/a neste canal.
 - **CRM-180 — README: modelo de papéis corrigido** — a introdução afirmava que a Community não tem `super_admin`. O seed de RBAC do `evo-auth-service-community` cria o papel (único com `installation_configs.manage`), o setup wizard o concede ao usuário do bootstrap e a migration `PromoteFirstUserToSuperAdmin` ao usuário mais antigo de instalações já bootstrapadas — sem nenhuma garantia de titular único. O texto passa a descrever os três papéis semeados e os papéis customizados criáveis em runtime (`POST /api/v1/roles`), e aponta `db/seeds/rbac.rb` como fonte autoritativa; `Role::ADMIN_ROLE_KEYS` deste repo é allowlist de bypass administrativo, não o modelo de papéis.
 

@@ -129,7 +129,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
   end
 
   describe 'GET /api/v1/contacts/:contact_id/labels' do
-    it 'answers in the standard envelope' do
+    it 'answers in the standard envelope, mirrored in payload for older clients' do
       contact.update_labels(%w[vip support])
 
       get "/api/v1/contacts/#{contact.id}/labels", headers: headers, as: :json
@@ -137,7 +137,7 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
       expect(response).to have_http_status(:ok)
       expect(json_response['success']).to be(true)
       expect(json_response['data']).to contain_exactly('vip', 'support')
-      expect(json_response).not_to have_key('payload')
+      expect(json_response['payload']).to eq(json_response['data'])
       expect(json_response['meta']).to include('timestamp')
     end
 
@@ -174,6 +174,26 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
            params: { labels: [label.id] }, headers: headers, as: :json
 
       expect(contact.reload.label_list).to contain_exactly('vip', 'priority')
+    end
+
+    # Both routes read the set and write it back whole, so concurrent calls on
+    # the same contact would each save their own union and lose a label.
+    it 'locks the contact row while it rewrites the set' do
+      contact.update_labels(%w[vip])
+      queries = []
+      subscriber = ActiveSupport::Notifications.subscribe('sql.active_record') do |*, payload|
+        queries << payload[:sql]
+      end
+
+      begin
+        post "/api/v1/contacts/#{contact.id}/labels/add",
+             params: { labels: ['support'] }, headers: headers, as: :json
+      ensure
+        ActiveSupport::Notifications.unsubscribe(subscriber)
+      end
+
+      expect(queries).to include(a_string_matching(/FOR UPDATE/))
+      expect(contact.reload.label_list).to contain_exactly('vip', 'support')
     end
 
     it 'rejects a request without labels instead of answering success' do
