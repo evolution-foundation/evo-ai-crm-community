@@ -108,6 +108,24 @@ class Pipeline < ApplicationRecord
     end
   end
 
+  EMPTY_STAGE_SUMMARY = { item_count: 0, total_value: 0, active_item_count: 0, active_total_value: 0 }.freeze
+
+  # Card counts and services totals per stage (all cards and active only) in one query, so
+  # the board header renders without loading the cards themselves.
+  def stage_summaries
+    rows = pipeline_items.pluck(:pipeline_stage_id, :completed_at, Arel.sql("custom_fields -> 'services'"))
+    rows.each_with_object({}) do |(stage_id, completed_at, services), acc|
+      summary = (acc[stage_id] ||= EMPTY_STAGE_SUMMARY.dup)
+      value = PipelineItem.services_total(services)
+      summary[:item_count] += 1
+      summary[:total_value] += value
+      next if completed_at
+
+      summary[:active_item_count] += 1
+      summary[:active_total_value] += value
+    end
+  end
+
   def push_event_data
     {
       id: id,

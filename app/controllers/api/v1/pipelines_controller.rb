@@ -1,5 +1,6 @@
 class Api::V1::PipelinesController < Api::V1::BaseController
   include Api::V1::ResourceLimitsHelper
+  include ConversationListLookups
 
   require_permissions({
     index: 'pipelines.read',
@@ -56,15 +57,23 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     )
   end
 
+  # include_items=false answers with the stages and their counters only; the board then
+  # pages each stage through pipeline_items. The default keeps every active card inline
+  # for clients that still read stages[].items.
   def show
+    conversation_ids = include_items? ? @pipeline.pipeline_items.filter_map(&:conversation_id) : []
+
     success_response(
       data: PipelineSerializer.serialize(
         @pipeline,
         include_stages: true,
-        include_items: true,
+        include_items: include_items?,
         include_tasks_info: true,
         include_services_info: true,
-        include_labels: true
+        include_labels: true,
+        stage_summaries: @pipeline.stage_summaries,
+        unread_counts: unread_counts_map(conversation_ids),
+        last_non_activity_messages: last_non_activity_messages_map(conversation_ids)
       ),
       message: 'Pipeline retrieved successfully'
     )
@@ -269,36 +278,30 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     authorize Pipeline.find(params[:id])
   end
 
+  # The latest message and unread count of each card come from batched lookups in #show,
+  # so no message is preloaded here.
   def fetch_pipeline
-    @pipeline = Pipeline.all
-                          .includes(
-                            :created_by,
-                            :pipeline_teams,
-                            pipeline_stages: [],
-                            pipeline_items: [
-                              :pipeline_stage,
-                              :contact,
-                              :tasks,
-                              conversation: [
-                                :contact,
-                                :assignee,
-                                :team,
-                                :inbox,
-                                messages: [:attachments, :sender]
-                              ]
-                            ]
-                          )
-                          .preload(
-                            pipeline_items: {
-                              conversation: :messages
-                            }
-                          )
-                          .find(params[:id])
+    scope = Pipeline.includes(:created_by, :pipeline_teams, pipeline_stages: [])
+    if action_name == 'show' && include_items?
+      scope = scope.includes(
+        pipeline_items: [
+          :pipeline_stage,
+          :stage_movements,
+          { contact: { avatar_attachment: :blob } },
+          { conversation: [:assignee, :team, { inbox: :channel }, { contact: { avatar_attachment: :blob } }] }
+        ]
+      )
+    end
+    @pipeline = scope.find(params[:id])
+  end
+
+  def include_items?
+    ActiveModel::Type::Boolean.new.cast(params.fetch(:include_items, true))
   end
 
   # dependents only needs the pipeline row to key the crm_forms lookup, so it skips the
-  # heavy item/conversation/message eager-load that fetch_pipeline does for show-style
-  # actions — loading that whole graph to answer a confirmation dialog is wasted work.
+  # eager-load that fetch_pipeline does for show-style actions — loading that graph to
+  # answer a confirmation dialog is wasted work.
   def fetch_pipeline_lean
     @pipeline = Pipeline.find(params[:id])
   end

@@ -203,29 +203,33 @@ module ConversationSerializer
       conversation.messages.last
     end
 
-    if last_non_activity_message
-      result['last_non_activity_message'] = {
-        id: last_non_activity_message.id,
-        content: last_non_activity_message.content,
-        message_type: last_non_activity_message.message_type,
-        created_at: last_non_activity_message.created_at&.iso8601,
-        processed_message_content: last_non_activity_message.processed_message_content,
-        # EVO-1551 round 6 — single masker entrypoint per egress audience.
-        content_attributes: last_non_activity_message.content_attributes_for_egress(audience: :per_request),
-        attachments: last_non_activity_message.attachments.map { |a| { file_type: a.file_type } },
-        sender: last_non_activity_message.sender ? {
-          id: last_non_activity_message.sender.id,
-          name: if ContactPiiMasker.should_mask? && last_non_activity_message.sender_type.to_s.casecmp('contact').zero?
-                  ContactPiiMasker.mask_phone_like_name(last_non_activity_message.sender.name)
-                else
-                  last_non_activity_message.sender.name
-                end,
-          type: last_non_activity_message.sender_type
-        } : nil
-      }
-    end
+    result['last_non_activity_message'] = serialize_last_message(last_non_activity_message) if last_non_activity_message
 
     result
+  end
+
+  # Preview of a conversation's latest message, shared by the conversation list and
+  # the pipeline board card.
+  def serialize_last_message(message)
+    {
+      id: message.id,
+      content: message.content,
+      message_type: message.message_type,
+      created_at: message.created_at&.iso8601,
+      processed_message_content: message.processed_message_content,
+      # Single masker entrypoint per egress audience.
+      content_attributes: message.content_attributes_for_egress(audience: :per_request),
+      attachments: message.attachments.map { |a| { file_type: a.file_type } },
+      sender: message.sender ? {
+        id: message.sender.id,
+        name: if ContactPiiMasker.should_mask? && message.sender_type.to_s.casecmp('contact').zero?
+                ContactPiiMasker.mask_phone_like_name(message.sender.name)
+              else
+                message.sender.name
+              end,
+        type: message.sender_type
+      } : nil
+    }
   end
 
   # Serialize collection of Conversations
