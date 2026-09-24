@@ -39,6 +39,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     @pipeline_items = @pipeline.pipeline_items.includes(
       :pipeline_stage,
       :stage_movements,
+      :assigned_by,
       :contact,
       conversation: [:contact, :assignee, :team, :inbox]
     )
@@ -161,6 +162,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       @pipeline_item = @pipeline.pipeline_items.includes(
         :conversation,
         :pipeline_stage,
+        :assigned_by,
         conversation: [
           :contact,
           :assignee,
@@ -202,6 +204,25 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     stage_changed = false
     wrote_anything = false
 
+    # Resolve the owner before any write, or a 422 for an unknown user would come back
+    # with the stage move (and its automations) already committed.
+    # `key?` rather than `present?`: an explicit null is how a caller clears the owner,
+    # and present? would read that as "field absent" and silently keep the old one.
+    owner_provided = params.key?(:assigned_by_id)
+    if owner_provided
+      owner_id = params[:assigned_by_id].presence
+      owner = owner_id && User.find_by(id: owner_id)
+
+      if owner_id && owner.nil?
+        return error_response(
+          ApiErrorCodes::VALIDATION_ERROR,
+          "User with ID '#{owner_id}' not found",
+          details: { assigned_by_id: owner_id },
+          status: :unprocessable_entity
+        )
+      end
+    end
+
     if new_stage_id.present? && new_stage_id.to_s != @pipeline_item.pipeline_stage_id.to_s
       new_stage = @pipeline.pipeline_stages.find(new_stage_id)
 
@@ -219,6 +240,11 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
     if params[:custom_fields].present?
       @pipeline_item.update!(custom_fields: params[:custom_fields])
+      wrote_anything = true
+    end
+
+    if owner_provided
+      @pipeline_item.update!(assigned_by: owner)
       wrote_anything = true
     end
 
@@ -242,7 +268,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     dispatch_conversation_updated_event(@pipeline_item.conversation) if stage_changed
 
     success_response(
-      data: PipelineItemSerializer.serialize(@pipeline_item.reload, include_entity: true),
+      data: PipelineItemSerializer.serialize(reload_item_with_owner, include_entity: true),
       message: 'Pipeline item updated successfully'
     )
   rescue ActiveRecord::RecordNotFound
@@ -532,11 +558,12 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     # Get contacts that are NOT already in THIS specific pipeline
     contacts_in_current_pipeline = @pipeline.pipeline_items.where.not(contact_id: nil).select(:contact_id)
 
+    # Ordering breaks ties on id: contacts sharing a name would otherwise drift between
+    # pages, and the caller would see duplicates and gaps.
     current_contacts = Contact.non_groups
                        .includes(avatar_attachment: :blob)
                        .where.not(contacts: { id: contacts_in_current_pipeline })
-                       .order(name: :desc)
-                       .limit(50)
+                       .order(name: :desc, id: :asc)
 
     # Apply search filter if provided
     if params[:search].present?
@@ -548,15 +575,22 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       )
     end
 
-    Rails.logger.info "Current contacts: #{current_contacts.inspect}"
+    current_contacts = current_contacts.page(params[:page]).per(items_per_page)
 
-    success_response(
+    paginated_response(
       data: ContactSerializer.serialize_collection(current_contacts),
+      collection: current_contacts,
       message: 'Available contacts retrieved successfully'
     )
   end
 
   private
+
+  # The serializer only emits the owner block when the association is loaded, so the
+  # update response has to come back with it preloaded.
+  def reload_item_with_owner
+    @pipeline.pipeline_items.includes(:assigned_by).find(@pipeline_item.id)
+  end
 
   def skip_missing_target_stage
     Rails.logger.warn(

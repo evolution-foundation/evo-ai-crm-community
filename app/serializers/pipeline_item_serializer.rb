@@ -80,11 +80,22 @@ module PipelineItemSerializer
       days_in_current_stage: pipeline_item.days_in_current_stage,
       created_at: pipeline_item.created_at&.to_i,
       updated_at: pipeline_item.updated_at&.iso8601,
+      assigned_by_id: pipeline_item.assigned_by_id,
       is_orphaned: is_orphaned
     }
 
     return result if is_orphaned
 
+    # Only when the caller eager-loaded the owner — reading it unconditionally would
+    # fire one User query per card on the board.
+    if pipeline_item.association(:assigned_by).loaded? && pipeline_item.assigned_by
+      result[:assigned_by] = {
+        id: pipeline_item.assigned_by.id,
+        name: pipeline_item.assigned_by.name,
+        email: pipeline_item.assigned_by.email,
+        avatar_url: pipeline_item.assigned_by.avatar_url
+      }
+    end
     if include_entity && view == :card
       serialize_card_entity(result, pipeline_item,
                             labels_by_title: labels_by_title, labels_by_id: labels_by_id,
