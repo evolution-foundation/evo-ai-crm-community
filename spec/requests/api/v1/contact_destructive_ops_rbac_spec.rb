@@ -5,7 +5,8 @@ require 'rails_helper'
 # Destructive contact operations must be permission-gated: merging (which
 # destroys the mergee) and contact bulk actions (delete-only today) demand
 # contacts.delete; conversation bulk actions demand conversations.update;
-# notes and label tagging demand contacts.update, with contacts.read for reads.
+# notes and label tagging (set, add, remove) demand contacts.update, with
+# contacts.read for reads.
 RSpec.describe 'Contact destructive operations RBAC', type: :request do
   let(:user) { User.create!(name: 'Perm Probe', email: "probe-#{SecureRandom.hex(4)}@example.com") }
   let(:contact) { Contact.create!(name: "Contact #{SecureRandom.hex(3)}") }
@@ -154,6 +155,32 @@ RSpec.describe 'Contact destructive operations RBAC', type: :request do
       expect(response).to have_http_status(:ok)
       expect(json_response['data']).to eq(['vip'])
       expect(json_response['payload']).to eq(['vip'])
+    end
+
+    it 'denies add and remove without contacts.update' do
+      grant_permissions('contacts.read')
+      contact.update_labels(['vip'])
+
+      post "/api/v1/contacts/#{contact.id}/labels/add", params: { labels: ['lead'] }, as: :json
+      expect(response).to have_http_status(:forbidden)
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove", params: { labels: ['vip'] }, as: :json
+      expect(response).to have_http_status(:forbidden)
+
+      expect(contact.reload.label_list).to contain_exactly('vip')
+    end
+
+    it 'adds and removes with contacts.update' do
+      grant_permissions('contacts.read', 'contacts.update')
+      contact.update_labels(['vip'])
+
+      post "/api/v1/contacts/#{contact.id}/labels/add", params: { labels: ['lead'] }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to contain_exactly('vip', 'lead')
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove", params: { labels: ['vip'] }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data']).to eq(['lead'])
     end
   end
 end
