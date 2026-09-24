@@ -271,6 +271,18 @@ class Rack::Attack
     end
   end
 
+  ## Instagram webhook ingress. The events can arrive from a single forwarder (the Evolution Hub
+  ## sends the whole platform's Instagram traffic from one address) and Meta redelivers in bursts
+  ## after an outage, so the ceiling sits well above real traffic. A deployment behind one
+  ## forwarder should raise it or list the forwarder in RACK_ATTACK_ALLOWED_IPS. The GET
+  ## handshake is not counted.
+  throttle('webhooks/instagram', limit: ENV.fetch('RATE_LIMIT_INSTAGRAM_WEBHOOK', '1800').to_i, period: 1.minute) do |req|
+    # Rails routes the path with any number of trailing slashes to the same action, so they are
+    # stripped before matching: otherwise one extra character walks straight past the ceiling.
+    path = req.path_without_extentions.to_s.sub(%r{/+\z}, '')
+    "instagram_webhook:#{req.ip}" if req.post? && path == '/webhooks/instagram'
+  end
+
   ## Prevent abuse of conversations history import (EVO-1557)
   ## Each request can ingest up to 50k rows; default 5 reqs/min/key.
   throttle('api/v1/conversations/import', limit: ENV.fetch('RATE_LIMIT_CONVERSATIONS_IMPORT', '5').to_i, period: 1.minute) do |req|

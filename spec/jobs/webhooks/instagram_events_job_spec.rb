@@ -78,4 +78,29 @@ RSpec.describe Webhooks::InstagramEventsJob, type: :job do
 
     expect(Rails.logger).to have_received(:info).with(/Skipping unsupported change fields/)
   end
+
+  # `changes` comes off the wire, so a shape the job did not expect must not kill the entry.
+  describe 'a malformed changes envelope' do
+    it 'skips changes sent as an object instead of an array' do
+      entry = comment_entry.merge('changes' => { 'field' => 'comments', 'value' => { 'text' => 'oi' } })
+      expect(Instagram::TestEventService).not_to receive(:new)
+
+      expect { process(entry) }.not_to raise_error
+    end
+
+    it 'skips changes sent as an array of strings' do
+      entry = comment_entry.merge('changes' => %w[comments mentions])
+      expect(Instagram::TestEventService).not_to receive(:new)
+
+      expect { process(entry) }.not_to raise_error
+    end
+
+    it 'skips a change that carries no value, or a value that is not an object' do
+      [{ 'field' => 'comments' }, { 'field' => 'comments', 'value' => 'text' }, { 'field' => 'comments', 'value' => nil }].each do |change|
+        expect(Instagram::TestEventService).not_to receive(:new)
+
+        expect { process(comment_entry.merge('changes' => [change])) }.not_to raise_error
+      end
+    end
+  end
 end

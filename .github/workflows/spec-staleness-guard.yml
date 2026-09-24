@@ -222,6 +222,11 @@ on:
       - 'app/controllers/webhooks/instagram_controller.rb'
       - 'config/initializers/facebook_messenger.rb'
       - 'spec/requests/webhooks/meta_token_verify_spec.rb'
+      # The Instagram webhook trusts nothing it cannot verify: the signature check
+      # and its throttle are what stand between an anonymous POST and the job queue.
+      - 'app/controllers/concerns/meta_webhook_signature_concern.rb'
+      - 'config/initializers/rack_attack.rb'
+      - 'spec/requests/webhooks/instagram_events_spec.rb'
       # A comment and Meta's dashboard test event arrive in the SAME `changes`
       # envelope, so the predicate that tells them apart is all that keeps real
       # notifications out of the test path - and it reads the shape of an external
@@ -589,6 +594,7 @@ jobs:
             spec/lib/evolution_hub/client_public_connect_spec.rb \
             spec/listeners/action_cable_listener_hub_channel_spec.rb \
             spec/lib/meta_base_url_spec.rb \
+            spec/requests/webhooks/instagram_events_spec.rb \
             spec/jobs/webhooks/instagram_events_job_spec.rb \
             spec/services/instagram/test_event_service_spec.rb \
             spec/services/whatsapp/send_on_whatsapp_service_spec.rb \

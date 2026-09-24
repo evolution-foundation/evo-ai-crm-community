@@ -15,6 +15,14 @@ class Instagram::TestEventService
     value.dig(:sender, :id).to_s == TEST_SENDER_ID && value.dig(:recipient, :id).to_s == TEST_RECIPIENT_ID
   end
 
+  # `changes` comes off the wire: only an array whose first item is an object carrying an
+  # object `value` has a messaging to read, and anything else is nil rather than a TypeError.
+  def self.messaging_from(changes)
+    first = changes.first if changes.is_a?(Array)
+    value = first.with_indifferent_access[:value] if first.is_a?(Hash)
+    value if value.is_a?(Hash)
+  end
+
   def initialize(messaging)
     @messaging = messaging
   end

@@ -137,7 +137,7 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   end
 
   def extract_messaging_from_test_event(entry)
-    entry[:changes].first&.dig(:value) if entry[:changes].present?
+    Instagram::TestEventService.messaging_from(entry[:changes])
   end
 
   def instagram_id(messaging, entry = nil)
