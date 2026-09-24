@@ -174,7 +174,12 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       ['standby is a string', { 'standby' => 'oops' }],
       ['changes is a string', { 'changes' => 'oops' }],
       ['changes is an array of strings', { 'changes' => %w[a b] }],
-      ['changes is an object', { 'changes' => { 'field' => 'comments' } }]
+      ['changes is an object', { 'changes' => { 'field' => 'comments' } }],
+      # The list check alone accepts these; the job then raises reading sender/recipient/message.
+      ['sender is a string', { 'messaging' => [{ 'sender' => 'x', 'recipient' => { 'id' => '1' } }] }],
+      ['recipient is an array', { 'messaging' => [{ 'sender' => { 'id' => '1' }, 'recipient' => %w[a] }] }],
+      ['message is a string', { 'messaging' => [{ 'sender' => { 'id' => '1' }, 'message' => 'oops' }] }],
+      ['read is a string', { 'standby' => [{ 'recipient' => { 'id' => '1' }, 'read' => 'oops' }] }]
     ].each do |label, extra|
       it "answers 422 without enqueueing when #{label}" do
         expect(Webhooks::InstagramEventsJob).not_to receive(:perform_later)
@@ -184,6 +189,16 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
 
         expect(response).to have_http_status(:unprocessable_entity)
       end
+    end
+
+    # `id` is handed to Channel::Instagram.find_by as a lookup key.
+    it 'answers 422 without enqueueing when the entry id is an object' do
+      expect(Webhooks::InstagramEventsJob).not_to receive(:perform_later)
+      body = { 'object' => 'instagram', 'entry' => [entry.merge('id' => { 'oops' => 1 })] }.to_json
+
+      post_events(body: body, signature: sign(body, instagram_secret))
+
+      expect(response).to have_http_status(:unprocessable_entity)
     end
 
     it 'still enqueues a well formed DM and a changes-only entry' do
@@ -229,6 +244,19 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       1800.times { mock_session.get(path, 'REMOTE_ADDR' => '203.0.113.7') }
 
       expect(mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7').status).to eq(200)
+    end
+
+    # Rails routes the path with trailing slashes to the same action, so they must share a bucket.
+    # Driven through the discriminator rather than mock_session: Rack::MockRequest collapses the
+    # path before Rack::Attack sees it, so a request-level test here would pass either way.
+    it 'buckets the path with trailing slashes together with the bare path' do
+      discriminator = Rack::Attack.throttles['webhooks/instagram'].block
+      keys = [path, "#{path}/", "#{path}//"].map do |candidate|
+        env = Rack::MockRequest.env_for(candidate, 'REQUEST_METHOD' => 'POST', 'REMOTE_ADDR' => '203.0.113.7')
+        discriminator.call(Rack::Attack::Request.new(env))
+      end
+
+      expect(keys).to eq(['instagram_webhook:203.0.113.7'] * 3)
     end
 
     it 'gives another address its own bucket' do

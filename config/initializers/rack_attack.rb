@@ -277,7 +277,10 @@ class Rack::Attack
   ## forwarder should raise it or list the forwarder in RACK_ATTACK_ALLOWED_IPS. The GET
   ## handshake is not counted.
   throttle('webhooks/instagram', limit: ENV.fetch('RATE_LIMIT_INSTAGRAM_WEBHOOK', '1800').to_i, period: 1.minute) do |req|
-    "instagram_webhook:#{req.ip}" if req.post? && req.path_without_extentions == '/webhooks/instagram'
+    # Rails routes the path with any number of trailing slashes to the same action, so they are
+    # stripped before matching: otherwise one extra character walks straight past the ceiling.
+    path = req.path_without_extentions.to_s.sub(%r{/+\z}, '')
+    "instagram_webhook:#{req.ip}" if req.post? && path == '/webhooks/instagram'
   end
 
   ## Prevent abuse of conversations history import (EVO-1557)

@@ -6,6 +6,10 @@ class Webhooks::InstagramController < ActionController::API
   # a body off the wire, so each one is checked before the job reads it.
   EVENT_KEYS = %i[messaging standby changes].freeze
 
+  # Keys the job and its services dereference inside an event (`messaging[:sender][:id]`,
+  # `params[:read][:mid]`). Checking only the list lets a scalar through and the job raises on it.
+  EVENT_OBJECT_KEYS = %i[sender recipient message read].freeze
+
   before_action :verify_meta_signature!, only: :events
 
   def events
@@ -28,7 +32,12 @@ class Webhooks::InstagramController < ActionController::API
   end
 
   def valid_entries?(entries)
-    entries.is_a?(Array) && entries.all? { |entry| entry.is_a?(Hash) && EVENT_KEYS.all? { |key| valid_events?(entry[key]) } }
+    entries.is_a?(Array) && entries.all? { |entry| valid_entry?(entry) }
+  end
+
+  # `id` reaches the channel lookup as a scalar key, so a list or an object there raises in the query.
+  def valid_entry?(entry)
+    entry.is_a?(Hash) && !entry[:id].is_a?(Enumerable) && EVENT_KEYS.all? { |key| valid_events?(entry[key]) }
   end
 
   def instagram_object?
@@ -41,7 +50,11 @@ class Webhooks::InstagramController < ActionController::API
   end
 
   def valid_events?(events)
-    events.nil? || (events.is_a?(Array) && events.all?(Hash))
+    events.nil? || (events.is_a?(Array) && events.all? { |event| valid_event?(event) })
+  end
+
+  def valid_event?(event)
+    event.is_a?(Hash) && EVENT_OBJECT_KEYS.all? { |key| event[key].nil? || event[key].is_a?(Hash) }
   end
 
   def valid_token?(token)
