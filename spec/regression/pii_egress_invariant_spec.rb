@@ -45,7 +45,13 @@ module Evo1551
       'MessageSerializer (REST)' =>
         ->(m) { MessageSerializer.new(m).to_json },
       'ConversationSerializer (last_non_activity_message preview)' =>
-        ->(m) { ConversationSerializer.new(m.conversation).to_json }
+        ->(m) { ConversationSerializer.serialize(m.conversation, last_non_activity_messages: { m.conversation_id => m }).to_json },
+      'PipelineItemSerializer card (board card message preview)' =>
+        lambda { |m|
+          item = PipelineItem.new(conversation: m.conversation, entered_at: Time.current)
+          PipelineItemSerializer.serialize(item, include_entity: true, view: :card,
+                                                 last_non_activity_messages: { m.conversation_id => m }).to_json
+        }
     }.freeze
 
     # Paths mirror the `NoRawContentAttributesInEgress` Include glob in

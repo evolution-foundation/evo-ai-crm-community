@@ -96,6 +96,18 @@ RSpec.describe 'Pipeline board', type: :request do
       expect(json_response['data']['stages'].sum { |stage| stage['items'].size }).to eq(8)
       expect(large).to eq(small)
     end
+
+    it 'runs the same number of queries for the stages-only answer' do
+      conversation_card
+      small = count_queries { get "/api/v1/pipelines/#{pipeline.id}", params: { include_items: false } }
+
+      4.times { conversation_card }
+      3.times { lead_card(stage: second_stage) }
+      large = count_queries { get "/api/v1/pipelines/#{pipeline.id}", params: { include_items: false } }
+
+      expect(json_response['data']['stages'].sum { |stage| stage['active_item_count'] }).to eq(8)
+      expect(large).to eq(small)
+    end
   end
 
   describe 'PATCH /pipeline_items/:id/move_to_stage' do
@@ -119,6 +131,19 @@ RSpec.describe 'Pipeline board', type: :request do
       expect(response).to have_http_status(:ok)
       expect(card.reload.pipeline_stage_id).to eq(second_stage.id)
       expect(other.reload.pipeline_stage_id).to eq(first_stage.id)
+    end
+
+    it 'removes the card whose id was sent, not the card of conversation #prefix' do
+      allow_any_instance_of(PipelinePolicy).to receive(:update?).and_return(true)
+      other = conversation_card
+      card_id = "#{other.conversation.display_id.to_s.ljust(8, 'a')}-0000-4000-8000-000000000000"
+      PipelineItem.create!(id: card_id, pipeline: pipeline, pipeline_stage: first_stage,
+                           contact: Contact.create!(name: 'Lead'))
+
+      delete "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card_id}", as: :json
+
+      expect(PipelineItem.exists?(card_id)).to be(false)
+      expect(PipelineItem.exists?(other.id)).to be(true)
     end
 
     it 'still finds a conversation card by its conversation number' do
@@ -279,6 +304,16 @@ RSpec.describe 'Pipeline board', type: :request do
         get url, params: { label: 'hot' }
 
         expect(json_response['data'].pluck('id')).to eq([labelled.id])
+      end
+
+      it 'filters by the entered range sent as ISO 8601 with a time zone' do
+        old = lead_card.tap { |item| item.update!(entered_at: Time.zone.parse('2026-05-03T12:00:00Z')) }
+        inside = lead_card.tap { |item| item.update!(entered_at: Time.zone.parse('2026-05-04T12:00:00Z')) }
+
+        get url, params: { entered_after: '2026-05-04T03:00:00.000Z', entered_before: '2026-05-05T02:59:59.999Z' }
+
+        expect(json_response['data'].pluck('id')).to eq([inside.id])
+        expect(json_response['data'].pluck('id')).not_to include(old.id)
       end
 
       it 'counts the filtered cards of a stage in meta' do
