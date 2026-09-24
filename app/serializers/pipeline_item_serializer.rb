@@ -48,9 +48,13 @@ module PipelineItemSerializer
     end
   end
 
+  # unread_counts / last_non_activity_messages: per-conversation lookups batched by the
+  # caller (ConversationListLookups); without them each conversation queries its own.
+  # view: :card returns only what a board card renders (see #serialize_card_entity).
   def serialize(pipeline_item, include_entity: false, include_tasks_info: false,
                 include_services_info: false, include_labels: false,
-                labels_by_title: nil, labels_by_id: nil, task_counts_by_item: nil)
+                labels_by_title: nil, labels_by_id: nil, task_counts_by_item: nil,
+                unread_counts: nil, last_non_activity_messages: nil, view: :full)
     is_orphaned = if pipeline_item.conversation_id.present?
                     !pipeline_item.conversation.present?
                   elsif pipeline_item.contact_id.present?
@@ -92,13 +96,19 @@ module PipelineItemSerializer
         avatar_url: pipeline_item.assigned_by.avatar_url
       }
     end
-    if include_entity && pipeline_item.conversation.present? && pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
+    if include_entity && view == :card
+      serialize_card_entity(result, pipeline_item,
+                            labels_by_title: labels_by_title, labels_by_id: labels_by_id,
+                            last_non_activity_messages: last_non_activity_messages)
+    elsif include_entity && pipeline_item.conversation.present? && pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
       result[:conversation] = ConversationSerializer.serialize(
         pipeline_item.conversation,
         include_messages: false,
         include_labels: include_labels,
         labels_by_title: labels_by_title,
-        labels_by_id: labels_by_id
+        labels_by_id: labels_by_id,
+        unread_counts: unread_counts,
+        last_non_activity_messages: last_non_activity_messages
       )
       result[:conversation]['uuid'] = pipeline_item.conversation.uuid
       if pipeline_item.conversation.association(:contact).loaded? && pipeline_item.conversation.contact
@@ -118,7 +128,7 @@ module PipelineItemSerializer
       end
     end
 
-    if include_entity && pipeline_item.contact.present? && pipeline_item.association(:contact).loaded? && pipeline_item.contact
+    if include_entity && view != :card && pipeline_item.contact.present? && pipeline_item.association(:contact).loaded? && pipeline_item.contact
       # include_labels: false — see note above; pipelines board does not use contact labels.
       result[:contact] = ContactSerializer.serialize(pipeline_item.contact, include_labels: false)
     end
@@ -172,6 +182,45 @@ module PipelineItemSerializer
     end
 
     result
+  end
+
+  # Card payload: the fields the board card, its filters and its edit/remove dialogs
+  # read, without the full contact and conversation (those load when the card opens).
+  def serialize_card_entity(result, pipeline_item, labels_by_title:, labels_by_id:, last_non_activity_messages:)
+    conversation = pipeline_item.conversation
+    contact = conversation&.contact || pipeline_item.contact
+    result[:contact] = card_contact(contact) if contact
+    return unless conversation
+
+    last_message = last_non_activity_messages ? last_non_activity_messages[conversation.id] : conversation.messages.last
+    assignee = conversation.assignee
+    result[:conversation] = {
+      id: conversation.id,
+      uuid: conversation.uuid,
+      display_id: conversation.display_id,
+      status: conversation.status,
+      priority: conversation.priority,
+      last_activity_at: conversation.last_activity_at&.to_i,
+      labels: Labels::TagChipResolver.chips_for(
+        conversation.cached_label_list_array,
+        by_title: labels_by_title || {},
+        by_id: labels_by_id || {}
+      ),
+      assignee: assignee && { id: assignee.id, name: assignee.name },
+      inbox: conversation.inbox && { id: conversation.inbox.id, name: conversation.inbox.name },
+      contact: contact && card_contact(contact).slice(:id, :name),
+      last_non_activity_message: last_message && ConversationSerializer.serialize_last_message(last_message)
+    }
+  end
+
+  def card_contact(contact)
+    masked = ContactPiiMasker.should_mask?
+    {
+      id: contact.id,
+      name: masked ? ContactPiiMasker.mask_phone_like_name(contact.name) : contact.name,
+      email: masked ? ContactPiiMasker.mask_email(contact.email) : contact.email,
+      phone_number: masked ? ContactPiiMasker.mask_phone(contact.phone_number) : contact.phone_number
+    }
   end
 
   # Serialize collection of PipelineItems

@@ -27,6 +27,7 @@ on:
       - 'spec/services/automation_rules/**'
       - 'spec/services/pipelines/**'
       - 'spec/listeners/automation_rule_listener_attribute_changed_spec.rb'
+      - 'spec/listeners/automation_rule_listener_contact_spec.rb'
       - 'spec/listeners/automation_rule_listener_pipeline_stage_updated_contact_card_spec.rb'
       - 'spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb'
       - 'spec/listeners/pipeline_stage_automation_listener_spec.rb'
@@ -43,6 +44,10 @@ on:
       - 'app/controllers/api/v1/contacts_controller.rb'
       - 'app/jobs/delete_object_job.rb'
       - 'spec/jobs/delete_object_job_spec.rb'
+      # The group filter and the duplicate-conflict disclosure share this controller,
+      # and a spec outside the run: list below never executes — which is how this one
+      # rotted unnoticed, its helper raising on every example.
+      - 'spec/requests/api/v1/contacts_groups_spec.rb'
       # EVO-2122: dropping is_active from the update permit made deactivation a
       # silent no-op that still answered 200. The regression is invisible to every
       # other lane, so the controller has to trigger the spec that proves it.
@@ -62,6 +67,13 @@ on:
       - 'spec/requests/api/v1/pipeline_items_archived_spec.rb'
       - 'spec/controllers/api/v1/pipeline_tasks_controller_spec.rb'
       - 'spec/controllers/api/v1/pipeline_items_controller_spec.rb'
+      # The board of a large funnel: stage pages, card payload, a query count that
+      # must not follow the number of cards, and no raw PII in the message preview.
+      - 'app/serializers/pipeline_serializer.rb'
+      - 'app/serializers/pipeline_item_serializer.rb'
+      - 'app/serializers/pipeline_stage_serializer.rb'
+      - 'spec/requests/api/v1/pipeline_board_spec.rb'
+      - 'spec/regression/pii_egress_invariant_spec.rb'
       # The resolver picks the service every new blob is born on, and the test
       # service is what an operator trusts to confirm it. Only these specs prove
       # both read the ENV ahead of a stale DB row instead of the ephemeral disk.
@@ -152,6 +164,11 @@ on:
       - 'app/listeners/agent_bot_listener.rb'
       - 'app/services/agent_bots/**'
       - 'spec/models/agent_bot_inbox_spec.rb'
+      # The moderation reply must leave through HttpRequestService#build_http_request,
+      # the seam request decorations hang on. A hand-rolled request keeps answering
+      # 200 everywhere and only this spec notices the dropped decoration.
+      - 'app/services/facebook/moderation/response_generator_service.rb'
+      - 'spec/services/facebook/moderation/response_generator_service_spec.rb'
       # The export enumerates macros, pipelines and inboxes; these specs are the whole
       # proof it does so through each category's visibility rule, on all three paths
       # (inventory, `all`, explicit id). The importer spec covers the report a skipped
@@ -485,6 +502,7 @@ jobs:
             spec/requests/api/v1/purchase_webhooks_spec.rb \
             spec/listeners/evo_flow/purchase_events_listener_spec.rb \
             spec/lib/events/evo_flow_event_names_spec.rb \
+            spec/listeners/automation_rule_listener_contact_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_contact_card_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb \
             spec/listeners/pipeline_stage_automation_listener_spec.rb \
@@ -495,12 +513,15 @@ jobs:
             spec/models/pipeline_spec.rb \
             spec/models/role_spec.rb \
             spec/requests/api/v1/contacts_spec.rb \
+            spec/requests/api/v1/contacts_groups_spec.rb \
             spec/requests/api/v1/pipelines_activation_spec.rb \
             spec/requests/api/v1/pipelines_team_visibility_spec.rb \
             spec/policies/pipeline_policy/scope_spec.rb \
             spec/requests/api/v1/pipeline_items_archived_spec.rb \
             spec/controllers/api/v1/pipeline_tasks_controller_spec.rb \
             spec/controllers/api/v1/pipeline_items_controller_spec.rb \
+            spec/requests/api/v1/pipeline_board_spec.rb \
+            spec/regression/pii_egress_invariant_spec.rb \
             spec/jobs/delete_object_job_spec.rb \
             spec/channels/room_channel_spec.rb \
             spec/lib/global_config_service_spec.rb \
@@ -543,6 +564,7 @@ jobs:
             spec/listeners/reporting_event_listener_device_echo_spec.rb \
             spec/services/dashboard/customer_dashboard_service_ai_vs_human_spec.rb \
             spec/services/facebook/moderation/action_executor_service_reply_author_spec.rb \
+            spec/services/facebook/moderation/response_generator_service_spec.rb \
             spec/services/evolution_hub/ \
             spec/controllers/api/v1/integrations/evolution_hub_controller_spec.rb \
             spec/lib/evolution_hub/client_public_connect_spec.rb \

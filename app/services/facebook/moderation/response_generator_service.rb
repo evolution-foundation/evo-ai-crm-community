@@ -3,7 +3,6 @@
 require 'net/http'
 require 'uri'
 require 'json'
-require 'securerandom'
 
 class Facebook::Moderation::ResponseGeneratorService
   attr_reader :conversation, :message, :agent_bot
@@ -107,56 +106,24 @@ class Facebook::Moderation::ResponseGeneratorService
   end
 
   def call_evo_ai_bot(payload)
-    # Evo AI provider uses JSON-RPC format (same as HttpRequestService)
-    return nil unless agent_bot.outgoing_url.present?
+    return nil if agent_bot.outgoing_url.blank?
 
-    uri = URI(agent_bot.outgoing_url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = uri.scheme == 'https'
-    http.read_timeout = 30
-    http.open_timeout = 10
-
-    request = Net::HTTP::Post.new(uri)
-    request['Content-Type'] = 'application/json'
-    # Same reason as the HTTP request service: gating on the inline column left a
-    # vault-only bot with no Authorization header at all.
-    moderation_key = AgentBots::CredentialResolution.api_key_for(agent_bot)
-    request['Authorization'] = "Bearer #{moderation_key}" if moderation_key.present?
-
-    # Build JSON-RPC payload (same format as HttpRequestService)
-    jsonrpc_payload = {
-      jsonrpc: '2.0',
-      id: "req-#{SecureRandom.uuid[0..7]}",
-      method: 'message/send',
-      params: {
-        contextId: conversation.id.to_s,
-        message: {
-          role: 'user',
-          parts: [{ type: 'text', text: message.content }],
-          messageId: message.id.to_s
-        },
-        metadata: {
-          evoai_crm_event: 'message_created',
-          evoai_crm_data: payload,
-          agent_bot_id: agent_bot.id,
-          agent_bot_name: agent_bot.name,
-          contactId: conversation.contact.id.to_s,
-          contactName: conversation.contact.name,
-          inboxId: conversation.inbox.id.to_s
-        }
-      }
-    }
-
-    request.body = jsonrpc_payload.to_json
-
+    # Never hand-build this request: it must inherit the service's request decorations.
     Rails.logger.info "[Facebook Moderation] Making JSON-RPC request to #{agent_bot.outgoing_url}"
-    response = http.request(request)
+    response = AgentBots::HttpRequestService.new(agent_bot, moderation_request_payload(payload)).execute_request
 
-    return nil unless response.code == '200'
+    return nil unless response&.code == '200'
 
     parsed = JSON.parse(response.body) rescue {}
     # Extract from artifacts format (same as ResponseProcessor)
     extract_response_from_artifacts(parsed)
+  end
+
+  # The service extractors read these top-level keys to build the JSON-RPC
+  # params: contextId from conversation.id, text from content, messageId from
+  # message_id — same values the hand-built payload used to carry.
+  def moderation_request_payload(payload)
+    payload.merge(content: message.content, message_id: message.id.to_s)
   end
 
   def call_http_bot(payload)

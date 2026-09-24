@@ -120,12 +120,14 @@ class PipelineItem < ApplicationRecord
     completed_at.present?
   end
 
-  def services_total_value
-    return 0 unless custom_fields&.dig('services').is_a?(Array)
+  def self.services_total(services)
+    return 0 unless services.is_a?(Array)
 
-    custom_fields['services'].sum do |service|
-      service['value'].to_f
-    end
+    services.sum { |service| service['value'].to_f }
+  end
+
+  def services_total_value
+    self.class.services_total(custom_fields&.dig('services'))
   end
 
   def pending_tasks_count

@@ -16,13 +16,18 @@ module PipelineSerializer
   # @param options [Hash] Serialization options
   # @option options [Boolean] :include_stages Include pipeline stages
   # @option options [Boolean] :include_items Include pipeline items
+  # @option options [Hash] :stage_summaries Pipeline#stage_summaries, so stage counters
+  #   come from one aggregate instead of per-stage queries
+  # @option options [Hash] :unread_counts, :last_non_activity_messages batched
+  #   per-conversation lookups forwarded to each item
   #
   # @return [Hash] Serialized pipeline ready for Oj
   #
   def serialize(pipeline, include_stages: false, include_items: false,
                 include_tasks_info: false, include_services_info: false,
                 include_labels: false, labels_by_title: nil, labels_by_id: nil,
-                task_counts_by_item: nil)
+                task_counts_by_item: nil, stage_summaries: nil, unread_counts: nil,
+                last_non_activity_messages: nil)
     result = {
       id: pipeline.id,
       name: pipeline.name,
@@ -77,7 +82,9 @@ module PipelineSerializer
             include_labels: include_labels,
             labels_by_title: labels_by_title,
             labels_by_id: labels_by_id,
-            task_counts_by_item: item_task_counts
+            task_counts_by_item: item_task_counts,
+            unread_counts: unread_counts,
+            last_non_activity_messages: last_non_activity_messages
           )
         end
 
@@ -86,7 +93,7 @@ module PipelineSerializer
 
         # Serialize stages with items already included
         result[:stages] = ordered_stages.map do |stage|
-          stage_data = PipelineStageSerializer.serialize(stage, include_item_count: true)
+          stage_data = serialize_stage(stage, stage_summaries)
           # Include items directly in the stage
           stage_data[:items] = items_by_stage[stage.id] || []
           stage_data
@@ -94,7 +101,7 @@ module PipelineSerializer
       else
         # Just serialize stages without items
         result[:stages] = ordered_stages.map do |stage|
-          PipelineStageSerializer.serialize(stage, include_item_count: true)
+          serialize_stage(stage, stage_summaries)
         end
       end
     end
@@ -105,7 +112,7 @@ module PipelineSerializer
     # services_info shape (PipelineItemSerializer) but aggregated over the whole
     # pipeline via Pipeline#total_value. Preloaded pipeline_items keep this N+1-free.
     if include_services_info
-      total_value = pipeline.total_value
+      total_value = stage_summaries ? stage_summaries.values.sum { |summary| summary[:total_value] } : pipeline.total_value
       result[:services_info] = {
         total_value: total_value,
         currency: 'BRL',
@@ -115,6 +122,12 @@ module PipelineSerializer
     end
 
     result
+  end
+
+  def serialize_stage(stage, stage_summaries)
+    return PipelineStageSerializer.serialize(stage, include_item_count: true) unless stage_summaries
+
+    PipelineStageSerializer.serialize(stage, summary: stage_summaries.fetch(stage.id, Pipeline::EMPTY_STAGE_SUMMARY))
   end
 
   # Serialize collection of Pipelines

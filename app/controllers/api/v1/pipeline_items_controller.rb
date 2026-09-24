@@ -3,6 +3,10 @@
 # rubocop:disable Metrics/ClassLength
 class Api::V1::PipelineItemsController < Api::V1::BaseController
   include Events::Types
+  include ConversationListLookups
+
+  DEFAULT_PER_PAGE = 50
+  MAX_PER_PAGE = 100
 
   # Mutating actions authorize against the pipeline write policy; reads stay at
   # view level.
@@ -34,24 +38,35 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # business-rule 422 telling it the pipeline is archived.
   before_action :reject_archived_pipeline, only: [:create, :move_conversation]
 
+  # Always paged (per_page defaults to 50, capped at 100) so the cost of a request never
+  # follows the size of the funnel. view=card returns the board card payload.
   def index
     @pipeline_items = @pipeline.pipeline_items.includes(
-      :conversation,
       :pipeline_stage,
+      :stage_movements,
       :assigned_by,
-      conversation: [
-        :contact,
-        :assignee,
-        :team,
-        messages: [:attachments, :sender]
-      ]
+      :contact,
+      conversation: [:contact, :assignee, :team, :inbox]
     )
 
     apply_filters
     apply_sorting
-    
-    success_response(
-      data: PipelineItemSerializer.serialize_collection(@pipeline_items, include_entity: true),
+    paginated = @pipeline_items.page(params[:page]).per(items_per_page)
+    items = paginated.to_a
+    conversation_ids = items.filter_map(&:conversation_id)
+
+    paginated_response(
+      data: PipelineItemSerializer.serialize_collection(
+        items,
+        include_entity: true,
+        include_services_info: card_view?,
+        labels_by_title: card_view? ? labels_by_title : nil,
+        labels_by_id: card_view? ? labels_by_id : nil,
+        unread_counts: card_view? ? nil : unread_counts_map(conversation_ids),
+        last_non_activity_messages: last_non_activity_messages_map(conversation_ids),
+        view: card_view? ? :card : :full
+      ),
+      collection: paginated,
       message: 'Pipeline items retrieved successfully'
     )
   end
@@ -684,9 +699,12 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   def set_pipeline_item
     # For destroy and move_to_stage actions, try to find by conversation_id first, then by pipeline_item id
     if %w[destroy move_to_stage update_conversation].include?(action_name)
-      # First try to find by conversation display_id
-      conversation = Conversation.find_by(display_id: params[:id])
-      @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
+      # First try to find by conversation display_id. Only a plain number is one: a UUID
+      # such as "089edd02-..." would cast to 89 and pick another conversation's card.
+      if params[:id].to_s.match?(/\A\d+\z/)
+        conversation = Conversation.find_by(display_id: params[:id])
+        @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
+      end
 
       # If not found, try by conversation id (UUID)
       if @pipeline_item.nil?
@@ -759,13 +777,63 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     @pipeline_items.where(pipeline_stage_id: params[:stage_id])
   end
 
+  # Matches the card's contact whether the card is a conversation or a lead. Aliased joins
+  # so it composes with the contact_name sort, which joins conversations/contacts too.
   def search_conversations
-    search_term = "%#{params[:search]}%"
-    @pipeline_items.joins(conversation: :contact)
-                           .where(
-                             'contacts.name ILIKE ? OR contacts.email ILIKE ? OR conversations.id::text ILIKE ?',
-                             search_term, search_term, search_term
-                           )
+    search_term = "%#{PipelineItem.sanitize_sql_like(params[:search].to_s.strip)}%"
+    @pipeline_items.joins(<<~SQL.squish)
+      LEFT JOIN conversations search_conversations ON search_conversations.id = pipeline_items.conversation_id
+      LEFT JOIN contacts search_contacts
+        ON search_contacts.id = COALESCE(pipeline_items.contact_id, search_conversations.contact_id)
+    SQL
+                   .where(
+                     'search_contacts.name ILIKE :term OR search_contacts.email ILIKE :term ' \
+                     'OR search_contacts.phone_number ILIKE :term OR search_conversations.display_id::text ILIKE :term ' \
+                     'OR search_conversations.id::text ILIKE :term',
+                     term: search_term
+                   )
+  end
+
+  # Filters on the card's conversation; lead cards have none, so they drop out, as they
+  # did when the board filtered in the browser.
+  def filter_by_conversation
+    return if params.values_at(:assignee_id, :conversation_status, :priority, :label).all?(&:blank?)
+
+    conversations = Conversation.all
+    conversations = conversations.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
+    { conversation_status: 'status', priority: 'priority' }.each do |param, column|
+      next if params[param].blank?
+
+      conversations = conversations.where(column => enum_values(params[param], Conversation.defined_enums[column]))
+    end
+    conversations = with_label(conversations, params[:label]) if params[:label].present?
+
+    @pipeline_items = @pipeline_items.where(conversation_id: conversations.select(:id))
+  end
+
+  def enum_values(param, mapping)
+    param.to_s.split(',').map(&:strip) & mapping.keys
+  end
+
+  # cached_label_list holds label titles, or label ids on rows written before titles
+  # were normalized; match either.
+  def with_label(conversations, title)
+    tags = [title.to_s.downcase] + Label.where('LOWER(title) = ?', title.to_s.downcase).pluck(:id)
+    conversations.where(<<~SQL.squish, tags: tags)
+      EXISTS (
+        SELECT 1 FROM unnest(string_to_array(conversations.cached_label_list, ',')) AS tag
+        WHERE LOWER(btrim(tag)) IN (:tags)
+      )
+    SQL
+  end
+
+  def items_per_page
+    per_page = params[:per_page].to_i
+    per_page.positive? ? [per_page, MAX_PER_PAGE].min : DEFAULT_PER_PAGE
+  end
+
+  def card_view?
+    params[:view] == 'card'
   end
 
   def stage_statistics
@@ -824,6 +892,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
     @pipeline_items = filter_by_stage if params[:stage_id].present?
     @pipeline_items = search_conversations if params[:search].present?
+    filter_by_conversation
   end
 
   def temporal_range(period)
@@ -860,6 +929,8 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
                       else
                         @pipeline_items.order(created_at: :desc)
                       end
+    # Tie-break so rows sharing a sort value never repeat or vanish across pages.
+    @pipeline_items = @pipeline_items.order(:id)
   end
 
   def ensure_authorized_user
