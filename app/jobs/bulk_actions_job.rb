@@ -74,8 +74,7 @@ class BulkActionsJob < ApplicationJob
   def remove_labels(conversation)
     return unless @params[:labels] && @params[:labels][:remove]
 
-    labels = conversation.label_list - @params[:labels][:remove]
-    conversation.update!(label_list: labels)
+    conversation.remove_labels(@params[:labels][:remove])
   end
 
   def bulk_delete_contacts
