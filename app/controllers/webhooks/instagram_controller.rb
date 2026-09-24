@@ -2,6 +2,8 @@ class Webhooks::InstagramController < ActionController::API
   include MetaTokenVerifyConcern
   include MetaWebhookSignatureConcern
 
+  EVENT_KEYS = %i[messaging standby].freeze
+
   before_action :verify_meta_signature!, only: :events
 
   def events
@@ -9,33 +11,11 @@ class Webhooks::InstagramController < ActionController::API
     Rails.logger.info("Instagram webhook params object: #{params['object'].inspect}")
 
     entries = params.to_unsafe_hash[:entry]
+    return refuse_envelope unless instagram_object? && valid_entries?(entries)
 
-    if params['object'].to_s.casecmp('instagram').zero? && valid_entries?(entries)
-      Rails.logger.info("Instagram webhook entry count: #{entries.length}")
-      # Log full entry structure for debugging
-      params[:entry]&.each_with_index do |entry, idx|
-        Rails.logger.info("Instagram webhook entry[#{idx}]: id=#{entry[:id]}, time=#{entry[:time]}")
-        Rails.logger.info("Instagram webhook entry[#{idx}] messaging count: #{entry[:messaging]&.length || 0}")
-        entry[:messaging]&.each_with_index do |msg, msg_idx|
-          Rails.logger.info("Instagram webhook entry[#{idx}] messaging[#{msg_idx}] keys: #{msg.keys.inspect}")
-          Rails.logger.info("Instagram webhook entry[#{idx}] messaging[#{msg_idx}] has sender: #{msg[:sender].present?}, has recipient: #{msg[:recipient].present?}, has message: #{msg[:message].present?}")
-
-          # Log sender and recipient IDs for verification
-          if msg[:sender].present?
-            Rails.logger.info("Instagram webhook entry[#{idx}] messaging[#{msg_idx}] SENDER ID: #{msg[:sender][:id]}")
-          end
-          if msg[:recipient].present?
-            Rails.logger.info("Instagram webhook entry[#{idx}] messaging[#{msg_idx}] RECIPIENT ID: #{msg[:recipient][:id]}")
-          end
-        end
-      end
-
-      ::Webhooks::InstagramEventsJob.perform_later(entries)
-      render json: :ok
-    else
-      Rails.logger.warn("Instagram webhook refused: unexpected envelope (object=#{params['object'].to_s[0, 40].inspect})")
-      head :unprocessable_entity
-    end
+    Rails.logger.info("Instagram webhook entry count: #{entries.length}")
+    ::Webhooks::InstagramEventsJob.perform_later(entries)
+    render json: :ok
   end
 
   private
@@ -47,7 +27,20 @@ class Webhooks::InstagramController < ActionController::API
   end
 
   def valid_entries?(entries)
-    entries.is_a?(Array) && entries.all?(Hash)
+    entries.is_a?(Array) && entries.all? { |entry| entry.is_a?(Hash) && EVENT_KEYS.all? { |key| valid_events?(entry[key]) } }
+  end
+
+  def instagram_object?
+    params['object'].to_s.casecmp('instagram').zero?
+  end
+
+  def refuse_envelope
+    Rails.logger.warn("Instagram webhook refused: unexpected envelope (object=#{params['object'].to_s[0, 40].inspect})")
+    head :unprocessable_entity
+  end
+
+  def valid_events?(events)
+    events.nil? || (events.is_a?(Array) && events.all?(Hash))
   end
 
   def valid_token?(token)

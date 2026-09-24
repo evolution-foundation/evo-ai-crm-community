@@ -78,6 +78,12 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       it_behaves_like 'refuses without enqueueing'
     end
 
+    context 'with a sha1= header that carries a valid sha256 digest' do
+      let(:subject_request) { post_events(signature: sign(raw_body, instagram_secret).sub('sha256=', 'sha1=')) }
+
+      it_behaves_like 'refuses without enqueueing'
+    end
+
     context 'when the body was changed after signing' do
       let(:subject_request) { post_events(body: raw_body.sub('oi', 'tchau'), signature: sign(raw_body, instagram_secret)) }
 
@@ -158,6 +164,35 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
     end
   end
 
+  describe 'events inside an entry' do
+    let(:base_entry) { { 'id' => '17841400000000000', 'time' => 1 } }
+
+    [
+      ['messaging is a string', { 'messaging' => 'oops' }],
+      ['messaging is an array of strings', { 'messaging' => %w[a b] }],
+      ['messaging is an object', { 'messaging' => { 'sender' => { 'id' => '1' } } }],
+      ['standby is a string', { 'standby' => 'oops' }]
+    ].each do |label, extra|
+      it "answers 422 without enqueueing when #{label}" do
+        expect(Webhooks::InstagramEventsJob).not_to receive(:perform_later)
+        body = { 'object' => 'instagram', 'entry' => [base_entry.merge(extra)] }.to_json
+
+        post_events(body: body, signature: sign(body, instagram_secret))
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    it 'still enqueues a well formed DM and a changes-only entry' do
+      expect(Webhooks::InstagramEventsJob).to receive(:perform_later).with([entry, { 'id' => '1', 'changes' => [] }])
+      body = { 'object' => 'instagram', 'entry' => [entry, { 'id' => '1', 'changes' => [] }] }.to_json
+
+      post_events(body: body, signature: sign(body, instagram_secret))
+
+      expect(response).to have_http_status(:ok)
+    end
+  end
+
   describe 'Rack::Attack throttle' do
     around do |example|
       original_enabled = Rack::Attack.enabled
@@ -177,24 +212,24 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       throttle = Rack::Attack.throttles['webhooks/instagram']
 
       expect(throttle).to be_present
-      expect(throttle.limit).to eq(600)
+      expect(throttle.limit).to eq(1800)
       expect(throttle.period).to eq(60)
     end
 
     it 'answers 429 past the ceiling, signature or not' do
-      600.times { mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7') }
+      1800.times { mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7') }
 
       expect(mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7').status).to eq(429)
     end
 
     it 'does not count the GET handshake' do
-      600.times { mock_session.get(path, 'REMOTE_ADDR' => '203.0.113.7') }
+      1800.times { mock_session.get(path, 'REMOTE_ADDR' => '203.0.113.7') }
 
       expect(mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7').status).to eq(200)
     end
 
     it 'gives another address its own bucket' do
-      600.times { mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7') }
+      1800.times { mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.7') }
 
       expect(mock_session.post(path, 'REMOTE_ADDR' => '203.0.113.8').status).to eq(200)
     end
