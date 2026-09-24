@@ -43,7 +43,7 @@ module Evo1551
       'Message#webhook_data (outbound webhook payload)' =>
         ->(m) { m.webhook_data.to_json },
       'MessageSerializer (REST)' =>
-        ->(m) { MessageSerializer.new(m).to_json },
+        ->(m) { MessageSerializer.serialize(m).to_json },
       'ConversationSerializer (last_non_activity_message preview)' =>
         ->(m) { ConversationSerializer.serialize(m.conversation, last_non_activity_messages: { m.conversation_id => m }).to_json },
       'PipelineItemSerializer card (board card message preview)' =>

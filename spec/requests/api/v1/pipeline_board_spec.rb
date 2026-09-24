@@ -186,6 +186,7 @@ RSpec.describe 'Pipeline board', type: :request do
       end
 
       expect(ids.uniq.size).to eq(6)
+      expect(ids).to eq(ids.sort)
     end
 
     it 'runs the same number of queries for 2 and for 8 cards' do

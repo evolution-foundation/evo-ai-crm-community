@@ -217,7 +217,7 @@ module ConversationSerializer
       message_type: message.message_type,
       created_at: message.created_at&.iso8601,
       processed_message_content: message.processed_message_content,
-      # EVO-1551 round 6 — single masker entrypoint per egress audience.
+      # Single masker entrypoint per egress audience.
       content_attributes: message.content_attributes_for_egress(audience: :per_request),
       attachments: message.attachments.map { |a| { file_type: a.file_type } },
       sender: message.sender ? {
