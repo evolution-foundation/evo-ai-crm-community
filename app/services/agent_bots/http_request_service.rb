@@ -183,6 +183,22 @@ class AgentBots::HttpRequestService
       inboxId: extract_inbox_id
     }
 
+    if (conversation = context_conversation)
+      epoch = session_epoch(conversation)
+      bumped_at = session_epoch_bumped_at(conversation)
+      if epoch.positive? && bumped_at.present?
+        metadata[:memorySessionEpoch] = epoch
+        metadata[:memoryMinTimestamp] = bumped_at
+      elsif epoch.positive?
+        # Legacy data: epoch was bumped before ai_session_epoch_bumped_at existed.
+        # No floor can be sent for this turn, so this conversation silently
+        # keeps seeing pre-reset memory until it is resolved and reopened again
+        # (EVO-2241) - loud on purpose so the gap is visible in logs.
+        Rails.logger.warn "[AgentBot HTTP] Conversation #{conversation.id} has ai_session_epoch=#{epoch} " \
+                           'but no ai_session_epoch_bumped_at - memory floor cannot be applied this turn'
+      end
+    end
+
     # Add full contact data if contact is found
     if contact
       metadata[:contact] = build_contact_data(contact)
@@ -288,13 +304,13 @@ class AgentBots::HttpRequestService
     # The session_id will be built as {conversation_uuid}_{agent_id} in the AI processor
     # This ensures unique session IDs and avoids conflicts
 
-    conversation = find_conversation_from_payload
+    conversation = context_conversation
 
     if conversation&.id
       # Fold in the reopen epoch (bumped by Conversation#bump_ai_session_epoch_if_reopened)
       # so a conversation reopened after being resolved gets a fresh AI
       # session instead of continuing the old one's history (EVO-2241).
-      epoch = conversation.custom_attributes['ai_session_epoch'].to_i
+      epoch = session_epoch(conversation)
       context_id = epoch.positive? ? "#{conversation.id}_r#{epoch}" : conversation.id.to_s
       Rails.logger.info "[AgentBot HTTP] Using conversation UUID as contextId: #{context_id}"
       return context_id
@@ -303,6 +319,25 @@ class AgentBots::HttpRequestService
     # Fallback to random UUID if conversation not found
     Rails.logger.warn "[AgentBot HTTP] Could not find conversation, generating random UUID"
     SecureRandom.uuid
+  end
+
+  # Memoized so build_metadata does not repeat the conversation lookup
+  # extract_context_id already did for the same request.
+  def context_conversation
+    return @context_conversation if defined?(@context_conversation)
+
+    @context_conversation = find_conversation_from_payload
+  end
+
+  def session_epoch(conversation)
+    conversation.custom_attributes['ai_session_epoch'].to_i
+  end
+
+  # Nil when the epoch was bumped by data written before this timestamp existed;
+  # build_metadata treats that the same as "never reopened" rather than sending
+  # a meaningless memoryMinTimestamp.
+  def session_epoch_bumped_at(conversation)
+    conversation.custom_attributes['ai_session_epoch_bumped_at']
   end
 
   def find_conversation_from_payload

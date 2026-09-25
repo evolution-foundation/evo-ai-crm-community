@@ -285,4 +285,24 @@ RSpec.describe Conversation, type: :model do
       expect(PipelineItem.where(conversation: conversation)).to exist
     end
   end
+
+  describe '#bump_ai_session_epoch_if_reopened' do
+    it 'bumps the epoch and records when it was bumped on a resolved -> reopened transition' do
+      conversation = create_conversation
+      conversation.update!(status: :resolved)
+
+      travel_to(Time.utc(2026, 9, 25, 12, 0, 0)) do
+        conversation.update!(status: :open)
+      end
+
+      conversation.reload
+      expect(conversation.custom_attributes['ai_session_epoch']).to eq(1)
+      expect(conversation.custom_attributes['ai_session_epoch_bumped_at']).to eq('2026-09-25T12:00:00Z')
+    end
+
+    it 'does not set a bump timestamp when the conversation has never been reopened' do
+      conversation = create_conversation
+      expect(conversation.custom_attributes['ai_session_epoch_bumped_at']).to be_nil
+    end
+  end
 end

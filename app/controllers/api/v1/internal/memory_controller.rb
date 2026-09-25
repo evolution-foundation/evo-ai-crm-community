@@ -22,14 +22,16 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
     query = params[:query].to_s
     limit = clamped_max_results(default: 10)
 
-    memories = matching_memories(app_name: app_name, user_id: user_id, query: query, limit: limit)
+    memories = matching_memories(app_name: app_name, user_id: user_id, query: query, limit: limit, min_timestamp: min_timestamp)
     render json: { memories: memories, total: memories.size, query: query }
   end
 
   def load
     limit = clamped_max_results(default: 10)
 
-    memories = MemorySummary.for(app_name: app_name, user_id: user_id).limit(limit).map { |s| serialize_summary(s) }
+    summaries = MemorySummary.for(app_name: app_name, user_id: user_id)
+    summaries = summaries.where('created_at >= ?', min_timestamp) if min_timestamp
+    memories = summaries.limit(limit).map { |s| serialize_summary(s) }
     render json: { memories: memories, total: memories.size, query: '' }
   end
 
@@ -38,7 +40,8 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
       app_name: app_name,
       user_id: user_id,
       force: ActiveModel::Type::Boolean.new.cast(params[:force]) || false,
-      interval: (params[:compression_interval] || params[:interval] || 10).to_i
+      interval: (params[:compression_interval] || params[:interval] || 10).to_i,
+      min_timestamp: min_timestamp
     )
 
     if summary
@@ -80,16 +83,38 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
 
     interval = params[:compression_interval].to_i
     return unless interval.positive?
-    return unless MemoryEvent.for(app_name: app_name, user_id: user_id).count >= interval
 
-    Memory::CompressionService.new.compress!(app_name: app_name, user_id: user_id, force: false, interval: interval)
+    scope = MemoryEvent.for(app_name: app_name, user_id: user_id)
+    scope = scope.where('created_at >= ?', min_timestamp) if min_timestamp
+    return unless scope.count >= interval
+
+    Memory::CompressionService.new.compress!(
+      app_name: app_name, user_id: user_id, force: false, interval: interval, min_timestamp: min_timestamp
+    )
   end
 
-  def matching_memories(app_name:, user_id:, query:, limit:)
+  # Lenient on purpose, matching the compression_interval parsing style
+  # above: a malformed value degrades to "no filter" rather than a 400 or
+  # (worse) silently excluding every memory.
+  def min_timestamp
+    return @min_timestamp if defined?(@min_timestamp)
+
+    raw = params[:min_timestamp].to_s
+    @min_timestamp = raw.present? ? Time.iso8601(raw) : nil
+  rescue ArgumentError
+    @min_timestamp = nil
+  end
+
+  def matching_memories(app_name:, user_id:, query:, limit:, min_timestamp: nil)
     summaries = MemorySummary.for(app_name: app_name, user_id: user_id)
     # MemoryEvent.for is oldest-first (correct for transcript replay); recall
     # wants the most recent matches, so flip it for this consumer only.
     events = MemoryEvent.for(app_name: app_name, user_id: user_id).reorder(created_at: :desc, id: :desc)
+
+    if min_timestamp
+      summaries = summaries.where('created_at >= ?', min_timestamp)
+      events = events.where('created_at >= ?', min_timestamp)
+    end
 
     if query.present?
       # Escape %/_ so a literal wildcard in the query does not match broadly.

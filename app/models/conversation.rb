@@ -307,7 +307,10 @@ class Conversation < ApplicationRecord
     return unless previous_status == 'resolved' && !resolved?
 
     current_epoch = custom_attributes['ai_session_epoch'].to_i
-    update_column(:custom_attributes, custom_attributes.merge('ai_session_epoch' => current_epoch + 1))
+    update_column(:custom_attributes, custom_attributes.merge(
+      'ai_session_epoch' => current_epoch + 1,
+      'ai_session_epoch_bumped_at' => Time.current.utc.iso8601
+    ))
   end
 
   def execute_after_update_commit_callbacks

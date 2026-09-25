@@ -10,7 +10,15 @@ class Memory::CompressionService
   OPEN_TIMEOUT = 10
   READ_TIMEOUT = 30
 
-  def compress!(app_name:, user_id:, force: false, interval: 10)
+  # min_timestamp (EVO-2241): when the conversation was reopened after being
+  # resolved, only events from at or after that boundary are eligible for
+  # compression. Without this, compressing all events for the (app_name,
+  # user_id) pair - the default scope - would fold pre-resolution events
+  # (e.g. an unanswered bot question) into a fresh summary whose created_at
+  # is now, letting it sail past the same min_timestamp filter that
+  # Api::V1::Internal::MemoryController#load/#search apply for reads,
+  # re-injecting exactly the stale state the reopen was supposed to clear.
+  def compress!(app_name:, user_id:, force: false, interval: 10, min_timestamp: nil)
     summary = nil
 
     ActiveRecord::Base.transaction do
@@ -23,7 +31,9 @@ class Memory::CompressionService
       acquired = ActiveRecord::Base.connection.select_value("SELECT pg_try_advisory_xact_lock(#{lock_key})")
       next unless ActiveModel::Type::Boolean.new.cast(acquired)
 
-      events = MemoryEvent.for(app_name: app_name, user_id: user_id).to_a
+      scope = MemoryEvent.for(app_name: app_name, user_id: user_id)
+      scope = scope.where('created_at >= ?', min_timestamp) if min_timestamp
+      events = scope.to_a
       count = events.size
       next if count.zero?
       next if !force && count < interval

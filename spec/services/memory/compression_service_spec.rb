@@ -7,8 +7,8 @@ RSpec.describe Memory::CompressionService do
   let(:app_name) { 'agent-1' }
   let(:user_id) { 'user-1' }
 
-  def create_events(count, role: 'user')
-    count.times { |i| MemoryEvent.create!(app_name: app_name, user_id: user_id, role: role, content: "msg #{i}") }
+  def create_events(count, role: 'user', prefix: 'msg')
+    count.times { |i| MemoryEvent.create!(app_name: app_name, user_id: user_id, role: role, content: "#{prefix} #{i}") }
   end
 
   def compress!(**overrides)
@@ -101,6 +101,27 @@ RSpec.describe Memory::CompressionService do
         .and_return(Ai::CredentialResolver::Endpoint.new(key: 'test-key', base_url: nil))
 
       expect { compress! }.to raise_error(Memory::CompressionService::Error, /unparseable JSON/)
+    end
+
+    it 'excludes events older than min_timestamp from the source transcript and leaves them uncompressed (EVO-2241 regression)' do
+      create_events(5, role: 'agent', prefix: 'stale')
+      travel_to(1.hour.from_now) { create_events(5, prefix: 'fresh') }
+
+      captured_transcript = nil
+      allow_any_instance_of(described_class).to receive(:call_llm) do |_, transcript|
+        captured_transcript = transcript
+        'Summary of only the fresh events.'
+      end
+
+      summary = compress!(min_timestamp: 30.minutes.from_now, force: true)
+
+      expect(summary.source_event_count).to eq(5)
+      expect(captured_transcript).not_to include('stale')
+      expect(captured_transcript.scan(/fresh \d+/).size).to eq(5)
+      # The pre-reset events are left alone - never summarized, never returned
+      # (their created_at is permanently before any future min_timestamp).
+      expect(MemoryEvent.for(app_name: app_name, user_id: user_id).count).to eq(5)
+      expect(MemoryEvent.for(app_name: app_name, user_id: user_id).pluck(:content)).to all(start_with('stale'))
     end
 
     it 'uses the configured model override in the LLM request body' do
