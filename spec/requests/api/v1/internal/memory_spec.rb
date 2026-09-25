@@ -109,6 +109,21 @@ RSpec.describe 'Api::V1::Internal::Memory', type: :request do
       contents = JSON.parse(response.body)['memories'].map { |m| m['content'] }
       expect(contents).to eq(['discount is 50% off'])
     end
+
+    it 'excludes an unanswered pre-resolution bot question from a reopened conversation (EVO-2241 regression)' do
+      MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: 'agent',
+                           content: 'Would you like the premium or standard plan?', created_at: 2.hours.ago)
+      MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: 'user',
+                           content: 'plan question from the new visit', created_at: 10.minutes.ago)
+
+      post '/api/v1/internal/memory/search',
+           params: { app_name: 'agent-1', user_id: 'user-1', query: 'plan', max_results: 5, min_timestamp: 1.hour.ago.iso8601 }.to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:ok)
+      contents = JSON.parse(response.body)['memories'].map { |m| m['content'] }
+      expect(contents).to eq(['plan question from the new visit'])
+    end
   end
 
   describe 'GET /api/v1/internal/memory/load' do
@@ -123,6 +138,30 @@ RSpec.describe 'Api::V1::Internal::Memory', type: :request do
       expect(response).to have_http_status(:ok)
       contents = JSON.parse(response.body)['memories'].map { |m| m['content'] }
       expect(contents).to eq([newer.content, older.content])
+    end
+
+    it 'excludes summaries older than min_timestamp, so a reopened conversation does not see pre-resolution state' do
+      MemorySummary.create!(app_name: 'agent-1', user_id: 'user-1', content: 'stale pre-reset summary', source_event_count: 10, created_at: 2.hours.ago)
+      fresh = MemorySummary.create!(app_name: 'agent-1', user_id: 'user-1', content: 'fresh post-reset summary', source_event_count: 10, created_at: 30.minutes.ago)
+
+      get '/api/v1/internal/memory/load',
+          params: { app_name: 'agent-1', user_id: 'user-1', max_results: 5, min_timestamp: 1.hour.ago.iso8601 },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      contents = JSON.parse(response.body)['memories'].map { |m| m['content'] }
+      expect(contents).to eq([fresh.content])
+    end
+
+    it 'ignores an unparseable min_timestamp instead of erroring or excluding everything' do
+      MemorySummary.create!(app_name: 'agent-1', user_id: 'user-1', content: 'still returned', source_event_count: 10)
+
+      get '/api/v1/internal/memory/load',
+          params: { app_name: 'agent-1', user_id: 'user-1', max_results: 5, min_timestamp: 'not-a-timestamp' },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)['memories'].map { |m| m['content'] }).to eq(['still returned'])
     end
   end
 
