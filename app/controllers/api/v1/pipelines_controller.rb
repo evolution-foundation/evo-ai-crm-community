@@ -236,10 +236,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     contact_items = PipelineItem.where(contact_id: @contact.id)
                                 .or(PipelineItem.where(conversation_id: @contact.conversations.select(:id)))
 
-    serialized_pipelines = fetch_pipelines_by_item_filter(
-      item_scope: contact_items,
-      item_filter: ->(item) { item.contact_id == @contact.id || item.conversation&.contact_id == @contact.id }
-    )
+    serialized_pipelines = fetch_pipelines_by_item_filter(contact_items)
 
     success_response(
       data: serialized_pipelines,
@@ -255,10 +252,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
   end
 
   def by_conversation
-    serialized_pipelines = fetch_pipelines_by_item_filter(
-      item_scope: PipelineItem.where(conversation_id: @conversation.id),
-      item_filter: ->(item) { item.conversation_id == @conversation.id }
-    )
+    serialized_pipelines = fetch_pipelines_by_item_filter(PipelineItem.where(conversation_id: @conversation.id))
 
     success_response(
       data: serialized_pipelines,
@@ -283,21 +277,19 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     authorize Pipeline.find(params[:id])
   end
 
-  # The latest message and unread count of each card come from batched lookups in #show,
-  # so no message is preloaded here.
+  # The latest message and unread count of each card come from batched lookups, so no
+  # message is preloaded here.
+  ITEM_INCLUDES = [
+    :pipeline_stage,
+    :stage_movements,
+    :assigned_by,
+    { contact: { avatar_attachment: :blob } },
+    { conversation: [:assignee, :team, { inbox: :channel }, { contact: { avatar_attachment: :blob } }] }
+  ].freeze
+
   def fetch_pipeline
     scope = Pipeline.includes(:created_by, :pipeline_teams, pipeline_stages: [])
-    if action_name == 'show' && include_items?
-      scope = scope.includes(
-        pipeline_items: [
-          :pipeline_stage,
-          :stage_movements,
-          :assigned_by,
-          { contact: { avatar_attachment: :blob } },
-          { conversation: [:assignee, :team, { inbox: :channel }, { contact: { avatar_attachment: :blob } }] }
-        ]
-      )
-    end
+    scope = scope.includes(pipeline_items: ITEM_INCLUDES) if action_name == 'show' && include_items?
     @pipeline = scope.find(params[:id])
   end
 
@@ -525,47 +517,41 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     end
   end
 
-  def fetch_pipelines_by_item_filter(item_scope:, item_filter:)
-    # Buscar todos os pipelines que têm items que correspondem ao filtro
-    pipeline_ids_with_items = item_scope.distinct.pluck(:pipeline_id)
-
-    # Carregar pipelines com eager loading otimizado incluindo stages e items.
-    # EVO-2222: escopar por visibilidade — o menu de pipelines na conversa/contato só
-    # mostra pipelines que o usuário pode ver (público/próprio/default/time). Antes
-    # retornava todos, independente da visibilidade.
+  # Only the cards matching item_scope are loaded, so the cost follows the cards of the
+  # contact or conversation, not the size of the pipelines holding them. Pipelines are
+  # scoped by visibility: the contact/conversation menu lists only those the user can see.
+  def fetch_pipelines_by_item_filter(item_scope)
     pipelines = policy_scope(Pipeline)
-                         .where(id: pipeline_ids_with_items)
-                         .includes(
-                           :pipeline_teams,
-                           pipeline_stages: [],
-                           pipeline_items: [
-                             :pipeline_stage,
-                             :assigned_by,
-                             conversation: [
-                               :contact,
-                               :assignee,
-                               :inbox,
-                             ]
-                           ]
-                         )
-                         .order(:name)
+                .where(id: item_scope.select(:pipeline_id))
+                .includes(:pipeline_teams, pipeline_stages: [])
+                .order(:name)
+                .to_a
+    items = attach_matching_items(pipelines, item_scope)
 
-    # Filtrar items de cada pipeline e preparar para serialização
-    pipelines.each do |pipeline|
-      # Filtrar items que correspondem ao filtro para este pipeline
-      filtered_items = pipeline.pipeline_items.select(&item_filter)
+    conversation_ids = items.filter_map(&:conversation_id).uniq
+    unread_counts = unread_counts_map(conversation_ids)
+    last_messages = last_non_activity_messages_map(conversation_ids)
 
-      # Substituir temporariamente os items filtrados
-      pipeline.association(:pipeline_items).target = filtered_items
+    pipelines.map do |pipeline|
+      PipelineSerializer.serialize(
+        pipeline,
+        include_stages: true,
+        include_items: true,
+        include_tasks_info: true,
+        include_services_info: true,
+        stage_summaries: pipeline.stage_summaries,
+        unread_counts: unread_counts,
+        last_non_activity_messages: last_messages
+      )
     end
+  end
 
-    # Serializar collection com stages e items incluídos
-    PipelineSerializer.serialize_collection(
-      pipelines,
-      include_stages: true,
-      include_items: true,
-      include_tasks_info: true,
-      include_services_info: true
-    )
+  def attach_matching_items(pipelines, item_scope)
+    items = item_scope.where(pipeline_id: pipelines.map(&:id)).includes(ITEM_INCLUDES).to_a
+    items_by_pipeline = items.group_by(&:pipeline_id)
+    pipelines.each do |pipeline|
+      pipeline.association(:pipeline_items).target = items_by_pipeline.fetch(pipeline.id, [])
+    end
+    items
   end
 end
