@@ -76,6 +76,14 @@ on:
       - 'spec/requests/api/v1/pipeline_items_available_contacts_spec.rb'
       - 'spec/requests/api/v1/pipeline_items_owner_spec.rb'
       - 'spec/requests/api/v1/pipelines_by_contact_spec.rb'
+      # Mirrors EGRESS_GLOBS in the PII egress spec, plus the masker every egress
+      # path calls: a raw content_attributes read in any of them must wake this lane.
+      - 'app/serializers/**/*.rb'
+      - 'app/views/**/*.jbuilder'
+      - 'app/models/message.rb'
+      - 'app/listeners/webhook_listener.rb'
+      - 'app/listeners/action_cable_listener.rb'
+      - 'app/lib/contact_pii_masker.rb'
       - 'spec/regression/pii_egress_invariant_spec.rb'
       # The resolver picks the service every new blob is born on, and the test
       # service is what an operator trusts to confirm it. Only these specs prove

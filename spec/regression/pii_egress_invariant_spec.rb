@@ -55,7 +55,7 @@ module Evo1551
     }.freeze
 
     # Paths mirror the `NoRawContentAttributesInEgress` Include glob in
-    # .rubocop.yml. Keep in sync.
+    # .rubocop.yml and the spec-staleness-guard `paths:`. Keep all three in sync.
     EGRESS_GLOBS = %w[
       app/serializers/**/*.rb
       app/views/**/*.jbuilder
