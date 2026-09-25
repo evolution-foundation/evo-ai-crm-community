@@ -150,6 +150,12 @@ RSpec.describe Message do
 
         expect(message.content).to eq("*Leandro - TI:*\njá formatado")
       end
+
+      it 'does not prefix a private note even when the inbox forces signatures' do
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, private: true, sender: user, content: 'nota interna')
+
+        expect(message.content).to eq('nota interna')
+      end
     end
 
     context 'on an email inbox' do

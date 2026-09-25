@@ -349,7 +349,7 @@ class Message < ApplicationRecord
   # email keeps the traditional sign-off at the bottom, since that's what
   # agents and recipients expect from an email signature.
   def apply_human_agent_signature
-    return unless outgoing? && sender.is_a?(User) && inbox.force_agent_signature?
+    return unless outgoing? && !private? && sender.is_a?(User) && inbox.force_agent_signature?
     return if content.blank?
 
     signature_name = sender.message_signature.presence || sender.name
