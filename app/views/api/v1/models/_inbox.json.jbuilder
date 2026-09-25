@@ -23,6 +23,7 @@ json.lock_to_single_conversation resource.lock_to_single_conversation
 json.sender_name_type resource.sender_name_type
 json.business_name resource.business_name
 json.default_conversation_status resource.default_conversation_status
+json.force_agent_signature resource.force_agent_signature
 
 
 ## Channel specific settings

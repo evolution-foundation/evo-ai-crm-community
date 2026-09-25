@@ -31,7 +31,8 @@ module InboxSerializer
              :timezone, :allow_messages_after_resolved, :auto_assignment_config,
              :business_name, :portal_id,
              :sender_name_type, :additional_attributes, :csat_config,
-             :lock_to_single_conversation, :default_conversation_status, :callback_webhook_url],
+             :lock_to_single_conversation, :default_conversation_status, :callback_webhook_url,
+             :force_agent_signature],
       methods: [:avatar_url]
     )
 
