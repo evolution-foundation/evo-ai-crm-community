@@ -44,6 +44,14 @@ on:
       - 'app/controllers/api/v1/contacts_controller.rb'
       - 'app/jobs/delete_object_job.rb'
       - 'spec/jobs/delete_object_job_spec.rb'
+      # Applying a label has to guarantee its catalog entry, and the removal has
+      # to match the case-insensitive finder. The label and automation-rule globs
+      # are listed elsewhere here; what was missing is the catalog spec, the model
+      # that normalizes the title, and the reconcile rake with its spec.
+      - 'app/models/label.rb'
+      - 'spec/models/concerns/labelable_catalog_spec.rb'
+      - 'lib/tasks/labels_orphan_reconcile.rake'
+      - 'spec/lib/tasks/labels_orphan_reconcile_rake_spec.rb'
       # The group filter and the duplicate-conflict disclosure share this controller,
       # and a spec outside the run: list below never executes — which is how this one
       # rotted unnoticed, its helper raising on every example.
@@ -527,6 +535,12 @@ jobs:
             spec/listeners/action_cable_listener_conversation_update_spec.rb \
             spec/jobs/action_cable_broadcast_job_spec.rb \
             spec/models/conversation_label_dispatch_spec.rb \
+            spec/models/concerns/labelable_catalog_spec.rb \
+            spec/lib/tasks/labels_orphan_reconcile_rake_spec.rb \
+            spec/services/labels/orphan_reconcile_service_spec.rb \
+            spec/services/automation_rules/flow_execution_service_spec.rb \
+            spec/services/labels/delete_service_spec.rb \
+            spec/services/labels/update_service_spec.rb \
             spec/models/pipeline_item_spec.rb \
             spec/models/pipeline_spec.rb \
             spec/models/role_spec.rb \

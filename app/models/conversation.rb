@@ -47,6 +47,7 @@
 #
 class Conversation < ApplicationRecord
   include Labelable
+  self.labels_in_catalog = true
   include LlmFormattable
   include AssignmentHandler
   include AutoAssignmentHandler

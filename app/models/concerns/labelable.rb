@@ -3,6 +3,37 @@ module Labelable
 
   included do
     acts_as_taggable_on :labels
+
+    # Contact and Conversation share the account-wide label catalog. Product
+    # labels are free text typed per product and must stay out of it.
+    class_attribute :labels_in_catalog, instance_writer: false, default: false
+
+    # Must live in `included do`: the gem inserts its Core module above this
+    # concern, so an override in the module body never runs. And it must be the
+    # setter: `cached_label_list` is written from the list handed to it, so
+    # normalising lower down leaves the tag canonical and the cache raw.
+    def label_list=(value)
+      if self.class.labels_in_catalog
+        super(Array(value).map { |name| Labelable.canonical_label_title(name) })
+      else
+        super
+      end
+    end
+  end
+
+  # Mirrors `Label`'s own normalisation, then makes sure the catalog holds the
+  # entry. A title `Label`'s format validation rejects stays applied but
+  # uncatalogued. A bare UUID is applied without being promoted: it only reaches
+  # here when it no longer resolves, and a UUID in the label picker is garbage.
+  def self.canonical_label_title(name)
+    title = name.to_s.strip.downcase
+    return title if title.blank?
+    return title if Labels::TokenResolver::UUID_FORMAT.match?(title)
+
+    # Non-bang on purpose: a rejected title stays applied but uncatalogued,
+    # it does not blow up the write that carried it.
+    Label.find_or_create_by(title: title) # rubocop:disable Rails/SaveBang
+    title
   end
 
   # F-2: label-change publishing moved to `after_update_commit` on Contact
