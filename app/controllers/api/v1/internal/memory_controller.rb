@@ -40,7 +40,8 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
       app_name: app_name,
       user_id: user_id,
       force: ActiveModel::Type::Boolean.new.cast(params[:force]) || false,
-      interval: (params[:compression_interval] || params[:interval] || 10).to_i
+      interval: (params[:compression_interval] || params[:interval] || 10).to_i,
+      min_timestamp: min_timestamp
     )
 
     if summary
@@ -82,9 +83,14 @@ class Api::V1::Internal::MemoryController < Api::ServiceController
 
     interval = params[:compression_interval].to_i
     return unless interval.positive?
-    return unless MemoryEvent.for(app_name: app_name, user_id: user_id).count >= interval
 
-    Memory::CompressionService.new.compress!(app_name: app_name, user_id: user_id, force: false, interval: interval)
+    scope = MemoryEvent.for(app_name: app_name, user_id: user_id)
+    scope = scope.where('created_at >= ?', min_timestamp) if min_timestamp
+    return unless scope.count >= interval
+
+    Memory::CompressionService.new.compress!(
+      app_name: app_name, user_id: user_id, force: false, interval: interval, min_timestamp: min_timestamp
+    )
   end
 
   # Lenient on purpose, matching the compression_interval parsing style

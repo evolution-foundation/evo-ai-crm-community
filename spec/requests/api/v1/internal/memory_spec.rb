@@ -65,6 +65,32 @@ RSpec.describe 'Api::V1::Internal::Memory', type: :request do
 
       expect(response).to have_http_status(:unauthorized)
     end
+
+    it 'excludes pre-reset events from auto-compression, so the resulting summary cannot resurface them (EVO-2241 regression)' do
+      allow_any_instance_of(Memory::CompressionService).to receive(:call_llm) do |_, transcript|
+        expect(transcript).not_to include('stale')
+        'Summary of only the fresh events.'
+      end
+
+      5.times { |i| MemoryEvent.create!(app_name: 'agent-1', user_id: 'user-1', role: 'agent', content: "stale #{i}") }
+      travel_to(1.hour.from_now) do
+        4.times do |i|
+          post '/api/v1/internal/memory/event',
+               params: { app_name: 'agent-1', user_id: 'user-1', role: 'user', content: "fresh #{i}",
+                         compression_interval: 5, min_timestamp: 30.minutes.ago.iso8601 }.to_json,
+               headers: headers
+        end
+        # The 5th post-reset event reaches compression_interval: 5 - counting
+        # only fresh events, not the 5 stale ones already sitting there.
+        post '/api/v1/internal/memory/event',
+             params: { app_name: 'agent-1', user_id: 'user-1', role: 'user', content: 'fresh 4',
+                       compression_interval: 5, min_timestamp: 30.minutes.ago.iso8601 }.to_json,
+             headers: headers
+      end
+
+      expect(MemorySummary.for(app_name: 'agent-1', user_id: 'user-1').count).to eq(1)
+      expect(MemoryEvent.for(app_name: 'agent-1', user_id: 'user-1').count).to eq(5) # the 5 stale events, untouched
+    end
   end
 
   describe 'POST /api/v1/internal/memory/search' do
