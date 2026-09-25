@@ -526,6 +526,9 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                 .includes(:pipeline_teams, pipeline_stages: [])
                 .order(:name)
                 .to_a
+    # Taken before the cards are narrowed to the matching ones, so the stage counters
+    # cover the whole pipeline.
+    stage_summaries = pipelines.to_h { |pipeline| [pipeline.id, pipeline.stage_summaries] }
     items = attach_matching_items(pipelines, item_scope)
 
     conversation_ids = items.filter_map(&:conversation_id).uniq
@@ -539,7 +542,7 @@ class Api::V1::PipelinesController < Api::V1::BaseController
         include_items: true,
         include_tasks_info: true,
         include_services_info: true,
-        stage_summaries: pipeline.stage_summaries,
+        stage_summaries: stage_summaries[pipeline.id],
         unread_counts: unread_counts,
         last_non_activity_messages: last_messages
       )
