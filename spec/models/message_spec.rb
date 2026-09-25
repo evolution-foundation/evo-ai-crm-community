@@ -7,9 +7,15 @@ RSpec.describe Message do
 
   describe '#refresh_conversation_activity!' do
     it 'uses current time when requested even if created_at is older' do
+      # Fixed relative to the travel_to point below, not to real wall-clock
+      # time: `2.days.ago` here would be evaluated before travel_to freezes
+      # time, so on a real clock far past 2026-02-12 it would come out LATER
+      # than the frozen "current" time - the opposite of "older" - and
+      # GREATEST would legitimately prefer it, breaking the test's premise.
+      older_time = Time.zone.parse('2026-02-10 10:00:00')
       conversation = double('Conversation', id: 'conv_1', class: Conversation)
       relation = double('Relation')
-      message = described_class.new(created_at: 2.days.ago)
+      message = described_class.new(created_at: older_time)
       allow(message).to receive(:conversation).and_return(conversation)
 
       travel_to(Time.zone.parse('2026-02-12 10:00:00')) do
