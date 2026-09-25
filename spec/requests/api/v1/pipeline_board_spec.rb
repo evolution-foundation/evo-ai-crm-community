@@ -202,6 +202,31 @@ RSpec.describe 'Pipeline board', type: :request do
       expect(large).to eq(small)
     end
 
+    describe 'sorting' do
+      it 'falls back to descending when sort_order is not asc or desc' do
+        older = lead_card.tap { |item| item.update!(created_at: 2.hours.ago) }
+        newer = lead_card.tap { |item| item.update!(created_at: 1.hour.ago) }
+
+        %w[stage_name contact_name].each do |sort_by|
+          get url, params: { sort_by: sort_by, sort_order: 'desc,(SELECT 1)' }
+          expect(response).to have_http_status(:ok)
+        end
+
+        get url, params: { sort_by: 'created_at', sort_order: 'bogus' }
+        expect(response).to have_http_status(:ok)
+        expect(json_response['data'].pluck('id')).to eq([newer.id, older.id])
+      end
+
+      it 'still honors asc' do
+        older = lead_card.tap { |item| item.update!(created_at: 2.hours.ago) }
+        newer = lead_card.tap { |item| item.update!(created_at: 1.hour.ago) }
+
+        get url, params: { sort_by: 'created_at', sort_order: 'ASC' }
+
+        expect(json_response['data'].pluck('id')).to eq([older.id, newer.id])
+      end
+    end
+
     describe 'view=card' do
       it 'returns the card fields without the full contact' do
         item = conversation_card(name: 'Maria', phone: '+5511999887766', priority: :high, assignee: agent)
