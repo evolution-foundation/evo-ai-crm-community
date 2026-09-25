@@ -35,11 +35,6 @@ class Api::V1::ContactsController < Api::V1::BaseController
   def index
     @contacts = fetch_contacts(listable_contacts)
 
-    # Use cached count to avoid expensive COUNT(*) queries on large datasets
-    @contacts_count = Rails.cache.fetch(cache_key_for_contacts_count, expires_in: 1.minute) do
-      listable_contacts.count
-    end
-
     apply_pagination
 
     paginated_response(
@@ -64,7 +59,6 @@ class Api::V1::ContactsController < Api::V1::BaseController
         OR contacts.additional_attributes->>\'company_name\' ILIKE :search',
       search: "%#{params[:q].strip}%"
     )
-    @contacts_count = contacts.count
     @contacts = fetch_contacts(contacts)
 
     apply_pagination
@@ -105,7 +99,6 @@ class Api::V1::ContactsController < Api::V1::BaseController
   def active
     contacts = Contact.where(id: ::OnlineStatusTracker
                   .get_available_contact_ids)
-    @contacts_count = contacts.count
     @contacts = fetch_contacts(contacts)
 
     apply_pagination
@@ -126,9 +119,7 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
   def filter
     result = ::Contacts::FilterService.new(nil, Current.user, params.permit!).perform
-    contacts = result[:contacts]
-    @contacts_count = result[:count]
-    @contacts = fetch_contacts(contacts)
+    @contacts = fetch_contacts(result[:contacts])
 
     apply_pagination
 
@@ -379,18 +370,6 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
   private
 
-  # Cache key for contacts count, varies by query parameters that affect listable contacts
-  def cache_key_for_contacts_count
-    # Build a deterministic string based on filters that influence the count
-    key_parts = [
-      params[:type],
-      params[:company_id],
-      params[:labels]&.sort&.join(','),
-      params[:q] # search query, if any
-    ].compact.join('/')
-    "contacts_count/#{key_parts.presence || 'all'}"
-  end
-
   # TODO: Move this to a finder class
   def listable_contacts
     return @listable_contacts if @listable_contacts
@@ -425,20 +404,14 @@ class Api::V1::ContactsController < Api::V1::BaseController
     @resolved_contacts
   end
 
+  # Preloads only what ContactSerializer reads on a listing. The relation must stay
+  # unloaded here: apply_pagination adds the LIMIT, and the preloads then run for that page only.
   def fetch_contacts(contacts)
-    # Eager load conversations and pipeline items to avoid N+1 queries
     # Tie-break on id so OFFSET pagination is deterministic when sort values repeat (or no sort is given)
     contacts_with_associations = filtrate(contacts)
                                    .order(:id)
-                                   .includes([
-                                               { avatar_attachment: [:blob] },
-                                               { conversations: { pipeline_items: [:pipeline, :pipeline_stage] } }
-                                             ])
-                                   .preload(:labels, :companies, :contact_companies, :company_contacts)
-
-    # Also preload pipeline items directly associated with contacts
-    contact_ids = contacts_with_associations.map(&:id)
-    PipelineItem.where(contact_id: contact_ids).includes(:pipeline, :pipeline_stage).load
+                                   .includes(avatar_attachment: [:blob])
+                                   .preload(:labels)
 
     return contacts_with_associations.includes([{ contact_inboxes: [:inbox] }]) if @include_contact_inboxes
 

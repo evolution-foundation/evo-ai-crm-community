@@ -484,6 +484,76 @@ RSpec.describe 'GET /api/v1/contacts listing', type: :request do
 
     expect(seen).to eq(contacts.map(&:id).sort)
   end
+
+  describe 'loading only the requested page' do
+    let!(:contacts) do
+      Array.new(5) do |i|
+        Contact.create!(name: "Paged #{i}", email: "paged-#{i}-#{SecureRandom.hex(4)}@example.com").tap do |contact|
+          contact.update!(label_list: ['vip'])
+          add_to_inboxes(contact, inbox_a)
+        end
+      end
+    end
+    let(:page_ids) { contacts.map(&:id).sort.first(2) }
+    let(:off_page_ids) { contacts.map(&:id) - page_ids }
+
+    before do
+      allow(OnlineStatusTracker).to receive(:get_available_contact_ids).and_return(contacts.map(&:id))
+    end
+
+    def capture_queries(&)
+      queries = []
+      callback = lambda do |*, payload|
+        next if payload[:name] == 'SCHEMA' || payload[:cached]
+
+        binds = payload[:type_casted_binds]
+        binds = binds.call if binds.respond_to?(:call)
+        queries << { sql: payload[:sql], binds: Array(binds).map(&:to_s) }
+      end
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &)
+      queries
+    end
+
+    def request_page(action)
+      page = { page: 1, per_page: 2 }
+      case action
+      when :index then get '/api/v1/contacts', params: page, headers: headers
+      when :search then get '/api/v1/contacts/search', params: page.merge(q: 'Paged'), headers: headers
+      when :active then get '/api/v1/contacts/active', params: page, headers: headers
+      when :filter
+        payload = [{ attribute_key: 'name', filter_operator: 'contains', values: ['Paged'], query_operator: nil }]
+        post '/api/v1/contacts/filter', params: page.merge(payload: payload), headers: headers, as: :json
+      end
+    end
+
+    %i[index search active filter].each do |action|
+      it "limits every contacts row query and preloads only the page on #{action}" do
+        queries = capture_queries { request_page(action) }
+
+        expect(response).to have_http_status(:ok)
+        expect(json_response['data'].map { |c| c['id'] }).to eq(page_ids)
+        expect(json_response.dig('meta', 'pagination', 'total')).to eq(5)
+
+        contact_rows = queries.select { |q| q[:sql].start_with?('SELECT "contacts".* FROM "contacts"') }
+        expect(contact_rows).not_to be_empty
+        expect(contact_rows).to all(satisfy { |q| q[:sql].include?('LIMIT') })
+
+        preloads = queries.reject { |q| q[:sql].match?(/\ASELECT (COUNT\(\*\)|"contacts"\.\*) FROM "contacts"/) }
+        expect(preloads).to all(satisfy { |q| off_page_ids.none? { |id| q[:sql].include?(id) || q[:binds].include?(id) } })
+        expect(queries.map { |q| q[:sql] }).to all(satisfy { |sql| !sql.match?(/FROM "(conversations|pipeline_items)"/) })
+      end
+    end
+
+    it 'serializes the page without a query per contact' do
+      queries = capture_queries { get '/api/v1/contacts', params: { page: 1, per_page: 5 }, headers: headers }
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['data'].size).to eq(5)
+      per_table = queries.filter_map { |q| q[:sql][/\ASELECT .*? FROM "(taggings|contact_inboxes|inboxes|active_storage_attachments)"/, 1] }.tally
+      expect(per_table.keys).to include('taggings', 'contact_inboxes', 'inboxes')
+      expect(per_table.values).to all(eq(1))
+    end
+  end
 end
 
 RSpec.describe 'GET /api/v1/contacts/companies_list', type: :request do
