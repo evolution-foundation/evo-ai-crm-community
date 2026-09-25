@@ -534,7 +534,8 @@ RSpec.describe 'GET /api/v1/contacts listing', type: :request do
         expect(json_response['data'].map { |c| c['id'] }).to eq(page_ids)
         expect(json_response.dig('meta', 'pagination', 'total')).to eq(5)
 
-        contact_rows = queries.select { |q| q[:sql].start_with?('SELECT "contacts".* FROM "contacts"') }
+        # Any read of contacts rows, pluck/ids included; the paren-free select list leaves COUNT(*) out.
+        contact_rows = queries.select { |q| q[:sql].match?(/\ASELECT [^()]*? FROM "contacts"/) }
         expect(contact_rows).not_to be_empty
         expect(contact_rows).to all(satisfy { |q| q[:sql].include?('LIMIT') })
 
