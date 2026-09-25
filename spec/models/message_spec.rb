@@ -163,6 +163,14 @@ RSpec.describe Message do
 
       expect(message.content).to eq("*Atendente:*\njá formatado")
     end
+
+    it 'does not prefix a private note even when sender is an AgentBot' do
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, private: true, sender: agent_bot, content: 'nota interna'
+      )
+
+      expect(message.content).to eq('nota interna')
+    end
   end
 
   describe '#set_conversation_activity' do

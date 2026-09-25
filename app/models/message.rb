@@ -344,7 +344,7 @@ class Message < ApplicationRecord
   # AgentBots::ResponseProcessor / SegmentedMessageCreator / N8nRequestService
   # for the callers this replaced.
   def apply_agent_bot_signature
-    return unless outgoing? && sender.is_a?(AgentBot) && sender.message_signature.present?
+    return unless outgoing? && !private? && sender.is_a?(AgentBot) && sender.message_signature.present?
     return if content.blank?
 
     signature_prefix = "*#{sender.message_signature}:*\n"
