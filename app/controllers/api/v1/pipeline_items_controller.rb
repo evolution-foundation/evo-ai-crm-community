@@ -897,7 +897,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
   def apply_sorting
     sort_by = params[:sort_by] || 'created_at'
-    sort_order = params[:sort_order] || 'desc'
+    sort_order = params[:sort_order].to_s.casecmp?('asc') ? 'asc' : 'desc'
 
     @pipeline_items = case sort_by
                       when 'created_at'

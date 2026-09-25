@@ -202,6 +202,33 @@ RSpec.describe 'Pipeline board', type: :request do
       expect(large).to eq(small)
     end
 
+    describe 'sorting' do
+      let!(:bruno) { conversation_card(stage: first_stage, name: 'Bruno').tap { |item| item.update!(created_at: 2.hours.ago) } }
+      let!(:ana) { conversation_card(stage: second_stage, name: 'Ana').tap { |item| item.update!(created_at: 1.hour.ago) } }
+      let(:descending) { { 'stage_name' => [ana, bruno], 'contact_name' => [bruno, ana], 'created_at' => [ana, bruno] } }
+
+      it 'falls back to descending when sort_order is not asc or desc' do
+        invalid_orders = ['bogus', 'desc,(SELECT 1)']
+
+        descending.each do |sort_by, expected|
+          invalid_orders.each do |sort_order|
+            get url, params: { sort_by: sort_by, sort_order: sort_order }
+
+            expect(response).to have_http_status(:ok)
+            expect(json_response['data'].pluck('id')).to eq(expected.map(&:id)), "#{sort_by} with #{sort_order}"
+          end
+        end
+      end
+
+      it 'still honors asc' do
+        descending.each do |sort_by, expected|
+          get url, params: { sort_by: sort_by, sort_order: 'ASC' }
+
+          expect(json_response['data'].pluck('id')).to eq(expected.reverse.map(&:id)), sort_by
+        end
+      end
+    end
+
     describe 'view=card' do
       it 'returns the card fields without the full contact' do
         item = conversation_card(name: 'Maria', phone: '+5511999887766', priority: :high, assignee: agent)
