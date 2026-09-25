@@ -31,7 +31,6 @@ class AgentBots::SegmentedMessageCreator
     # Se não tem segmentação habilitada ou só tem um segmento, cria uma mensagem normal
     if !@agent_bot.text_segmentation_enabled || segments.length == 1
       content = segments.join('\n\n')
-      content = build_message_with_signature(content)
       create_single_message(content, conversation)
       return
     end
@@ -54,8 +53,7 @@ class AgentBots::SegmentedMessageCreator
     if media_segment?(segment)
       create_media_message(segment, conversation)
     else
-      content = build_message_with_signature(segment)
-      create_single_message(content, conversation)
+      create_single_message(segment, conversation)
     end
   end
 
@@ -283,12 +281,5 @@ class AgentBots::SegmentedMessageCreator
     Rails.logger.info "[AgentBot Segmented] Building reply to message #{last_incoming_message.id} (source_id: #{last_incoming_message.source_id}, content: #{last_incoming_message.content&.truncate(50)})"
 
     reply_attributes
-  end
-
-  def build_message_with_signature(content)
-    return content if @agent_bot.message_signature.blank?
-
-    # Add signature at the top with two line breaks before the message
-    "#{@agent_bot.message_signature}\n\n#{content}"
   end
 end

@@ -59,6 +59,7 @@ class Message < ApplicationRecord
   }.to_json.freeze
 
   before_validation :ensure_content_type
+  before_validation :apply_agent_bot_signature, on: :create
   before_validation :prevent_message_flooding, unless: :imported?
   before_save :ensure_processed_message_content
   before_save :ensure_in_reply_to
@@ -347,6 +348,21 @@ class Message < ApplicationRecord
 
   def ensure_content_type
     self.content_type ||= Message.content_types[:text]
+  end
+
+  # Single source of truth for the agent-bot display-name prefix (FR-21):
+  # every path that creates an outgoing AgentBot message converges here,
+  # so the format only needs to be correct in one place. See
+  # AgentBots::ResponseProcessor / SegmentedMessageCreator / N8nRequestService
+  # for the callers this replaced.
+  def apply_agent_bot_signature
+    return unless outgoing? && sender.is_a?(AgentBot) && sender.message_signature.present?
+    return if content.blank?
+
+    signature_prefix = "*#{sender.message_signature}:*\n"
+    return if content.start_with?(signature_prefix)
+
+    self.content = "#{signature_prefix}#{content}"
   end
 
   def execute_after_create_commit_callbacks

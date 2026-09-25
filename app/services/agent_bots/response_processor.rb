@@ -57,21 +57,21 @@ class AgentBots::ResponseProcessor
     if select_items.blank? && @agent_bot.text_segmentation_enabled && ['evo_ai_provider', 'n8n_provider'].include?(@agent_bot.bot_provider)
       process_segmented_response(text_content, conversation)
     else
-      # Process as a single message with signature
-      final_content = build_message_with_signature(text_content)
-      Rails.logger.info "[AgentBot HTTP] Bot Response Message: #{final_content}"
-      
+      # Process as a single message. The agent-bot display-name prefix is
+      # applied once, centrally, by Message#apply_agent_bot_signature.
+      Rails.logger.info "[AgentBot HTTP] Bot Response Message: #{text_content}"
+
       # Try to create message normally first
       message_creator = AgentBots::MessageCreator.new(@agent_bot)
       content_type = select_items.present? ? 'input_select' : 'text'
       content_attributes = select_items.present? ? { items: select_items } : nil
-      message = message_creator.create_bot_reply(final_content, conversation, content_type: content_type, content_attributes: content_attributes)
-      
+      message = message_creator.create_bot_reply(text_content, conversation, content_type: content_type, content_attributes: content_attributes)
+
       # If message creation failed (conversation not eligible, e.g., after transfer),
       # try to force create it anyway (for final responses after transfer)
       unless message
         Rails.logger.info "[AgentBot HTTP] Message creation failed (conversation not eligible), attempting force create..."
-        message = message_creator.create_bot_reply(final_content, conversation, force: true, content_type: content_type, content_attributes: content_attributes)
+        message = message_creator.create_bot_reply(text_content, conversation, force: true, content_type: content_type, content_attributes: content_attributes)
       end
       
       message
@@ -126,12 +126,5 @@ class AgentBots::ResponseProcessor
     # Create messages using the segmented message creator
     message_creator = AgentBots::SegmentedMessageCreator.new(@agent_bot)
     message_creator.create_messages(segments, conversation)
-  end
-
-  def build_message_with_signature(content)
-    return content if @agent_bot.message_signature.blank?
-
-    # Add signature at the top with two line breaks before the message
-    "#{@agent_bot.message_signature}\n\n#{content}"
   end
 end
