@@ -44,4 +44,21 @@ RSpec.describe Labels::DeleteService do
   it 'is a no-op when the label is not in use' do
     expect { described_class.new(label_title: title).perform }.not_to raise_error
   end
+
+  # `tagged_with` matches LOWER(name) ILIKE, so it FOUND the record holding
+  # "VIP"; the subtraction was exact, so it removed nothing and saved the row
+  # unchanged — catalog entry gone, application left behind, invisible to
+  # every filter. Legacy rows look like this, so the removal is case-insensitive.
+  it 'removes an application whose casing differs from the catalog title' do
+    ActsAsTaggableOn::Tagging.create!(
+      tag: ActsAsTaggableOn::Tag.create!(name: 'VIP'),
+      taggable: contact,
+      context: 'labels'
+    )
+    expect(contact.reload.label_list.to_a).to eq(['VIP'])
+
+    described_class.new(label_title: title).perform
+
+    expect(contact.reload.label_list.to_a).to be_empty
+  end
 end

@@ -80,4 +80,50 @@ RSpec.describe Labels::UpdateService do
     expect(removed).to be_empty
     expect(contact.reload.label_list).to contain_exactly('same')
   end
+
+  # The rename finds its rows with `tagged_with`, which matches ignoring case,
+  # while the subtraction used to be exact: a label stored as "Urgente" was
+  # located and then left in place, so the old title outlived its catalog entry.
+  describe 'a title applied with different casing' do
+    let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
+    let(:inbox) { Inbox.create!(name: 'Inbox', channel: channel) }
+    let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+    let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+
+    def apply_raw(taggable, name)
+      tag = ActsAsTaggableOn::Tag.find_or_create_by!(name: name)
+      ActsAsTaggableOn::Tagging.find_or_create_by!(tag: tag, taggable: taggable, context: 'labels')
+      return unless taggable.class.column_names.include?('cached_label_list')
+
+      taggable.update_column(:cached_label_list, name) # rubocop:disable Rails/SkipsModelValidations
+    end
+
+    it 'is replaced on a contact, not left behind' do
+      apply_raw(contact, 'Urgente')
+
+      described_class.new(new_label_title: 'critico', old_label_title: 'urgente').perform
+
+      expect(contact.reload.label_list.to_a).to eq(['critico'])
+    end
+
+    it 'is replaced on a conversation, not left behind' do
+      apply_raw(conversation, 'Urgente')
+
+      described_class.new(new_label_title: 'critico', old_label_title: 'urgente').perform
+
+      expect(conversation.reload.label_list.to_a).to eq(['critico'])
+    end
+
+    # Renaming must not start emitting a conversation update per conversation:
+    # that reaches webhooks, automations and evo-flow, and the rename never did.
+    it 'does not dispatch a conversation update per conversation' do
+      apply_raw(conversation, 'Urgente')
+      dispatched = []
+      allow(Rails.configuration.dispatcher).to receive(:dispatch) { |name, *_| dispatched << name }
+
+      described_class.new(new_label_title: 'critico', old_label_title: 'urgente').perform
+
+      expect(dispatched).not_to include(Conversation::CONVERSATION_UPDATED)
+    end
+  end
 end
