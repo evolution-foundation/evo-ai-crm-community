@@ -245,16 +245,10 @@ class AgentBots::N8nRequestService
     conversation = AgentBots::ConversationFinder.new(@agent_bot, @payload).find_conversation
     return unless conversation
 
-    # Add signature if configured
-    final_content = build_message_with_signature(message_content)
-    Rails.logger.info "[AgentBot N8n] Bot Response Message: #{final_content}"
+    # The agent-bot display-name prefix is applied once, centrally, by
+    # Message#apply_agent_bot_signature.
+    Rails.logger.info "[AgentBot N8n] Bot Response Message: #{message_content}"
 
-    AgentBots::MessageCreator.new(@agent_bot).create_bot_reply(final_content, conversation)
-  end
-
-  def build_message_with_signature(content)
-    return content unless @agent_bot.message_signature.present?
-
-    "#{content}\n\n#{@agent_bot.message_signature}"
+    AgentBots::MessageCreator.new(@agent_bot).create_bot_reply(message_content, conversation)
   end
 end

@@ -111,6 +111,68 @@ RSpec.describe Message do
     end
   end
 
+  describe '#apply_agent_bot_signature' do
+    let(:contact) { Contact.create!(name: 'Signature Spec Contact', email: "signature-#{SecureRandom.hex(4)}@example.com") }
+    let(:inbox) { Inbox.create!(name: "Signature Spec Inbox #{SecureRandom.hex(2)}", channel: Channel::Api.create!) }
+    let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+    let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+    let(:agent_bot) do
+      AgentBot.create!(name: 'Atendente', bot_type: :webhook, bot_provider: :webhook_provider,
+                       debounce_time: 5, message_signature: 'Atendente')
+    end
+
+    it 'prefixes an outgoing AgentBot message with the bold display name, once' do
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, sender: agent_bot, content: 'Pronto, já te encaminhei.'
+      )
+
+      expect(message.content).to eq("*Atendente:*\nPronto, já te encaminhei.")
+    end
+
+    it 'does not prefix when the AgentBot has no message_signature configured' do
+      agent_bot.update!(message_signature: nil)
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, sender: agent_bot, content: 'Sem assinatura.'
+      )
+
+      expect(message.content).to eq('Sem assinatura.')
+    end
+
+    it 'does not prefix an incoming message even when sender is an AgentBot' do
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :incoming, sender: agent_bot, content: 'eco de teste'
+      )
+
+      expect(message.content).to eq('eco de teste')
+    end
+
+    it 'does not prefix a human agent message' do
+      user = User.create!(name: 'Leandro', email: "leandro-#{SecureRandom.hex(4)}@example.com")
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, sender: user, content: 'resposta manual'
+      )
+
+      expect(message.content).to eq('resposta manual')
+    end
+
+    it 'does not double-prefix a message that already carries the signature' do
+      message = conversation.messages.new(
+        inbox: inbox, message_type: :outgoing, sender: agent_bot, content: "*Atendente:*\njá formatado"
+      )
+      message.valid?
+
+      expect(message.content).to eq("*Atendente:*\njá formatado")
+    end
+
+    it 'does not prefix a private note even when sender is an AgentBot' do
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, private: true, sender: agent_bot, content: 'nota interna'
+      )
+
+      expect(message.content).to eq('nota interna')
+    end
+  end
+
   describe '#set_conversation_activity' do
     it 'delegates to refresh_conversation_activity! with current time' do
       conversation = double('Conversation', last_activity_at: nil)
