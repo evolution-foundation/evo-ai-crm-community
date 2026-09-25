@@ -94,6 +94,9 @@ class Whatsapp::Providers::BaseService
     result.gsub!(%r{<strike[^>]*>(.*?)</strike>}im, '~\1~')
     result.gsub!(%r{<del[^>]*>(.*?)</del>}im, '~\1~')
     result = ActionController::Base.helpers.strip_tags(result)
+    # strip_tags serializes its output as HTML, turning a bare "&" into "&amp;"
+    # (and "<"/">" into "&lt;"/"&gt;"). WhatsApp renders plain text, so decode.
+    result = CGI.unescapeHTML(result)
     result.gsub!(/[ \t]+/, ' ')
     result.gsub!(/\n{3,}/, "\n\n")
     result.strip
