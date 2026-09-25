@@ -58,6 +58,7 @@ class Message < ApplicationRecord
   }.to_json.freeze
 
   before_validation :ensure_content_type
+  before_validation :apply_human_agent_signature, on: :create
   before_validation :prevent_message_flooding, unless: :imported?
   before_save :ensure_processed_message_content
   before_save :ensure_in_reply_to
@@ -335,6 +336,35 @@ class Message < ApplicationRecord
 
   def ensure_content_type
     self.content_type ||= Message.content_types[:text]
+  end
+
+  # Forces the agent's display-name signature on outgoing human-agent messages
+  # when the inbox opts in (Inbox#force_agent_signature), so the agent has no
+  # per-message choice — unlike the manual composer toggle, which stays
+  # client-side and opt-in. Falls back to the agent's name when they haven't
+  # set a custom signature in their profile.
+  #
+  # Chat channels use the same bold-name-and-colon prefix convention as
+  # agent-bot messages (see AgentBots::SegmentedMessageCreator and friends);
+  # email keeps the traditional sign-off at the bottom, since that's what
+  # agents and recipients expect from an email signature.
+  def apply_human_agent_signature
+    return unless outgoing? && sender.is_a?(User) && inbox.force_agent_signature?
+    return if content.blank?
+
+    signature_name = sender.message_signature.presence || sender.name
+    return if signature_name.blank?
+
+    if inbox.email?
+      return if content.end_with?(signature_name)
+
+      self.content = "#{content}\n\n#{signature_name}"
+    else
+      signature_prefix = "*#{signature_name}:*\n"
+      return if content.start_with?(signature_prefix)
+
+      self.content = "#{signature_prefix}#{content}"
+    end
   end
 
   def execute_after_create_commit_callbacks

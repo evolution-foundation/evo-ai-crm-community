@@ -111,6 +111,65 @@ RSpec.describe Message do
     end
   end
 
+  describe '#apply_human_agent_signature' do
+    let(:contact) { Contact.create!(name: 'Signature Spec Contact', email: "signature-#{SecureRandom.hex(4)}@example.com") }
+    let(:user) { User.create!(name: 'Leandro', email: "leandro-#{SecureRandom.hex(4)}@example.com") }
+
+    context 'on a chat inbox' do
+      let(:inbox) do
+        Inbox.create!(name: "Signature Chat Inbox #{SecureRandom.hex(2)}", channel: Channel::Api.create!,
+                      force_agent_signature: true)
+      end
+      let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+      let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+
+      it 'prefixes with the bold display name when forced' do
+        user.update!(message_signature: 'Leandro - TI')
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, sender: user, content: 'Já te encaminho.')
+
+        expect(message.content).to eq("*Leandro - TI:*\nJá te encaminho.")
+      end
+
+      it 'falls back to the agent name when no signature is configured' do
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, sender: user, content: 'Já te encaminho.')
+
+        expect(message.content).to eq("*Leandro:*\nJá te encaminho.")
+      end
+
+      it 'does not prefix when the inbox does not force it' do
+        inbox.update!(force_agent_signature: false)
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, sender: user, content: 'resposta manual')
+
+        expect(message.content).to eq('resposta manual')
+      end
+
+      it 'does not double-prefix content that already carries the signature' do
+        user.update!(message_signature: 'Leandro - TI')
+        message = conversation.messages.new(inbox: inbox, message_type: :outgoing, sender: user, content: "*Leandro - TI:*\njá formatado")
+        message.valid?
+
+        expect(message.content).to eq("*Leandro - TI:*\njá formatado")
+      end
+    end
+
+    context 'on an email inbox' do
+      let(:inbox) do
+        Inbox.create!(name: "Signature Email Inbox #{SecureRandom.hex(2)}",
+                      channel: Channel::Email.create!(email: "signature-#{SecureRandom.hex(4)}@example.com", forward_to_email: 'fwd@example.com'),
+                      force_agent_signature: true)
+      end
+      let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }
+      let(:conversation) { Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox) }
+
+      it 'appends the signature at the end instead of prefixing it' do
+        user.update!(message_signature: 'Leandro - TI')
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, sender: user, content: 'Segue o retorno.')
+
+        expect(message.content).to eq("Segue o retorno.\n\nLeandro - TI")
+      end
+    end
+  end
+
   describe '#set_conversation_activity' do
     it 'delegates to refresh_conversation_activity! with current time' do
       conversation = double('Conversation', last_activity_at: nil)
