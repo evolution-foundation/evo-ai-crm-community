@@ -188,5 +188,29 @@ RSpec.describe 'Api::V1::Pipelines by_contact', type: :request do
       items = response.parsed_body['data'].sole['stages'].flat_map { |s| s['items'] }
       expect(items.pluck('id')).to eq([conversation_item.id])
     end
+
+    context 'when the contact holds several conversation cards' do
+      # A conversation created for the contact would promote the lead card instead of adding one.
+      let(:lead_item) { nil }
+
+      def own_conversation_card
+        own_contact_inbox = ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4))
+        own_conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: own_contact_inbox)
+        Message.create!(conversation: own_conversation, inbox: inbox, message_type: :incoming, content: 'hi',
+                        sender: contact)
+        pipeline.pipeline_items.create!(pipeline_stage: stage, conversation: own_conversation, entered_at: Time.current)
+      end
+
+      it 'runs the same number of queries for by_contact whatever the number of the contact\'s own cards' do
+        small = count_queries { get "/api/v1/pipelines/by_contact/#{contact.id}" }
+        expect(response).to have_http_status(:success)
+
+        3.times { own_conversation_card }
+        large = count_queries { get "/api/v1/pipelines/by_contact/#{contact.id}" }
+
+        expect(response.parsed_body['data'].sole['stages'].sum { |s| s['items'].size }).to eq(4)
+        expect(large).to eq(small)
+      end
+    end
   end
 end

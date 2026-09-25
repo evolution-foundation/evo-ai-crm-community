@@ -517,9 +517,9 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     end
   end
 
-  # Only the cards matching item_scope are loaded, so the cost follows the cards of the
-  # contact or conversation, not the size of the pipelines holding them. Pipelines are
-  # scoped by visibility: the contact/conversation menu lists only those the user can see.
+  # Only the cards matching item_scope are instantiated; the stage counters still read one
+  # row per card of each pipeline (Pipeline#stage_summaries). Pipelines are scoped by
+  # visibility: the contact/conversation menu lists only those the user can see.
   def fetch_pipelines_by_item_filter(item_scope)
     pipelines = policy_scope(Pipeline)
                 .where(id: item_scope.select(:pipeline_id))
