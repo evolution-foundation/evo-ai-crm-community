@@ -189,6 +189,13 @@ class AgentBots::HttpRequestService
       if epoch.positive? && bumped_at.present?
         metadata[:memorySessionEpoch] = epoch
         metadata[:memoryMinTimestamp] = bumped_at
+      elsif epoch.positive?
+        # Legacy data: epoch was bumped before ai_session_epoch_bumped_at existed.
+        # No floor can be sent for this turn, so this conversation silently
+        # keeps seeing pre-reset memory until it is resolved and reopened again
+        # (EVO-2241) - loud on purpose so the gap is visible in logs.
+        Rails.logger.warn "[AgentBot HTTP] Conversation #{conversation.id} has ai_session_epoch=#{epoch} " \
+                           'but no ai_session_epoch_bumped_at - memory floor cannot be applied this turn'
       end
     end
 

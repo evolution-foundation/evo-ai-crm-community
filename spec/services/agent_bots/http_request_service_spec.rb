@@ -38,4 +38,17 @@ RSpec.describe AgentBots::HttpRequestService do
     expect(params[:metadata][:memorySessionEpoch]).to eq(1)
     expect(params[:metadata][:memoryMinTimestamp]).to eq('2026-09-25T12:00:00Z')
   end
+
+  it 'warns LOUDLY when a positive epoch has no bump timestamp, so the gap stays visible in logs (EVO-2241 legacy data)' do
+    # Simulates a conversation whose epoch was bumped by data written before
+    # ai_session_epoch_bumped_at existed (pre-migration): the memory floor
+    # cannot be sent for this turn, silently reverting to old behavior for
+    # exactly the population that already hit this bug.
+    conversation.update_column(:custom_attributes, conversation.custom_attributes.merge('ai_session_epoch' => 1))
+    allow(Rails.logger).to receive(:warn)
+
+    jsonrpc_params
+
+    expect(Rails.logger).to have_received(:warn).with(/#{conversation.id}/)
+  end
 end
