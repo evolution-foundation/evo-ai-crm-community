@@ -163,6 +163,14 @@ RSpec.describe Message do
 
       expect(message.content).to eq("*Atendente:*\njá formatado")
     end
+
+    it 'does not prefix a private note even when sender is an AgentBot' do
+      message = conversation.messages.create!(
+        inbox: inbox, message_type: :outgoing, private: true, sender: agent_bot, content: 'nota interna'
+      )
+
+      expect(message.content).to eq('nota interna')
+    end
   end
 
   describe '#apply_human_agent_signature' do
@@ -203,6 +211,12 @@ RSpec.describe Message do
         message.valid?
 
         expect(message.content).to eq("*Leandro - TI:*\njá formatado")
+      end
+
+      it 'does not prefix a private note even when the inbox forces signatures' do
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, private: true, sender: user, content: 'nota interna')
+
+        expect(message.content).to eq('nota interna')
       end
     end
 
