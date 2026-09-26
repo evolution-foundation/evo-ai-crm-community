@@ -11,6 +11,12 @@ module Pipelines::StageMessageActions
   # message. Falls back to a direct message when no evo_ai bot is available and
   # a literal text was provided. Mirrors AgentBots::InactivityActionsService.
   def send_ai_message(conversation, suggested_message: nil, source: AUTOMATION_SOURCE)
+    # Reload so that labels applied by earlier rules in the same Sidekiq job
+    # (e.g. apply_label atendimento_ia firing at 2 min in the same pass as
+    # send_ai_message at 1440 min) are visible to processing_block_reason.
+    # Without this, the in-memory object still has empty labels and the label
+    # check blocks the dispatch even though the DB row is correct.
+    conversation.reload
     agent_bot = conversation.inbox&.agent_bot
     unless agent_bot&.evo_ai_provider?
       if suggested_message.present?
@@ -446,3 +452,4 @@ module Pipelines::StageMessageActions
            'Do NOT add meta-commentary.</important></system_message>'
   end
 end
+
