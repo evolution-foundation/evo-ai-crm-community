@@ -33,8 +33,8 @@ module Pipelines::StageMessageActions
       return false
     end
 
-    AgentBots::HttpRequestService.new(agent_bot, build_ai_payload(conversation, suggested_message)).perform
-    true
+    message = AgentBots::HttpRequestService.new(agent_bot, build_ai_payload(conversation, suggested_message)).perform
+    message.present?
   end
 
   def send_direct_message(conversation, text, source: AUTOMATION_SOURCE)
