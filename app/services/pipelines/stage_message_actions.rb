@@ -7,17 +7,31 @@ require 'securerandom'
 module Pipelines::StageMessageActions
   AUTOMATION_SOURCE = 'stage_inactivity_action'.freeze
 
-  # Ask the inbox's evo_ai agent bot to generate a contextual re-engagement
-  # message. Falls back to a direct message when no evo_ai bot is available and
-  # a literal text was provided. Mirrors AgentBots::InactivityActionsService.
-  def send_ai_message(conversation, suggested_message: nil, source: AUTOMATION_SOURCE)
+  # Ask an evo_ai agent bot to generate a contextual re-engagement message.
+  # Falls back to a direct message when no evo_ai bot is available and a
+  # literal text was provided. Mirrors AgentBots::InactivityActionsService.
+  #
+  # explicit_agent_bot_id: the bot the rule's own "message via agent" dropdown
+  # selected (rule[:action_value], same field every other action reuses). It
+  # used to be silently dropped here, so no matter which bot an operator
+  # picked, the request always went to the inbox's generic router bot.
+  #
+  # pipeline_id: the pipeline of the pipeline_item that triggered this rule
+  # (callers already have it in scope). Used as a deterministic fallback when
+  # no explicit bot was chosen — matched against a bot's own bot_config.pipeline_rules
+  # so a market/pipeline-specific subagent (e.g. lead_qualifier_uk_subagent for
+  # "UK Commercial Journey") is picked without relying on the router bot's own
+  # LLM judgment to get the delegation right.
+  def send_ai_message(conversation, suggested_message: nil, source: AUTOMATION_SOURCE, explicit_agent_bot_id: nil,
+                       pipeline_id: nil)
     # Reload so that labels applied by earlier rules in the same Sidekiq job
     # (e.g. apply_label atendimento_ia firing at 2 min in the same pass as
     # send_ai_message at 1440 min) are visible to processing_block_reason.
     # Without this, the in-memory object still has empty labels and the label
     # check blocks the dispatch even though the DB row is correct.
     conversation.reload
-    agent_bot = conversation.inbox&.agent_bot
+    agent_bot = resolve_agent_bot_for_conversation(conversation, explicit_agent_bot_id: explicit_agent_bot_id,
+                                                                  pipeline_id: pipeline_id)
     unless agent_bot&.evo_ai_provider?
       if suggested_message.present?
         Rails.logger.info '[StageMessageActions] no evo_ai bot on inbox, falling back to direct message'
@@ -322,6 +336,31 @@ module Pipelines::StageMessageActions
   end
 
   private
+
+  # Resolution order for #send_ai_message's target bot:
+  #   1. The rule's own explicit selection (an operator picked a specific bot
+  #      in the UI) — always wins.
+  #   2. A deterministic match: an evo_ai bot whose bot_config.pipeline_rules
+  #      names the triggering pipeline_item's pipeline (e.g. lead_qualifier_uk_subagent
+  #      for "UK Commercial Journey"). This replaces guessing — no LLM judgment
+  #      call needed to route by market/pipeline.
+  #   3. The inbox's own bot, same fallback as before this existed.
+  def resolve_agent_bot_for_conversation(conversation, explicit_agent_bot_id: nil, pipeline_id: nil)
+    explicit = AgentBot.find_by(id: explicit_agent_bot_id) if explicit_agent_bot_id.present?
+    return explicit if explicit
+
+    pipeline_matched_agent_bot_for(pipeline_id) || conversation.inbox&.agent_bot
+  end
+
+  # A jsonb containment query, not an in-memory scan: matches any bot whose
+  # bot_config.pipeline_rules array holds an entry for this exact pipeline.
+  def pipeline_matched_agent_bot_for(pipeline_id)
+    return nil if pipeline_id.blank?
+
+    AgentBot.evo_ai_provider
+            .where("bot_config -> 'pipeline_rules' @> ?", [{ pipelineId: pipeline_id.to_s }].to_json)
+            .first
+  end
 
   # Parses a stage-automation action_value JSON string defensively — a bad or missing
   # payload must never raise into the automation dispatch loop, only warn and no-op.

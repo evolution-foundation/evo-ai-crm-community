@@ -176,7 +176,8 @@ class Pipelines::StageInactivityActionsService
     conversation = target.conversation
     case rule[:action]
     when 'send_ai_message'
-      send_ai_message(conversation, suggested_message: rule[:ai_message])
+      send_ai_message(conversation, suggested_message: rule[:ai_message], explicit_agent_bot_id: rule[:action_value],
+                                     pipeline_id: @pipeline_item.pipeline_id)
     when 'send_direct_message'
       send_direct_message(conversation, rule[:action_value])
     when 'send_template'
