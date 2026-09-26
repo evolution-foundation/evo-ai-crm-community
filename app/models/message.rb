@@ -58,6 +58,7 @@ class Message < ApplicationRecord
   }.to_json.freeze
 
   before_validation :ensure_content_type
+  before_validation :apply_human_agent_signature, on: :create
   before_validation :prevent_message_flooding, unless: :imported?
   before_save :ensure_processed_message_content
   before_save :ensure_in_reply_to
@@ -69,9 +70,11 @@ class Message < ApplicationRecord
                  schema: TEMPLATE_PARAMS_SCHEMA,
                  attribute_resolver: ->(record) { record.additional_attributes }
 
+  CONTENT_MAX_LENGTH = 150_000
+
   validates :content_type, presence: true
-  validates :content, length: { maximum: 150_000 }
-  validates :processed_message_content, length: { maximum: 150_000 }
+  validates :content, length: { maximum: CONTENT_MAX_LENGTH }
+  validates :processed_message_content, length: { maximum: CONTENT_MAX_LENGTH }
 
   # when you have a temperory id in your frontend and want it echoed back via action cable
   attr_accessor :echo_id
@@ -318,7 +321,7 @@ class Message < ApplicationRecord
     html_content_quoted = content_attributes.dig(:email, :html_content, :quoted)
 
     message_content = text_content_quoted || html_content_quoted || content
-    self.processed_message_content = message_content&.truncate(150_000)
+    self.processed_message_content = message_content&.truncate(CONTENT_MAX_LENGTH)
   end
 
   # fetch the in_reply_to message and set the external id
@@ -335,6 +338,46 @@ class Message < ApplicationRecord
 
   def ensure_content_type
     self.content_type ||= Message.content_types[:text]
+  end
+
+  # Forces the agent's display-name signature on outgoing human-agent messages
+  # when the inbox opts in (Inbox#force_agent_signature), so the agent has no
+  # per-message choice — unlike the manual composer toggle, which stays
+  # client-side and opt-in. Falls back to the agent's name when they haven't
+  # set a custom signature in their profile.
+  #
+  # Chat channels use the same bold-name-and-colon prefix convention as
+  # agent-bot messages (see AgentBots::SegmentedMessageCreator and friends);
+  # email keeps the traditional sign-off at the bottom, since that's what
+  # agents and recipients expect from an email signature.
+  def apply_human_agent_signature
+    return unless outgoing? && !private? && sender.is_a?(User) && inbox.force_agent_signature?
+    return if content.blank?
+
+    signature_name = sender.message_signature.presence || sender.name
+    return if signature_name.blank?
+
+    if inbox.email?
+      return if content.end_with?(signature_name)
+
+      suffix = "\n\n#{signature_name}"
+      self.content = "#{truncate_for_signature(content, suffix.length)}#{suffix}"
+    else
+      signature_prefix = "*#{signature_name}:*\n"
+      return if content.start_with?(signature_prefix)
+
+      self.content = "#{signature_prefix}#{truncate_for_signature(content, signature_prefix.length)}"
+    end
+  end
+
+  # Reserves room for the signature so appending/prefixing it can never push
+  # `content` past the model's length validation, which would otherwise
+  # reject a message that was valid before this callback ran.
+  def truncate_for_signature(text, reserved_length)
+    max_length = CONTENT_MAX_LENGTH - reserved_length
+    return text if text.length <= max_length
+
+    text.truncate(max_length)
   end
 
   def execute_after_create_commit_callbacks

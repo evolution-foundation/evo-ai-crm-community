@@ -14,6 +14,7 @@
 #  email_address                     :string
 #  enable_auto_assignment            :boolean          default(TRUE)
 #  enable_email_collect              :boolean          default(TRUE)
+#  force_agent_signature             :boolean          default(FALSE), not null
 #  greeting_enabled                  :boolean          default(FALSE)
 #  greeting_message                  :string
 #  lock_to_single_conversation       :boolean          default(FALSE), not null
@@ -38,6 +39,11 @@ class Inbox < ApplicationRecord
   include Avatarable
   include OutOfOffisable
   include InstanceNameSanitizable
+
+  # Declared explicitly so `force_agent_signature?` doesn't raise NoMethodError
+  # on app processes booted against a database where the migration adding this
+  # column hasn't run yet (rolling deploy).
+  attribute :force_agent_signature, :boolean, default: false
 
   # Not allowing characters:
   validates :name, presence: true
