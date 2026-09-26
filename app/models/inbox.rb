@@ -40,6 +40,11 @@ class Inbox < ApplicationRecord
   include OutOfOffisable
   include InstanceNameSanitizable
 
+  # Declared explicitly so `force_agent_signature?` doesn't raise NoMethodError
+  # on app processes booted against a database where the migration adding this
+  # column hasn't run yet (rolling deploy).
+  attribute :force_agent_signature, :boolean, default: false
+
   # Not allowing characters:
   validates :name, presence: true
   validates :timezone, inclusion: { in: TZInfo::Timezone.all_identifiers }

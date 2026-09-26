@@ -156,6 +156,17 @@ RSpec.describe Message do
 
         expect(message.content).to eq('nota interna')
       end
+
+      it 'truncates content that would exceed the length limit once the signature is added' do
+        user.update!(message_signature: 'Leandro - TI')
+        signature_prefix = "*Leandro - TI:*\n"
+        long_content = 'a' * Message::CONTENT_MAX_LENGTH
+        message = conversation.messages.create!(inbox: inbox, message_type: :outgoing, sender: user, content: long_content)
+
+        expect(message.content.length).to eq(Message::CONTENT_MAX_LENGTH)
+        expect(message.content).to start_with(signature_prefix)
+        expect(message).to be_valid
+      end
     end
 
     context 'on an email inbox' do

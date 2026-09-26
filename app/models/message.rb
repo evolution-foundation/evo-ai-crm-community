@@ -70,9 +70,11 @@ class Message < ApplicationRecord
                  schema: TEMPLATE_PARAMS_SCHEMA,
                  attribute_resolver: ->(record) { record.additional_attributes }
 
+  CONTENT_MAX_LENGTH = 150_000
+
   validates :content_type, presence: true
-  validates :content, length: { maximum: 150_000 }
-  validates :processed_message_content, length: { maximum: 150_000 }
+  validates :content, length: { maximum: CONTENT_MAX_LENGTH }
+  validates :processed_message_content, length: { maximum: CONTENT_MAX_LENGTH }
 
   # when you have a temperory id in your frontend and want it echoed back via action cable
   attr_accessor :echo_id
@@ -319,7 +321,7 @@ class Message < ApplicationRecord
     html_content_quoted = content_attributes.dig(:email, :html_content, :quoted)
 
     message_content = text_content_quoted || html_content_quoted || content
-    self.processed_message_content = message_content&.truncate(150_000)
+    self.processed_message_content = message_content&.truncate(CONTENT_MAX_LENGTH)
   end
 
   # fetch the in_reply_to message and set the external id
@@ -358,13 +360,24 @@ class Message < ApplicationRecord
     if inbox.email?
       return if content.end_with?(signature_name)
 
-      self.content = "#{content}\n\n#{signature_name}"
+      suffix = "\n\n#{signature_name}"
+      self.content = "#{truncate_for_signature(content, suffix.length)}#{suffix}"
     else
       signature_prefix = "*#{signature_name}:*\n"
       return if content.start_with?(signature_prefix)
 
-      self.content = "#{signature_prefix}#{content}"
+      self.content = "#{signature_prefix}#{truncate_for_signature(content, signature_prefix.length)}"
     end
+  end
+
+  # Reserves room for the signature so appending/prefixing it can never push
+  # `content` past the model's length validation, which would otherwise
+  # reject a message that was valid before this callback ran.
+  def truncate_for_signature(text, reserved_length)
+    max_length = CONTENT_MAX_LENGTH - reserved_length
+    return text if text.length <= max_length
+
+    text.truncate(max_length)
   end
 
   def execute_after_create_commit_callbacks
