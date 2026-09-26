@@ -139,6 +139,17 @@ class Pipelines::StageInactivityActionsService
     return if execution.nil? # lost the race — another worker already reserved
 
     message = dispatch(rule, target)
+
+    # If a message-type action was blocked or skipped (dispatch returned false),
+    # destroy the execution record so the scheduler retries on the next pass
+    # instead of treating this as permanently done. Non-message actions (labels,
+    # stage moves, etc.) are idempotent and their records should be kept.
+    if message == false && MESSAGE_ACTIONS.include?(rule[:action])
+      execution.destroy
+      Rails.logger.info "[StageInactivity] item=#{@pipeline_item.id} rule=#{rule_id} dispatch blocked, releasing for retry"
+      return
+    end
+
     execution.update!(message_sent: message_text(rule, message))
   rescue StandardError => e
     Rails.logger.error "[StageInactivity] item=#{@pipeline_item.id} fire failed: #{e.message}"
@@ -214,3 +225,4 @@ class Pipelines::StageInactivityActionsService
     rule[:ai_message].presence || rule[:action_value].presence
   end
 end
+
