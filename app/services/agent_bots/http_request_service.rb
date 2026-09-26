@@ -246,7 +246,8 @@ class AgentBots::HttpRequestService
   end
 
   def build_pipeline_data(contact)
-    contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
+    contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks, :stage_movements).map do |item|
+      latest_notes = item.stage_movements.select { |m| m.notes.present? }.max_by(&:created_at)&.notes
       {
         id: item.id.to_s,
         pipeline_id: item.pipeline_id.to_s,
@@ -258,6 +259,7 @@ class AgentBots::HttpRequestService
         entered_at: item.entered_at&.iso8601,
         completed_at: item.completed_at&.iso8601,
         custom_fields: item.custom_fields || {},
+        notes: latest_notes,
         tasks: item.tasks.map { |task| { id: task.id.to_s, title: task.title, status: task.status } }
       }
     end
