@@ -9,6 +9,7 @@ class Pipelines::StageInactivityActionsService
   include Pipelines::StageMessageActions
 
   INACTIVITY_TRIGGER = 'inactivity'.freeze
+  MESSAGE_ACTIONS = %w[send_ai_message send_direct_message send_template finalize].freeze
 
   def initialize(pipeline_item)
     @pipeline_item = pipeline_item
@@ -131,14 +132,25 @@ class Pipelines::StageInactivityActionsService
   # --- firing (reserve-before-send) ----------------------------------------
 
   def fire(rule, rule_id, base)
-    target = Pipelines::StageInactivityTargetResolver.new(@pipeline_item).resolve(rule[:action])
+    target = Pipelines::StageInactivityTargetResolver.new(@pipeline_item).resolve(rule[:action], rule[:action_value])
     return if target.nil?
 
     execution = reserve(rule, rule_id, base)
     return if execution.nil? # lost the race — another worker already reserved
 
     message = dispatch(rule, target)
-    execution.update(message_sent: message_text(rule, message))
+
+    # If a message-type action was blocked or skipped (dispatch returned false),
+    # destroy the execution record so the scheduler retries on the next pass
+    # instead of treating this as permanently done. Non-message actions (labels,
+    # stage moves, etc.) are idempotent and their records should be kept.
+    if message == false && MESSAGE_ACTIONS.include?(rule[:action])
+      execution.destroy
+      Rails.logger.info "[StageInactivity] item=#{@pipeline_item.id} rule=#{rule_id} dispatch blocked, releasing for retry"
+      return
+    end
+
+    execution.update!(message_sent: message_text(rule, message))
   rescue StandardError => e
     Rails.logger.error "[StageInactivity] item=#{@pipeline_item.id} fire failed: #{e.message}"
   end
@@ -171,16 +183,46 @@ class Pipelines::StageInactivityActionsService
       send_template(conversation, template_params_for(rule))
     when 'finalize'
       finalize(conversation, rule[:action_value])
+    when 'move_to_stage'
+      move_to_stage(@pipeline_item, rule[:action_value])
+    when 'move_to_pipeline'
+      move_to_pipeline(@pipeline_item, rule[:action_value])
+    when 'assign_agent'
+      assign_agent(conversation, rule[:action_value])
+    when 'assign_team'
+      assign_team(conversation, rule[:action_value])
+    when 'apply_label'
+      apply_label(conversation, rule[:action_value])
+    when 'remove_label'
+      remove_label(conversation, rule[:action_value])
+    when 'change_priority'
+      change_priority(conversation, rule[:action_value])
+    when 'change_status'
+      change_status(conversation, rule[:action_value])
+    when 'send_webhook_event'
+      send_webhook_event(conversation, rule[:action_value])
+    when 'create_pipeline_task'
+      create_pipeline_task(@pipeline_item, rule[:action_value])
+    when 'send_canned_response'
+      send_canned_response(conversation, rule[:action_value])
+    when 'send_email_to_team'
+      send_email_to_team(conversation, rule[:action_value])
+    when 'send_email_transcript'
+      send_email_transcript(conversation, rule[:action_value])
+    when 'update_custom_attribute'
+      update_custom_attribute(conversation, @pipeline_item, rule[:action_value])
     else
       Rails.logger.warn "[StageInactivity] unsupported inactivity action: #{rule[:action]}"
     end
   end
 
-  def template_params_for(rule)
-    { id: rule[:action_value] }
-  end
-
+  # Only message-sending actions have meaningful "message_sent" text; the
+  # pipeline-movement/assignment/label actions already have their target
+  # recorded in action_config (the rule JSON) and have no message body.
   def message_text(rule, _dispatch_result)
+    return nil unless MESSAGE_ACTIONS.include?(rule[:action])
+
     rule[:ai_message].presence || rule[:action_value].presence
   end
 end
+
