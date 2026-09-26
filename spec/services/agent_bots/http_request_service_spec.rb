@@ -51,4 +51,14 @@ RSpec.describe AgentBots::HttpRequestService do
 
     expect(Rails.logger).to have_received(:warn).with(/#{conversation.id}/)
   end
+
+  describe '#perform' do
+    it 'does not return a truthy value when the HTTP call raises' do
+      stub_request(:post, agent_bot.outgoing_url).to_raise(Errno::ECONNREFUSED)
+
+      result = service.perform
+
+      expect(result).to be_falsey
+    end
+  end
 end
