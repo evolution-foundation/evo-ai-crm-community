@@ -29,7 +29,7 @@ class Product < ApplicationRecord
 
   KINDS    = %w[physical digital].freeze
   STATUSES = %w[active inactive draft].freeze
-  ALLOWED_CURRENCIES = %w[BRL USD EUR].freeze
+  ALLOWED_CURRENCIES = SupportedCurrencies::CODES
   URL_REGEXP = %r{\Ahttps?://[^\s]+\z}.freeze
 
   has_many_attached :images
