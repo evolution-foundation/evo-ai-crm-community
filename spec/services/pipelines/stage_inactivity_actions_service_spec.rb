@@ -231,6 +231,41 @@ RSpec.describe Pipelines::StageInactivityActionsService do
     end
   end
 
+  # A reservation is created BEFORE the send (reserve-before-send, see the service's
+  # own comment), so a worker killed mid-flight (e.g. a deploy restarting
+  # evo-crm-sidekiq while the AI call is still in flight) leaves a row with
+  # message_sent: nil that nothing will ever resolve -- idempotency then blocks
+  # this rule for this item forever, silently, with no further attempt.
+  describe 'orphaned reservation (message_sent nil, never resolved)' do
+    before do
+      rule = set_rule(minutes: 30, base: 'stage_stagnation')
+      pipeline_item.stage_movements.update_all(created_at: 31.minutes.ago)
+      @orphan = StageInactivityExecution.create!(
+        pipeline_item: pipeline_item, pipeline_stage_id: stage_a.id,
+        rule_id: rule['id'], base: 'stage_stagnation', action: 'send_direct_message',
+        action_config: rule, executed_at: 15.minutes.ago, message_sent: nil
+      )
+    end
+
+    it 'reclaims a reservation stale past the abandonment window and delivers the message' do
+      expect { described_class.new(pipeline_item.reload).process }
+        .to change { conversation.messages.count }.by(1)
+
+      execution = StageInactivityExecution.for_item(pipeline_item.id).sole
+      expect(execution.id).not_to eq(@orphan.id)
+      expect(execution.message_sent).to be_present
+    end
+
+    context 'when the reservation is recent (plausibly still in flight)' do
+      before { @orphan.update!(executed_at: 2.minutes.ago) }
+
+      it 'leaves it alone instead of firing a duplicate' do
+        expect { described_class.new(pipeline_item.reload).process }
+          .not_to change { conversation.messages.count }
+      end
+    end
+  end
+
   # EVO-2201: this path is time-based and fires unattended, so an archived pipeline that
   # kept its inactivity rules would message customers from a board the operator turned off.
   describe 'archived pipeline' do
