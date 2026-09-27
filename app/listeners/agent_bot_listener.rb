@@ -182,6 +182,17 @@ class AgentBotListener < BaseListener
     return unless connected_agent_bot_exist?(inbox)
     return unless message.webhook_sendable?
 
+    # A status-only update (a WhatsApp read receipt, for one) touches this same
+    # Message row and fires this same event, with no change to what the
+    # customer actually said. message_created already dispatched a bot reply
+    # to this content once; re-running the full dispatch here produced a
+    # second, redundant AI reply a few seconds later, every time a read
+    # receipt landed after the first reply had already gone out.
+    if message.incoming? && !content_changed?(event)
+      Rails.logger.info "[AgentBot Listener] Skipping message_updated - no content change (status-only update) for message #{message.id}"
+      return
+    end
+
     conversation = message.conversation
     agent_bot_inbox = inbox.agent_bot_inbox
 
@@ -358,6 +369,15 @@ class AgentBotListener < BaseListener
   end
 
   private
+
+  # message.rb#publish_message_updated sends previous_changes verbatim as
+  # changed_attributes (string keys, Rails' own dirty-tracking shape), e.g.
+  # {"status" => ["sent", "read"]}. A read receipt or similar status-only
+  # transition never touches content, so this stays false for it.
+  def content_changed?(event)
+    changed_attributes = event.data[:changed_attributes] || {}
+    changed_attributes.key?('content') || changed_attributes.key?(:content)
+  end
 
   def connected_agent_bot_exist?(inbox)
     return false if inbox.agent_bot_inbox.blank?
