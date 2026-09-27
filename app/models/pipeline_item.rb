@@ -105,17 +105,28 @@ class PipelineItem < ApplicationRecord
   end
 
   def days_in_current_stage
-    # Read from the loaded association in memory (max_by) instead of
-    # `order(:created_at).last`, which re-queries even when stage_movements is
-    # eager-loaded — an N+1 when serializing many items. Falls back to a query
-    # if not preloaded.
-    last_movement = if stage_movements.loaded?
-                      stage_movements.max_by(&:created_at)
-                    else
-                      stage_movements.order(:created_at).last
-                    end
-    start_time = last_movement&.created_at || entered_at
+    start_time = latest_stage_movement&.created_at || entered_at
     ((Time.current - start_time) / 1.day).round
+  end
+
+  # The "Observações" card field (see Api::V1::PipelineItemsController
+  # #persist_notes) writes to the latest stage_movement's notes rather than a
+  # column on this model. Read from the same row so the API response can
+  # actually redisplay what was saved.
+  def notes
+    latest_stage_movement&.notes
+  end
+
+  # Read from the loaded association in memory (max_by) instead of
+  # `order(:created_at).last`, which re-queries even when stage_movements is
+  # eager-loaded — an N+1 when serializing many items. Falls back to a query
+  # if not preloaded.
+  def latest_stage_movement
+    if stage_movements.loaded?
+      stage_movements.max_by(&:created_at)
+    else
+      stage_movements.order(:created_at).last
+    end
   end
 
   def completed?

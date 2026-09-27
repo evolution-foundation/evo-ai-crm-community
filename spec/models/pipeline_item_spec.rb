@@ -245,4 +245,31 @@ RSpec.describe PipelineItem, type: :model do
     end
 
   end
+
+  # The "Observações" card field writes to the latest stage_movement's notes
+  # (see Api::V1::PipelineItemsController#persist_notes) but the serializer
+  # never read it back, so the UI always redisplayed the field as blank after
+  # reopening the card even though the save itself had succeeded.
+  describe 'notes (Observações card field)' do
+    it 'exposes the latest stage_movement notes so the UI can redisplay a saved observation' do
+      item = PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact)
+      item.stage_movements.first.update!(notes: 'teste 123')
+
+      serialized = PipelineItemSerializer.serialize(item, include_entity: false)
+
+      expect(serialized[:notes]).to eq('teste 123')
+    end
+
+    it 'uses the most recent movement after the item has moved stages more than once' do
+      second_stage = PipelineStage.create!(pipeline: pipeline, name: 'Stage 2', position: 2)
+      item = PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact)
+      item.stage_movements.first.update!(notes: 'old note')
+      item.move_to_stage(second_stage)
+      item.stage_movements.order(:created_at).last.update!(notes: 'new note')
+
+      serialized = PipelineItemSerializer.serialize(item.reload, include_entity: false)
+
+      expect(serialized[:notes]).to eq('new note')
+    end
+  end
 end
