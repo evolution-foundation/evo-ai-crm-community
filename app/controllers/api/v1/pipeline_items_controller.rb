@@ -203,7 +203,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     end
 
     if params[:custom_fields].present?
-      @pipeline_item.update!(custom_fields: params[:custom_fields])
+      @pipeline_item.update!(custom_fields: merged_custom_fields(params[:custom_fields]))
       wrote_anything = true
     end
 
@@ -268,7 +268,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
     # Update custom fields and notes
     update_params = {}
-    update_params[:custom_fields] = params[:custom_fields] if params[:custom_fields].present?
+    update_params[:custom_fields] = merged_custom_fields(params[:custom_fields]) if params[:custom_fields].present?
 
     @pipeline_item.update!(update_params) if update_params.any?
 
@@ -388,7 +388,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # rubocop:enable Metrics/MethodLength
 
   def update_custom_fields
-    @pipeline_item.update!(custom_fields: params[:custom_fields])
+    @pipeline_item.update!(custom_fields: merged_custom_fields(params[:custom_fields]))
     success_response(
       data: { custom_fields: @pipeline_item.custom_fields },
       message: 'Custom fields updated successfully'
@@ -400,6 +400,15 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
       details: format_validation_errors(e.record.errors),
       status: :unprocessable_entity
     )
+  end
+
+  # A full replace here silently drops any pre-existing key the caller doesn't
+  # resend (e.g. an AI agent saving qualification fields wiping the ad-form
+  # fields it was never given), so merge onto what's already on the card.
+  def merged_custom_fields(new_fields)
+    existing = @pipeline_item.custom_fields || {}
+    incoming = new_fields.respond_to?(:to_unsafe_h) ? new_fields.to_unsafe_h : new_fields
+    existing.merge(incoming)
   end
 
   # rubocop:disable Metrics/MethodLength

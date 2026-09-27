@@ -284,7 +284,13 @@ module AgentBots
     end
 
     def build_pipeline_data(contact)
-      contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
+      scope = PipelineItem.where(contact_id: contact.id)
+      # Cards created from a conversation (e.g. WhatsApp inbound leads) are linked
+      # via conversation_id with contact_id left null, so contact.pipeline_items
+      # alone misses them entirely.
+      scope = scope.or(PipelineItem.where(conversation_id: @conversation.id)) if @conversation
+
+      scope.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
         {
           id: item.id.to_s,
           pipeline_id: item.pipeline_id.to_s,
