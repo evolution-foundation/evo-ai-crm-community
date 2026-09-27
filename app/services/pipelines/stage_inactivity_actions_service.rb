@@ -10,6 +10,14 @@ class Pipelines::StageInactivityActionsService
 
   INACTIVITY_TRIGGER = 'inactivity'.freeze
 
+  # reserve() writes the execution row BEFORE the send, so a worker killed
+  # mid-flight (a deploy restarting evo-crm-sidekiq while the HTTP call to the
+  # AI processor is still in flight) leaves a row with message_sent: nil that
+  # nothing will ever resolve -- idempotency then blocks this rule for this
+  # item forever, silently. Comfortably past HttpRequestService's own ~120s
+  # ceiling, so a merely slow in-flight request is never mistaken for one.
+  STALE_RESERVATION_TIMEOUT = 10.minutes
+
   def initialize(pipeline_item)
     @pipeline_item = pipeline_item
   end
@@ -63,7 +71,12 @@ class Pipelines::StageInactivityActionsService
 
   def evaluate_rule(rule)
     rule_id = rule_id_for(rule)
-    return if StageInactivityExecution.executed?(@pipeline_item.id, rule_id)
+    existing = StageInactivityExecution.find_by(pipeline_item_id: @pipeline_item.id, rule_id: rule_id)
+    if existing
+      return unless orphaned_reservation?(existing)
+
+      existing.destroy
+    end
 
     base    = inactivity_base(rule)
     minutes = inactivity_minutes(rule)
@@ -71,6 +84,10 @@ class Pipelines::StageInactivityActionsService
     return if elapsed.nil? || elapsed < minutes
 
     fire(rule, rule_id, base)
+  end
+
+  def orphaned_reservation?(execution)
+    execution.message_sent.nil? && execution.executed_at < STALE_RESERVATION_TIMEOUT.ago
   end
 
   # --- timing ---------------------------------------------------------------
