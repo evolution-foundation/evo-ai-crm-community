@@ -1,4 +1,5 @@
 require 'base64'
+require 'uri'
 
 class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   PRESENCE_STATUS_BY_EVENT = {
@@ -11,15 +12,19 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
     @message = message
     @phone_number = phone_number
 
+    unless message.attachments.present? || message.content_type == 'input_select' || message.content.present?
+      @message.update!(is_unsupported: true)
+      return
+    end
+
+    return false unless outbound_configuration_ready?
+
     if message.attachments.present?
       send_attachment_message(phone_number, message)
     elsif message.content_type == 'input_select'
       send_interactive_message(phone_number, message)
     elsif message.content.present?
       send_text_message(phone_number, message)
-    else
-      @message.update!(is_unsupported: true)
-      return
     end
   end
 
@@ -45,6 +50,8 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def send_template(phone_number, template_info)
+    return false unless outbound_configuration_ready?
+
     # Evolution API doesn't support template messages in the same way
     # For now, we'll send a regular text message
     Rails.logger.warn "Evolution API doesn't support template messages, sending as text"
@@ -156,15 +163,11 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def validate_provider_config?
-    api_url = whatsapp_channel.provider_config['api_url'].presence || GlobalConfigService.load('EVOLUTION_API_URL', '').to_s.strip
-    admin_token = whatsapp_channel.provider_config['admin_token'].presence || GlobalConfigService.load('EVOLUTION_ADMIN_SECRET', '').to_s.strip
-    
-    # Try multiple keys for instance name
-    instance_name = whatsapp_channel.provider_config['instance_name'].presence || 
-                    whatsapp_channel.provider_config['instanceName'].presence ||
-                    whatsapp_channel.provider_config['name'].presence
+    api_url = api_base_path
+    admin_token = api_admin_token
+    resolved_instance_name = instance_name
 
-    return false if api_url.blank? || admin_token.blank? || instance_name.blank?
+    return false if api_url.blank? || admin_token.blank? || resolved_instance_name.blank?
 
     # Test connection to Evolution API root endpoint
     response = HTTParty.get(
@@ -183,9 +186,8 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def api_headers
-    admin_token = whatsapp_channel.provider_config['admin_token'].presence || GlobalConfigService.load('EVOLUTION_ADMIN_SECRET', '').to_s.strip
     {
-      'apikey' => admin_token,
+      'apikey' => api_admin_token,
       'Content-Type' => 'application/json'
     }
   end
@@ -292,6 +294,8 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def try_logout_instance(instance_name)
+    return false if api_base_path.blank?
+
     logout_url = "#{api_base_path}/instance/logout/#{instance_name}"
     Rails.logger.info "Evolution API: Attempting logout for instance #{instance_name} at #{logout_url}"
 
@@ -316,6 +320,8 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def try_delete_instance(instance_name)
+    return false if api_base_path.blank?
+
     delete_url = "#{api_base_path}/instance/delete/#{instance_name}"
     Rails.logger.info "Evolution API: Attempting delete for instance #{instance_name} at #{delete_url}"
 
@@ -341,12 +347,79 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   end
 
   def api_base_path
-    api_url = whatsapp_channel.provider_config['api_url'].presence || GlobalConfigService.load('EVOLUTION_API_URL', '').to_s.strip
-    api_url&.chomp('/')
+    return @api_base_path if defined?(@api_base_path)
+
+    api_url = channel_config_value('api_url').to_s.strip.presence || global_evolution_setting('EVOLUTION_API_URL').to_s.strip
+    return @api_base_path = nil if api_url.blank?
+
+    uri = URI.parse(api_url)
+    return @api_base_path = nil unless uri.is_a?(URI::HTTP) && uri.host.present? && (1..65_535).cover?(uri.port)
+    return @api_base_path = nil if uri.userinfo.present? || uri.query.present? || uri.fragment.present?
+
+    @api_base_path = uri.to_s.sub(%r{/+\z}, '')
+  rescue URI::InvalidURIError
+    @api_base_path = nil
+  end
+
+  def api_admin_token
+    @api_admin_token ||= channel_config_value('admin_token').presence ||
+                         global_evolution_setting('EVOLUTION_ADMIN_SECRET').to_s.strip
+  end
+
+  # GlobalConfigService is cache-backed. If a worker has a stale empty cache
+  # entry, recover from the persisted installation config before refusing a send.
+  # InstallationConfig#value decrypts *_SECRET values transparently.
+  def global_evolution_setting(key)
+    @global_evolution_settings ||= {}
+    return @global_evolution_settings[key] if @global_evolution_settings.key?(key)
+
+    cached_value = begin
+      GlobalConfigService.load(key, nil)
+    rescue StandardError => e
+      Rails.logger.warn("[Evolution] global config cache lookup failed key=#{key} error_class=#{e.class}")
+      nil
+    end
+    return @global_evolution_settings[key] = cached_value if cached_value.present?
+
+    persisted_value = InstallationConfig.unscoped.find_by(name: key)&.value
+    if persisted_value.present?
+      Rails.logger.warn("[Evolution] global config cache was empty; using persisted setting key=#{key}")
+    end
+    @global_evolution_settings[key] = persisted_value
+  rescue StandardError => e
+    Rails.logger.error("[Evolution] global config lookup failed key=#{key} error_class=#{e.class}")
+    @global_evolution_settings[key] = nil
   end
 
   def instance_name
-    whatsapp_channel.provider_config['instance_name']
+    @instance_name ||= channel_config_value('instance_name', 'instanceName', 'name')
+  end
+
+  def channel_config_value(*keys)
+    config = whatsapp_channel.provider_config
+    return if config.blank?
+
+    keys.each do |key|
+      value = config[key].presence || config[key.to_sym].presence
+      return value if value
+    end
+
+    nil
+  end
+
+  def outbound_configuration_ready?
+    missing = []
+    missing << 'api_url (global EVOLUTION_API_URL or channel api_url)' if api_base_path.blank?
+    missing << 'admin key (global EVOLUTION_ADMIN_SECRET or channel admin_token)' if api_admin_token.blank?
+    missing << 'instance_name' if instance_name.blank?
+    return true if missing.empty?
+
+    @last_delivery_status = nil
+    @last_delivery_error = "Evolution API configuration is incomplete: #{missing.join(', ')}."
+    Rails.logger.error(
+      "[Evolution] outbound configuration invalid channel_id=#{whatsapp_channel.id} missing=#{missing.join('|')}"
+    )
+    false
   end
 
   def remote_jid_for(message)
@@ -607,10 +680,12 @@ class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
   def process_response(response)
     if response.success?
       parsed_response = response.parsed_response
-      return parsed_response.dig('key', 'id') || parsed_response['messageId'] || true
+      return parsed_response.dig('key', 'id') || parsed_response['messageId'] || true if parsed_response.is_a?(Hash)
+
+      return true
     end
 
-    Rails.logger.error "Evolution API error: #{response.code} - #{response.body}"
+    handle_error(response)
     false
   end
 end
