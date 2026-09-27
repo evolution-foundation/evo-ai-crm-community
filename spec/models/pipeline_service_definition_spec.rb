@@ -75,11 +75,11 @@ RSpec.describe PipelineServiceDefinition, type: :model do
     end
 
     it 'requires valid currency' do
-      definition = build_definition(currency: 'GBP')
+      definition = build_definition(currency: 'XYZ')
       expect(definition).not_to be_valid
     end
 
-    %w[BRL USD EUR].each do |currency|
+    SupportedCurrencies::CODES.each do |currency|
       it "accepts #{currency} currency" do
         definition = build_definition(currency: currency)
         expect(definition).to be_valid
@@ -124,6 +124,11 @@ RSpec.describe PipelineServiceDefinition, type: :model do
 
     it 'formats USD with dot separator' do
       definition = build_definition(default_value: 1500.50, currency: 'USD')
+      expect(definition.formatted_default_value).to eq('1500.50')
+    end
+
+    it 'formats GBP with dot separator' do
+      definition = build_definition(default_value: 1500.50, currency: 'GBP')
       expect(definition.formatted_default_value).to eq('1500.50')
     end
   end

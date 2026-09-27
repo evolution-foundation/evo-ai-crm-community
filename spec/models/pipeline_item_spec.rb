@@ -62,6 +62,23 @@ RSpec.describe PipelineItem, type: :model do
     end
   end
 
+  describe 'currency validation (custom_fields.currency)' do
+    SupportedCurrencies::CODES.each do |currency|
+      it "accepts #{currency}" do
+        item = PipelineItem.new(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact,
+                                 custom_fields: { 'currency' => currency })
+        expect(item).to be_valid
+      end
+    end
+
+    it 'rejects an unsupported currency code' do
+      item = PipelineItem.new(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact,
+                               custom_fields: { 'currency' => 'XYZ' })
+      expect(item).not_to be_valid
+      expect(item.errors[:custom_fields]).to include(/Currency must be one of/)
+    end
+  end
+
   describe 'orphaned item detection' do
     it 'detects orphaned item when contact is missing' do
       item = PipelineItem.create!(
