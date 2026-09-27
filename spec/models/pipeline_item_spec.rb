@@ -62,6 +62,47 @@ RSpec.describe PipelineItem, type: :model do
     end
   end
 
+  # Sourcery review (public PR): the zero-total early return hardcoded a comma
+  # separator regardless of currency, so a GBP (or USD) item with no services
+  # showed "0,00" instead of the "0.00" every other GBP/USD total used.
+  describe '#formatted_services_total' do
+    let!(:item) { PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact) }
+
+    it 'formats a zero total with a dot separator for USD' do
+      expect(item.formatted_services_total('USD')).to eq('0.00')
+    end
+
+    it 'formats a zero total with a dot separator for GBP' do
+      expect(item.formatted_services_total('GBP')).to eq('0.00')
+    end
+
+    it 'formats a zero total with a comma separator for BRL' do
+      expect(item.formatted_services_total('BRL')).to eq('0,00')
+    end
+
+    it 'formats a non-zero total with a dot separator for GBP' do
+      item.update!(custom_fields: { 'services' => [{ 'name' => 'Consulting', 'value' => '150.5' }] })
+      expect(item.formatted_services_total('GBP')).to eq('150.50')
+    end
+  end
+
+  describe 'currency validation (custom_fields.currency)' do
+    SupportedCurrencies::CODES.each do |currency|
+      it "accepts #{currency}" do
+        item = PipelineItem.new(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact,
+                                 custom_fields: { 'currency' => currency })
+        expect(item).to be_valid
+      end
+    end
+
+    it 'rejects an unsupported currency code' do
+      item = PipelineItem.new(pipeline: pipeline, pipeline_stage: pipeline_stage, contact: contact,
+                               custom_fields: { 'currency' => 'XYZ' })
+      expect(item).not_to be_valid
+      expect(item.errors[:custom_fields]).to include(/Currency must be one of/)
+    end
+  end
+
   describe 'orphaned item detection' do
     it 'detects orphaned item when contact is missing' do
       item = PipelineItem.create!(

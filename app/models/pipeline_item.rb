@@ -194,8 +194,6 @@ class PipelineItem < ApplicationRecord
   end
 
   def formatted_services_total(currency = 'BRL')
-    return '0,00' if services_total_value.zero?
-
     case currency
     when 'EUR', 'BRL'
       format('%.2f', services_total_value).tr('.', ',')
@@ -307,10 +305,9 @@ class PipelineItem < ApplicationRecord
   end
 
   def validate_currency_structure
-    valid_currencies = %w[BRL USD EUR]
-    return if valid_currencies.include?(custom_fields['currency'])
+    return if SupportedCurrencies::CODES.include?(custom_fields['currency'])
 
-    errors.add(:custom_fields, 'Currency must be one of: BRL, USD, EUR')
+    errors.add(:custom_fields, "Currency must be one of: #{SupportedCurrencies::CODES.join(', ')}")
   end
 
   def must_have_conversation_or_contact

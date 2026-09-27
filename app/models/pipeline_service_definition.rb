@@ -28,7 +28,7 @@ class PipelineServiceDefinition < ApplicationRecord
   validates :name, presence: true, length: { maximum: 255 }
   validates :name, uniqueness: { scope: [:pipeline_id] }
   validates :default_value, presence: true, numericality: { greater_than_or_equal_to: 0 }
-  validates :currency, presence: true, inclusion: { in: %w[BRL USD EUR] }
+  validates :currency, presence: true, inclusion: { in: SupportedCurrencies::CODES }
   validates :pipeline_id, presence: true
 
   scope :active, -> { where(active: true) }
