@@ -388,6 +388,14 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # rubocop:enable Metrics/MethodLength
 
   def update_custom_fields
+    unless params[:custom_fields].present?
+      return error_response(
+        ApiErrorCodes::VALIDATION_ERROR,
+        'custom_fields is required',
+        status: :unprocessable_entity
+      )
+    end
+
     @pipeline_item.update!(custom_fields: merged_custom_fields(params[:custom_fields]))
     success_response(
       data: { custom_fields: @pipeline_item.custom_fields },
