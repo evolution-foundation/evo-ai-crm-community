@@ -252,7 +252,13 @@ class AgentBots::HttpRequestService
   end
 
   def build_pipeline_data(contact)
-    contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks, :stage_movements).map do |item|
+    scope = PipelineItem.where(contact_id: contact.id)
+    # Cards created from a conversation (e.g. WhatsApp inbound leads) are linked
+    # via conversation_id with contact_id left null, so contact.pipeline_items
+    # alone misses them entirely.
+    scope = scope.or(PipelineItem.where(conversation_id: context_conversation.id)) if context_conversation
+
+    scope.includes(:pipeline, :pipeline_stage, :tasks, :stage_movements).map do |item|
       latest_notes = item.stage_movements.select { |m| m.notes.present? }.max_by(&:created_at)&.notes
       {
         id: item.id.to_s,
