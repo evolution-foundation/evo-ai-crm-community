@@ -42,6 +42,12 @@ class AgentBots::HttpRequestService
       Rails.logger.error "[AgentBot HTTP] ❌ Error: #{e.message}"
       Rails.logger.error "[AgentBot HTTP] Error class: #{e.class}"
       Rails.logger.error "[AgentBot HTTP] Backtrace: #{e.backtrace.first(10).join("\n")}"
+      # Explicit nil: without it, the rescue block's value is whatever the last
+      # Rails.logger.error call returns (`true`), which callers (e.g.
+      # Pipelines::StageMessageActions#send_ai_message) read as "message sent" via
+      # `.present?` — silently marking a stage-inactivity rule executed, with no
+      # message ever created and no retry, even though the send never happened.
+      nil
     end
   end
 
