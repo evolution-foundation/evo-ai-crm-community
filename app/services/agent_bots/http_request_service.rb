@@ -230,7 +230,15 @@ class AgentBots::HttpRequestService
   end
 
   def build_pipeline_data(contact)
-    contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
+    scope = PipelineItem.where(contact_id: contact.id)
+    # Cards created from a conversation (e.g. WhatsApp inbound leads) are linked
+    # via conversation_id with contact_id left null, so contact.pipeline_items
+    # alone misses them entirely.
+    if (conversation = find_conversation_from_payload)
+      scope = scope.or(PipelineItem.where(conversation_id: conversation.id))
+    end
+
+    scope.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
       {
         id: item.id.to_s,
         pipeline_id: item.pipeline_id.to_s,
@@ -301,6 +309,12 @@ class AgentBots::HttpRequestService
   end
 
   def find_conversation_from_payload
+    return @found_conversation if defined?(@found_conversation)
+
+    @found_conversation = locate_conversation_from_payload
+  end
+
+  def locate_conversation_from_payload
     # Try multiple strategies to find the conversation
 
     # Strategy 1: Try conversation ID from payload (could be UUID or display_id)
