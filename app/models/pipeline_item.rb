@@ -207,8 +207,6 @@ class PipelineItem < ApplicationRecord
   end
 
   def formatted_services_total(currency = 'BRL')
-    return '0,00' if services_total_value.zero?
-
     case currency
     when 'EUR', 'BRL'
       format('%.2f', services_total_value).tr('.', ',')
