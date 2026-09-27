@@ -142,6 +142,14 @@ RSpec.describe Pipelines::StageInactivityActionsService do
       expect(execution.message_sent).to be_present
     end
 
+    it 'logs the reclaim so a wrong stale-window assumption is never silent' do
+      allow(Rails.logger).to receive(:warn)
+
+      described_class.new(pipeline_item.reload).process
+
+      expect(Rails.logger).to have_received(:warn).with(/reclaiming reservation/)
+    end
+
     context 'when the reservation is recent (plausibly still in flight)' do
       before { @orphan.update!(executed_at: 2.minutes.ago) }
 

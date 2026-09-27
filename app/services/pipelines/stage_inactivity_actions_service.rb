@@ -75,6 +75,13 @@ class Pipelines::StageInactivityActionsService
     if existing
       return unless orphaned_reservation?(existing)
 
+      # Never silent: if the abandonment window ever turns out too short for a
+      # genuinely slow (not dead) request, this is the line that lets an
+      # operator notice a duplicate send instead of it going unexplained.
+      Rails.logger.warn(
+        "[StageInactivity] item=#{@pipeline_item.id} rule=#{rule_id} reclaiming reservation " \
+        "abandoned at #{existing.executed_at} (older than #{STALE_RESERVATION_TIMEOUT.inspect})"
+      )
       existing.destroy
     end
 
