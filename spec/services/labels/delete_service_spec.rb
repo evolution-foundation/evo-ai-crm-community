@@ -44,4 +44,18 @@ RSpec.describe Labels::DeleteService do
   it 'is a no-op when the label is not in use' do
     expect { described_class.new(label_title: title).perform }.not_to raise_error
   end
+
+  # `tagged_with` finds "VIP" for "vip", so the removal has to match the same way.
+  it 'removes an application whose casing differs from the catalog title' do
+    ActsAsTaggableOn::Tagging.create!(
+      tag: ActsAsTaggableOn::Tag.create!(name: 'VIP'),
+      taggable: contact,
+      context: 'labels'
+    )
+    expect(contact.reload.label_list.to_a).to eq(['VIP'])
+
+    described_class.new(label_title: title).perform
+
+    expect(contact.reload.label_list.to_a).to be_empty
+  end
 end

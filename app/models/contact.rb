@@ -42,6 +42,7 @@ class Contact < ApplicationRecord
   include Avatarable
   include AvailabilityStatusable
   include Labelable
+  self.labels_in_catalog = true
   include LlmFormattable
   include Wisper::Publisher
 

@@ -3,6 +3,46 @@ module Labelable
 
   included do
     acts_as_taggable_on :labels
+
+    # Contact and Conversation share the account-wide label catalog. Product
+    # labels are free text typed per product and must stay out of it.
+    class_attribute :labels_in_catalog, instance_writer: false, default: false
+
+    # Must live in `included do`: the gem inserts its Core module above this
+    # concern, so an override in the module body never runs. And it must be the
+    # setter: `cached_label_list` is written from the list handed to it, so
+    # normalising lower down leaves the tag canonical and the cache raw.
+    def label_list=(value)
+      if self.class.labels_in_catalog
+        super(Labelable.catalogued_label_list(value, label_list))
+      else
+        super
+      end
+    end
+  end
+
+  # Split with the gem's own parser, so "a, b" is catalogued as the two titles it
+  # becomes; `TagList#to_s` re-quotes a title that keeps a comma for `super`.
+  def self.catalogued_label_list(value, current)
+    titles = ActsAsTaggableOn.default_parser.new(value).parse.map { |name| canonical_label_title(name) }
+    # Only what this write adds: a title already applied may be one a pending
+    # rename has just moved out of the catalog.
+    (titles - current.map { |name| canonical_label_title(name) }).each { |title| ensure_in_catalog(title) }
+    ActsAsTaggableOn::TagList.new(titles).to_s
+  end
+
+  # Mirrors `Label`'s own normalisation.
+  def self.canonical_label_title(name)
+    name.to_s.strip.downcase
+  end
+
+  # Non-bang on purpose: a title `Label` rejects stays applied but uncatalogued.
+  # A bare UUID is never promoted: it only reaches here when it no longer
+  # resolves, and a UUID in the label picker is garbage.
+  def self.ensure_in_catalog(title)
+    return if title.blank? || Labels::TokenResolver::UUID_FORMAT.match?(title)
+
+    Label.find_or_create_by(title: title) # rubocop:disable Rails/SaveBang
   end
 
   # F-2: label-change publishing moved to `after_update_commit` on Contact
