@@ -8,6 +8,13 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   DEFAULT_PER_PAGE = 50
   MAX_PER_PAGE = 100
 
+  # The card's contact as PipelineItem#contact resolves it: a lead's own, else the conversation's.
+  # Search and the contact_name sort share this string; Rails dedupes it, so they join once.
+  CARD_CONTACT_JOIN = <<~SQL.squish.freeze
+    LEFT JOIN conversations card_conversations ON card_conversations.id = pipeline_items.conversation_id
+    LEFT JOIN contacts card_contacts ON card_contacts.id = COALESCE(pipeline_items.contact_id, card_conversations.contact_id)
+  SQL
+
   # Mutating actions authorize against the pipeline write policy; reads stay at
   # view level.
   # Card writes an AGENT may run — gated on the dedicated pipeline_items.update key
@@ -759,19 +766,14 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     @pipeline_items.where(pipeline_stage_id: params[:stage_id])
   end
 
-  # Matches the card's contact whether the card is a conversation or a lead. Aliased joins
-  # so it composes with the contact_name sort, which joins conversations/contacts too.
+  # Matches the card's contact whether the card is a conversation or a lead.
   def search_conversations
     search_term = "%#{PipelineItem.sanitize_sql_like(params[:search].to_s.strip)}%"
-    @pipeline_items.joins(<<~SQL.squish)
-      LEFT JOIN conversations search_conversations ON search_conversations.id = pipeline_items.conversation_id
-      LEFT JOIN contacts search_contacts
-        ON search_contacts.id = COALESCE(pipeline_items.contact_id, search_conversations.contact_id)
-    SQL
+    @pipeline_items.joins(CARD_CONTACT_JOIN)
                    .where(
-                     'search_contacts.name ILIKE :term OR search_contacts.email ILIKE :term ' \
-                     'OR search_contacts.phone_number ILIKE :term OR search_conversations.display_id::text ILIKE :term ' \
-                     'OR search_conversations.id::text ILIKE :term',
+                     'card_contacts.name ILIKE :term OR card_contacts.email ILIKE :term ' \
+                     'OR card_contacts.phone_number ILIKE :term OR card_conversations.display_id::text ILIKE :term ' \
+                     'OR card_conversations.id::text ILIKE :term',
                      term: search_term
                    )
   end
@@ -907,22 +909,12 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
                       when 'stage_name'
                         @pipeline_items.joins(:pipeline_stage).order("pipeline_stages.name #{sort_order}")
                       when 'contact_name'
-                        order_by_contact_name(sort_order)
+                        @pipeline_items.joins(CARD_CONTACT_JOIN).order(Arel.sql("card_contacts.name #{sort_order}"))
                       else
                         @pipeline_items.order(created_at: :desc)
                       end
     # Tie-break so rows sharing a sort value never repeat or vanish across pages.
     @pipeline_items = @pipeline_items.order(:id)
-  end
-
-  # Resolves the card's contact the way PipelineItem#contact does: a lead card carries its
-  # own contact, a conversation card borrows the conversation's.
-  def order_by_contact_name(sort_order)
-    @pipeline_items
-      .joins('LEFT JOIN conversations sort_conversations ON sort_conversations.id = pipeline_items.conversation_id')
-      .joins('LEFT JOIN contacts sort_contacts ' \
-             'ON sort_contacts.id = COALESCE(pipeline_items.contact_id, sort_conversations.contact_id)')
-      .order(Arel.sql("sort_contacts.name #{sort_order}"))
   end
 
   def ensure_authorized_user

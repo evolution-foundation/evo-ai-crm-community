@@ -241,6 +241,17 @@ RSpec.describe 'Pipeline board', type: :request do
         expect(json_response['data'].pluck('id')).to eq([ana, beatriz, bruno].map(&:id))
         expect(json_response['meta']['pagination']['total']).to eq(3)
       end
+
+      it 'sorts the search result by contact name' do
+        carla = conversation_card(name: 'Carla Silva')
+        beatriz = lead_card(name: 'Beatriz Silva')
+
+        get url, params: { search: 'silva', sort_by: 'contact_name', sort_order: 'asc' }
+
+        expect(response).to have_http_status(:ok)
+        expect(json_response['data'].pluck('id')).to eq([beatriz, carla].map(&:id))
+        expect(json_response['meta']['pagination']['total']).to eq(2)
+      end
     end
 
     describe 'view=card' do
