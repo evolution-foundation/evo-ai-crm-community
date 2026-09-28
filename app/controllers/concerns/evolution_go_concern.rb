@@ -13,7 +13,8 @@ module EvolutionGoConcern
       subscribe: [
         'MESSAGE',
         'READ_RECEIPT',
-        'CONNECTION'
+        'CONNECTION',
+        'ChatPresence'
       ],
       webhookUrl: webhook_url_value
     }
