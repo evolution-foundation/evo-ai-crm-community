@@ -112,4 +112,51 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
       service.send(:handle_connection_open, nil)
     end
   end
+
+  describe 'presence.update event' do
+    let(:inbox) { instance_double(Inbox, archived?: false, contact_inboxes: contact_inboxes_relation) }
+    let(:contact_inboxes_relation) { instance_double(ActiveRecord::Relation, find_by: contact_inbox) }
+    let(:contact_inbox) { instance_double(ContactInbox, conversations: conversations_relation) }
+    let(:conversations_relation) { instance_double(ActiveRecord::Relation, where: where_chain) }
+    let(:where_chain) { double('WhereChain', not: not_resolved_relation) }
+    let(:not_resolved_relation) { instance_double(ActiveRecord::Relation, last: conversation) }
+    let(:conversation) { instance_double(Conversation, display_id: 5, contact_id: 'contact-1') }
+
+    def service_for(data)
+      described_class.new(inbox: inbox, params: { event: 'presence.update', data: data, instance: 'test' })
+    end
+
+    it 'extends the debounce for a composing signal' do
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'composing' } } }
+
+      expect(BotRuntime::PresenceDelegationService).to receive(:new).with(conversation).and_return(instance_double(BotRuntime::PresenceDelegationService, delegate: true))
+
+      service_for(data).perform
+    end
+
+    it 'does nothing for a paused signal' do
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'paused' } } }
+
+      expect(BotRuntime::PresenceDelegationService).not_to receive(:new)
+
+      service_for(data).perform
+    end
+
+    it 'ignores group presence (@g.us)' do
+      data = { id: '123456-group@g.us', presences: { 'x@g.us' => { lastKnownPresence: 'composing' } } }
+
+      expect(inbox).not_to receive(:contact_inboxes)
+
+      service_for(data).perform
+    end
+
+    it 'discards silently when no ContactInbox matches the sender' do
+      allow(contact_inboxes_relation).to receive(:find_by).and_return(nil)
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'composing' } } }
+
+      expect(BotRuntime::PresenceDelegationService).not_to receive(:new)
+
+      expect { service_for(data).perform }.not_to raise_error
+    end
+  end
 end

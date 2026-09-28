@@ -27,6 +27,8 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
       process_connection_update
     when 'logout.instance'
       process_logout_instance
+    when 'presence.update'
+      process_presence_update
     else
       Rails.logger.warn "Evolution API: Unsupported event type: #{event_type}"
     end
@@ -36,6 +38,33 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
 
   def processed_params
     @processed_params ||= params
+  end
+
+  def process_presence_update
+    presence_data = processed_params[:data]
+    return if presence_data.blank?
+
+    remote_jid = presence_data[:id].to_s
+    return if remote_jid.include?('@g.us') # group presence — never extends a 1:1 debounce
+
+    presences = presence_data[:presences] || {}
+    typing = presences.values.any? { |p| Whatsapp::PresenceEventFilter.typing?(:evolution, p[:lastKnownPresence]) }
+    return unless typing
+
+    notify_presence(remote_jid.split('@').first)
+  end
+
+  # Shared by the presence handler only (message ingestion has its own
+  # contact/conversation resolution via set_contact/set_conversation) — a
+  # presence pulse alone must never create a Contact/ContactInbox/Conversation.
+  def notify_presence(phone_number)
+    contact_inbox = inbox.contact_inboxes.find_by(source_id: phone_number)
+    return unless contact_inbox
+
+    conversation = contact_inbox.conversations.where.not(status: :resolved).last
+    return unless conversation
+
+    BotRuntime::PresenceDelegationService.new(conversation).delegate
   end
 
   def process_contacts_update
