@@ -156,12 +156,8 @@ module BotRuntime
       }
     end
 
-    # Generate a deterministic int64 from the UUID contact_id.
-    # Uses SHA256 truncated to 8 bytes, masked to positive int64.
-    # Deterministic across processes and restarts (unlike String#hash).
     def stable_contact_id
-      digest = Digest::SHA256.digest(@conversation.contact_id.to_s)
-      digest.unpack1('Q>') & 0x7FFFFFFFFFFFFFFF
+      BotRuntime::StableContactId.stable_contact_id(@conversation.contact_id)
     end
   end
 end
