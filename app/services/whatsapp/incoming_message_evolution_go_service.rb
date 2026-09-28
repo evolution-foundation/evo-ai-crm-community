@@ -22,12 +22,40 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
       process_pair_success
     when 'LoggedOut'
       process_logged_out
+    when 'ChatPresence'
+      process_chat_presence
     else
       Rails.logger.warn "Evolution Go API: Unhandled event type: #{event_type}"
     end
   end
 
   private
+
+  def process_chat_presence
+    data = processed_params[:data]
+    return if data.blank?
+    return if data[:IsGroup] == true
+
+    return unless Whatsapp::PresenceEventFilter.typing?(:evolution_go, data[:State])
+
+    jid = data[:Chat].to_s
+    return if jid.blank?
+
+    phone_number = jid.split('@').first.gsub(/:\d+$/, '')
+    notify_presence(phone_number)
+  end
+
+  # Mirrors Whatsapp::IncomingMessageEvolutionService#notify_presence — a
+  # presence pulse alone must never create a Contact/ContactInbox/Conversation.
+  def notify_presence(phone_number)
+    contact_inbox = inbox.contact_inboxes.find_by(source_id: phone_number)
+    return unless contact_inbox
+
+    conversation = contact_inbox.conversations.where.not(status: :resolved).last
+    return unless conversation
+
+    BotRuntime::PresenceDelegationService.new(conversation).delegate
+  end
 
   def process_evolution_go_message
     # Evolution Go structure: { data: { Info: {...}, Message: {...} } }
