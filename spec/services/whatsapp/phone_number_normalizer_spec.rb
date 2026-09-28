@@ -108,4 +108,38 @@ RSpec.describe Whatsapp::PhoneNumberNormalizer do
       end
     end
   end
+
+  describe '.to_e164_candidates' do
+    subject(:candidates) { described_class.to_e164_candidates(input) }
+
+    context 'with blank input' do
+      let(:input) { '' }
+
+      it { is_expected.to eq([]) }
+    end
+
+    context 'when the BR number is missing its nono dígito (12 digits)' do
+      let(:input) { '551187654321' }
+
+      it 'includes both the as-is form and the form with the 9 inserted' do
+        expect(candidates).to contain_exactly('+551187654321', '+5511987654321')
+      end
+    end
+
+    context 'when the BR number already carries the nono dígito (13 digits)' do
+      let(:input) { '5511987654321' }
+
+      it 'includes both the as-is form and the form with the 9 stripped' do
+        expect(candidates).to contain_exactly('+5511987654321', '+551187654321')
+      end
+    end
+
+    context 'with a non-BR number' do
+      let(:input) { '+1 (415) 555-2671' }
+
+      it 'returns only the single canonical form' do
+        expect(candidates).to eq(['+14155552671'])
+      end
+    end
+  end
 end

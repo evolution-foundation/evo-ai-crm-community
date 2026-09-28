@@ -179,11 +179,14 @@ class ContactInboxWithContactBuilder
   def find_contact_by_phone_number(phone_number)
     return if phone_number.blank?
 
-    # Normalize the lookup key to the canonical stored form so a contact created
-    # via another path (e.g. leads API) is matched instead of duplicated.
-    normalized = Whatsapp::PhoneNumberNormalizer.to_e164(phone_number)
-    return if normalized.blank?
+    # Try every E.164 form this phone number could canonicalize to (a BR nono
+    # dígito can be missing or present depending on how WhatsApp/Evolution
+    # relayed this particular message), so a contact created via another path
+    # (e.g. leads API, or a prior message with the digit present/absent) is
+    # matched instead of duplicated.
+    candidates = Whatsapp::PhoneNumberNormalizer.to_e164_candidates(phone_number)
+    return if candidates.blank?
 
-    Contact.find_by(phone_number: normalized)
+    Contact.find_by(phone_number: candidates)
   end
 end

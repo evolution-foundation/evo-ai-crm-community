@@ -3,7 +3,9 @@ class Api::V1::Contacts::LabelsController < Api::V1::Contacts::BaseController
 
   require_permissions({
     index: 'contacts.read',
-    create: 'contacts.update'
+    create: 'contacts.update',
+    add: 'contacts.update',
+    remove: 'contacts.update'
   })
 
   private

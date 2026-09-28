@@ -1,8 +1,6 @@
 module LabelConcern
   def create
-    model.update_labels(resolve_label_titles(incoming_label_tokens))
-    @labels = model.label_list
-    render json: { payload: @labels }
+    apply_and_render { |tokens| model.update_labels(tokens) }
   end
 
   def index
@@ -10,7 +8,26 @@ module LabelConcern
     render json: { payload: @labels }
   end
 
+  # CRM-212 follow-up: `#create` REPLACES the full label set, so a caller that
+  # only wants to add or remove one label (e.g. the AI's manage_conversation_labels
+  # tool) previously had to GET the current set, merge locally, then POST the
+  # full result — a read-then-replace race where a concurrent change made
+  # between the GET and the POST gets silently clobbered. `add`/`remove` apply
+  # directly against whatever is persisted at write time, no prior read needed.
+  def add
+    apply_and_render { |tokens| model.add_labels(tokens) }
+  end
+
+  def remove
+    apply_and_render { |tokens| model.remove_labels(tokens) }
+  end
+
   private
+
+  def apply_and_render
+    yield resolve_label_titles(incoming_label_tokens)
+    render json: { payload: model.label_list }
+  end
 
   # EVO-1928: `#create` historically only honoured `labels` shaped as a flat
   # array of strings (`params.permit(labels: [])`). Any other shape made

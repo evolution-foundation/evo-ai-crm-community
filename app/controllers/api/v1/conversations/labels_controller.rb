@@ -3,7 +3,9 @@ class Api::V1::Conversations::LabelsController < Api::V1::Conversations::BaseCon
 
   require_permissions({
     index: 'conversations.read',
-    create: 'conversations.update'
+    create: 'conversations.update',
+    add: 'conversations.update',
+    remove: 'conversations.update'
   })
 
   private

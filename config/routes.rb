@@ -134,7 +134,12 @@ Rails.application.routes.draw do
           end
         end
         resources :assignments, only: [:create], controller: 'conversations/assignments'
-        resources :labels, only: [:create, :index], controller: 'conversations/labels'
+        resources :labels, only: [:create, :index], controller: 'conversations/labels' do
+          collection do
+            post :add
+            post :remove
+          end
+        end
         resource :participants, only: [:show, :create, :update, :destroy], controller: 'conversations/participants'
         resource :direct_uploads, only: [:create], controller: 'conversations/direct_uploads'
         resource :draft_messages, only: [:show, :update, :destroy], controller: 'conversations/draft_messages'
@@ -237,7 +242,12 @@ Rails.application.routes.draw do
         scope module: 'contacts' do
           resources :conversations, only: [:index]
           resources :contact_inboxes, only: [:create]
-          resources :labels, only: [:create, :index]
+          resources :labels, only: [:create, :index] do
+            collection do
+              post :add
+              post :remove
+            end
+          end
           resources :notes
         end
       end

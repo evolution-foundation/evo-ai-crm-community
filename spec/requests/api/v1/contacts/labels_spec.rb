@@ -116,4 +116,63 @@ RSpec.describe 'Api::V1::Contacts::Labels', type: :request do
       expect(json_response['payload']).to contain_exactly('support')
     end
   end
+
+  # CRM-212 follow-up: `POST .../labels` replaces the full set, so a caller
+  # that only knows the label it wants to add/remove (e.g. the AI's own
+  # manage_conversation_labels tool) had to GET the current list, merge
+  # locally, then POST the full result back. That read-then-replace is not
+  # atomic: a concurrent removal (an operator turning off `atendimento_ia`
+  # mid-turn) landing between the tool's GET and POST gets silently
+  # overwritten, re-adding the label the operator just removed. These atomic
+  # endpoints let a caller add/remove a single label without ever reading
+  # the current set first, closing that race.
+  describe 'POST /api/v1/contacts/:contact_id/labels/add' do
+    it 'adds a label without disturbing existing labels' do
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: ['vip'] }, headers: headers, as: :json
+
+      post "/api/v1/contacts/#{contact.id}/labels/add",
+           params: { labelId: 'atendimento_ia' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['payload']).to contain_exactly('vip', 'atendimento_ia')
+      expect(contact.reload.label_list).to contain_exactly('vip', 'atendimento_ia')
+    end
+
+    it 'is idempotent when the label is already present' do
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: ['atendimento_ia'] }, headers: headers, as: :json
+
+      post "/api/v1/contacts/#{contact.id}/labels/add",
+           params: { labelId: 'atendimento_ia' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(taggings_for(contact).count).to eq(1)
+    end
+  end
+
+  describe 'POST /api/v1/contacts/:contact_id/labels/remove' do
+    it 'removes a single label without disturbing the others, with no prior read' do
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: %w[vip atendimento_ia] }, headers: headers, as: :json
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labelId: 'atendimento_ia' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['payload']).to contain_exactly('vip')
+      expect(contact.reload.label_list).to contain_exactly('vip')
+    end
+
+    it 'is a no-op when the label is not present' do
+      post "/api/v1/contacts/#{contact.id}/labels",
+           params: { labels: ['vip'] }, headers: headers, as: :json
+
+      post "/api/v1/contacts/#{contact.id}/labels/remove",
+           params: { labelId: 'atendimento_ia' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response['payload']).to contain_exactly('vip')
+    end
+  end
 end

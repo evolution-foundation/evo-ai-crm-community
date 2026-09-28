@@ -23,25 +23,45 @@ RSpec.describe ContactInboxWithContactBuilder do
   end
   let(:inbox) { Inbox.create!(name: 'Evolution Inbox', channel: channel) }
 
-  # DDD 74 (>= 31): PhoneNumberNormalizer strips the nono dígito, the older
-  # normalised_brazil_mobile_number does not touch an already-13-digit input.
-  let(:canonical_source_id) { '557499879409' } # what Contact#phone_number/manual creation stores
-  let(:webhook_source_id) { '5574999879409' } # what the old webhook normalizer produces
+  shared_examples 'reconciles the divergent source_id to the existing ContactInbox' do
+    let(:contact) { Contact.create!(name: 'Existing lead', phone_number: "+#{canonical_source_id}") }
+    let!(:existing_contact_inbox) do
+      ContactInbox.create!(contact: contact, inbox: inbox, source_id: canonical_source_id)
+    end
 
-  let(:contact) { Contact.create!(name: 'Manually created lead', phone_number: "+#{canonical_source_id}") }
-  let!(:existing_contact_inbox) do
-    ContactInbox.create!(contact: contact, inbox: inbox, source_id: canonical_source_id)
+    it 'reuses the existing ContactInbox instead of creating a duplicate' do
+      result = described_class.new(
+        inbox: inbox,
+        source_id: incoming_source_id,
+        contact_attributes: { name: 'Existing lead', phone_number: "+#{incoming_source_id}" }
+      ).perform
+
+      expect(result.id).to eq(existing_contact_inbox.id)
+      expect(ContactInbox.where(contact: contact, inbox: inbox).count).to eq(1)
+    end
   end
 
-  it 'reuses the manually created ContactInbox instead of creating a duplicate with the divergent source_id' do
-    result = described_class.new(
-      inbox: inbox,
-      source_id: webhook_source_id,
-      contact_attributes: { name: 'Manually created lead', phone_number: "+#{webhook_source_id}" }
-    ).perform
+  context 'when the webhook normalizer disagrees on the nono dígito (DDD >= 31)' do
+    # DDD 74 (>= 31): PhoneNumberNormalizer strips the nono dígito, the older
+    # normalised_brazil_mobile_number does not touch an already-13-digit input.
+    let(:canonical_source_id) { '557499879409' } # what Contact#phone_number/manual creation stores
+    let(:incoming_source_id) { '5574999879409' } # what the old webhook normalizer produces
 
-    expect(result.id).to eq(existing_contact_inbox.id)
-    expect(ContactInbox.where(contact: contact, inbox: inbox).count).to eq(1)
+    include_examples 'reconciles the divergent source_id to the existing ContactInbox'
+  end
+
+  context 'when the incoming source_id is missing the nono dígito entirely (DDD < 31)' do
+    # DDD 11 (< 31): PhoneNumberNormalizer always keeps the nono dígito, so the
+    # contact's canonical phone_number is 13 digits. If WhatsApp/Evolution
+    # occasionally emits a remoteJid without the 9 (a real, observed drift on
+    # reconnects), the raw source_id is only 12 digits. PhoneNumberNormalizer's
+    # regex requires an exact 13-digit match to decide whether to keep or strip
+    # the 9, so a 12-digit input is passed through unchanged and never matches
+    # the stored 13-digit contact, creating a duplicate ContactInbox/conversation.
+    let(:canonical_source_id) { '5511987654321' } # stored contact phone_number (with the 9)
+    let(:incoming_source_id) { '551187654321' } # webhook glitch (without the 9)
+
+    include_examples 'reconciles the divergent source_id to the existing ContactInbox'
   end
 
   context 'when the channel provider is waha' do
