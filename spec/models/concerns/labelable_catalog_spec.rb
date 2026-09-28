@@ -3,9 +3,7 @@
 require 'rails_helper'
 
 # A label tagging must never exist without its catalog entry, and it
-# must be stored in the catalog's own form. Before this, `acts_as_taggable_on`
-# created the tag verbatim and never looked at `Label`, so the application was
-# unreachable from every filter.
+# must be stored in the catalog's own form.
 RSpec.describe Labelable, type: :model do
   let(:contact) { Contact.create!(name: 'Contact', email: "c-#{SecureRandom.hex(4)}@test.com") }
 
@@ -23,10 +21,8 @@ RSpec.describe Labelable, type: :model do
       expect { contact.update!(label_list: ['vip']) }.not_to change(Label, :count)
     end
 
-    # The defect that produced a large number of orphans at once: the catalog
-    # stores `strip.downcase`, the gem created the tag with the original
-    # casing, and that tag then captured every later application of the
-    # correct title.
+    # The gem matches an existing tag ignoring case but creates it verbatim, so a
+    # raw "Urgente" tag would capture every later application of "urgente".
     it 'stores the tag in the catalog form when the input differs by case' do
       Label.create!(title: 'urgente')
 
@@ -52,10 +48,7 @@ RSpec.describe Labelable, type: :model do
       expect(Label.pluck(:title)).to match_array(%w[um dois])
     end
 
-    # An unresolvable token is still applied rather than
-    # silently dropped. A title the Label format validation rejects cannot be
-    # catalogued, but the tagging must survive — the alternative is a
-    # success response that tags nothing.
+    # Dropping a title `Label` rejects would answer success having tagged nothing.
     it 'still applies a title the catalog cannot accept, without raising' do
       expect { contact.update!(label_list: ['a/b']) }.not_to raise_error
 
@@ -63,10 +56,7 @@ RSpec.describe Labelable, type: :model do
       expect(Label.exists?(title: 'a/b')).to be(false)
     end
 
-    # An id that no longer resolves to a Label still arrives here as a literal,
-    # and the same decision holds: it gets applied, but it must NOT be promoted
-    # to a catalog entry — a UUID in the label picker is exactly the garbage
-    # `rake labels:reconcile_orphans` refuses to create for the legacy rows.
+    # An id that no longer resolves arrives as a literal: applied, never promoted.
     it 'applies an unresolved id without putting a UUID in the catalog' do
       uuid = '11111111-2222-3333-4444-555555555555'
 
@@ -76,10 +66,7 @@ RSpec.describe Labelable, type: :model do
       expect(Label.exists?(title: uuid)).to be(false)
     end
 
-    # The consequence of "applying guarantees the catalog entry": the title is
-    # now taken, so creating it again is refused. That is the acceptance
-    # criterion working, not a regression — but it is a behaviour change on
-    # POST /api/v1/labels and it gets pinned here rather than discovered.
+    # Applying a title catalogues it, so POST /api/v1/labels with it answers 422.
     it 'makes a later create of the same title collide, because it now exists' do
       contact.update!(label_list: ['ja existe'])
 
@@ -113,6 +100,32 @@ RSpec.describe Labelable, type: :model do
 
       expect(product.reload.label_list.to_a).to eq(['Promocao de Verao'])
       expect(Label.exists?(title: 'promocao de verao')).to be(false)
+    end
+
+    # The gem splits a token on commas after the setter has seen it.
+    it 'catalogues each title a comma-separated token becomes' do
+      contact.update!(label_list: ['Cliente, VIP'])
+
+      expect(contact.reload.label_list).to match_array(%w[cliente vip])
+      expect(Label.pluck(:title)).to match_array(%w[cliente vip])
+    end
+
+    it 'keeps a quoted title whole, as the gem does' do
+      contact.update!(label_list: '"a, b", c')
+
+      expect(contact.reload.label_list).to contain_exactly('a, b', 'c')
+    end
+
+    # A rename takes the title out of the catalog before its job reaches every
+    # record; a write on one of those in between must not bring it back.
+    it 'does not re-catalogue a title the record already carries' do
+      contact.update!(label_list: ['antigo'])
+      Label.find_by!(title: 'antigo').update!(title: 'renomeado')
+
+      contact.add_labels(['novo'])
+
+      expect(Label.exists?(title: 'antigo')).to be(false)
+      expect(Label.exists?(title: 'novo')).to be(true)
     end
   end
 end
