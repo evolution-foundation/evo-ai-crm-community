@@ -6,8 +6,18 @@ module Templates
       CATEGORY = 'pipelines'
       MODEL = ::Pipeline
       UNIQUE_FIELD = :name
+      # A pipeline name is unique across the whole table, private pipelines included,
+      # so a collision cannot be looked up only among the readable ones: the create
+      # would fail on the unreadable one. Suffixing every pipeline keeps the report
+      # from depending on whether the original name exists. Only an already suffixed
+      # name can still step to " (2)", the same uniqueness any pipeline create exposes.
+      ALWAYS_SUFFIX = true
 
       private
+
+      def collision_scope
+        ::Pipeline.all
+      end
 
       def attributes_for(item)
         attrs = item.except('slug', 'stages', 'service_definitions')

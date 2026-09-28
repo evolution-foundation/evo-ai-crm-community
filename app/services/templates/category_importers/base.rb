@@ -10,10 +10,13 @@ module Templates
     # - UNIQUE_FIELD: field used to detect conflicts (used by ConflictResolver)
     # - SCOPE_FIELDS: optional fields to scope UNIQUE_FIELD lookup (e.g. for
     #   compound-unique constraints like message_templates.name+channel)
+    # - ALWAYS_SUFFIX: optional; rename every record instead of only colliding ones
     #
     # Sub-classes typically override #attributes_for to map the bundle hash to
     # model attributes, and #after_create to register the slug for IdRemapper.
     class Base
+      ALWAYS_SUFFIX = false
+
       attr_reader :report
 
       def initialize(items, id_remapper:, conflict_resolver:, current_user:)
@@ -38,12 +41,7 @@ module Templates
         Templates::Sanitizer.zero_blocked_fields!(self.class::CATEGORY, attrs)
 
         original_value = attrs[self.class::UNIQUE_FIELD.to_s]
-        result = @conflict_resolver.resolve(
-          self.class::MODEL,
-          self.class::UNIQUE_FIELD,
-          original_value,
-          scope: scope_for(item)
-        )
+        result = resolve_unique_value(original_value, item)
         attrs[self.class::UNIQUE_FIELD.to_s] = result[:value]
 
         record = self.class::MODEL.create!(attrs)
@@ -62,6 +60,17 @@ module Templates
         raise e
       end
 
+      def resolve_unique_value(value, item)
+        @conflict_resolver.public_send(
+          self.class::ALWAYS_SUFFIX ? :resolve_always_suffixed : :resolve,
+          self.class::MODEL,
+          self.class::UNIQUE_FIELD,
+          value,
+          scope: scope_for(item),
+          within: collision_scope
+        )
+      end
+
       # Hook: build attribute hash from a bundle item. Default: shallow copy
       # minus 'slug' (which is bundle-only metadata, not a column).
       def attributes_for(item)
@@ -76,6 +85,12 @@ module Templates
       # Hook: extra WHERE scope for conflict detection (e.g. compound-unique).
       def scope_for(_item)
         {}
+      end
+
+      # Hook: the records a name collision is looked up in. The report says whether
+      # a name collided, so it may only consult what the caller already reads.
+      def collision_scope
+        Templates::VisibilityScope.for(self.class::CATEGORY, self.class::MODEL, @current_user)
       end
     end
   end

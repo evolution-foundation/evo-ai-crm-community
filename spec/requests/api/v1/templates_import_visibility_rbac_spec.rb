@@ -46,20 +46,21 @@ RSpec.describe 'Template import collision scope', type: :request do
     response.parsed_body.dig('data', 'items').index_by { |item| item['slug'] }
   end
 
-  def untouched(item, name)
+  def expect_untouched(item, name)
     expect(item).to include('status' => 'created', 'new_name' => name)
     expect(item).not_to have_key('original_name')
   end
 
-  def renamed(item, name)
+  def expect_renamed(item, name)
     expect(item).to include('status' => 'renamed', 'new_name' => "#{name} (Template T)")
   end
 
   describe 'inboxes' do
-    let!(:member_inbox) { Inbox.create!(name: 'member-desk', channel: Channel::Api.create!(webhook_url: 'https://member.example.com/hook')) }
-    let!(:foreign_inbox) { Inbox.create!(name: 'foreign-desk', channel: Channel::Api.create!(webhook_url: 'https://foreign.example.com/hook')) }
-
-    before { InboxMember.create!(user: importer, inbox: member_inbox) }
+    before do
+      member_inbox = Inbox.create!(name: 'member-desk', channel: Channel::Api.create!(webhook_url: 'https://member.example.com/hook'))
+      Inbox.create!(name: 'foreign-desk', channel: Channel::Api.create!(webhook_url: 'https://foreign.example.com/hook'))
+      InboxMember.create!(user: importer, inbox: member_inbox)
+    end
 
     # Inbox names are stored sanitized, and that stored form is what an export writes.
 
@@ -75,9 +76,9 @@ RSpec.describe 'Template import collision scope', type: :request do
       login_as(importer)
       items = import(bundle)
 
-      untouched(items['foreign'], 'foreign-desk')
-      untouched(items['fresh'], 'fresh-desk')
-      renamed(items['member'], 'member-desk')
+      expect_untouched(items['foreign'], 'foreign-desk')
+      expect_untouched(items['fresh'], 'fresh-desk')
+      expect_renamed(items['member'], 'member-desk')
     end
 
     it 'renames against every inbox for an administrator' do
@@ -85,14 +86,14 @@ RSpec.describe 'Template import collision scope', type: :request do
       login_as(importer)
       items = import(bundle)
 
-      renamed(items['foreign'], 'foreign-desk')
-      untouched(items['fresh'], 'fresh-desk')
+      expect_renamed(items['foreign'], 'foreign-desk')
+      expect_untouched(items['fresh'], 'fresh-desk')
     end
 
     it 'renames against every inbox for a holder of conversations.read_all' do
       login_as(importer, read_all_inboxes: true)
 
-      renamed(import(bundle)['foreign'], 'foreign-desk')
+      expect_renamed(import(bundle)['foreign'], 'foreign-desk')
     end
   end
 
@@ -114,10 +115,10 @@ RSpec.describe 'Template import collision scope', type: :request do
                        macro_item('global', 'Shared global'), macro_item('fresh', 'Fresh macro')
                      ])
 
-      untouched(items['foreign'], 'Foreign personal')
-      untouched(items['fresh'], 'Fresh macro')
-      renamed(items['own'], 'Own personal')
-      renamed(items['global'], 'Shared global')
+      expect_untouched(items['foreign'], 'Foreign personal')
+      expect_untouched(items['fresh'], 'Fresh macro')
+      expect_renamed(items['own'], 'Own personal')
+      expect_renamed(items['global'], 'Shared global')
     end
   end
 
@@ -141,10 +142,20 @@ RSpec.describe 'Template import collision scope', type: :request do
                        pipeline_item('fresh', 'Fresh funnel')
                      ])
 
-      renamed(items['foreign'], 'Foreign private')
-      renamed(items['public'], 'Shared public')
-      renamed(items['fresh'], 'Fresh funnel')
+      expect_renamed(items['foreign'], 'Foreign private')
+      expect_renamed(items['public'], 'Shared public')
+      expect_renamed(items['fresh'], 'Fresh funnel')
       expect(Pipeline.where(name: 'Fresh funnel (Template T)', created_by: importer)).to exist
+    end
+
+    # Looking only among readable pipelines here would hand the create a name the
+    # table already holds, and the whole import would fail.
+    it 'steps past a suffixed name held by an unreadable pipeline instead of failing' do
+      Pipeline.create!(name: 'Fresh funnel (Template T)', visibility: :private, created_by: other_user)
+      login_as(importer)
+      items = import('pipelines' => [pipeline_item('fresh', 'Fresh funnel')])
+
+      expect(items['fresh']).to include('status' => 'renamed', 'new_name' => 'Fresh funnel (Template T) (2)')
     end
   end
 
@@ -157,7 +168,7 @@ RSpec.describe 'Template import collision scope', type: :request do
       login_as(importer)
       items = import('teams' => [{ 'slug' => 'team', 'name' => 'Shared team' }])
 
-      renamed(items['team'], 'Shared team')
+      expect_renamed(items['team'], 'Shared team')
     end
   end
 end
