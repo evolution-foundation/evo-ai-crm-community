@@ -47,21 +47,21 @@ class Whatsapp::IncomingMessageEvolutionService < Whatsapp::IncomingMessageBaseS
     remote_jid = presence_data[:id].to_s
     return if remote_jid.include?('@g.us') # group presence — never extends a 1:1 debounce
 
-    presences = presence_data[:presences] || {}
-    typing = presences.values.any? { |p| Whatsapp::PresenceEventFilter.typing?(:evolution, p[:lastKnownPresence]) }
+    presence_entries = presence_data[:presences]
+    presence_values = presence_entries.is_a?(Hash) ? presence_entries.values : Array(presence_entries)
+    typing = presence_values.any? { |p| p.is_a?(Hash) && Whatsapp::PresenceEventFilter.typing?(:evolution, p[:lastKnownPresence]) }
     return unless typing
 
     notify_presence(remote_jid.split('@').first)
+  rescue StandardError => e
+    Rails.logger.warn "Evolution API: presence.update ingestion failed: #{e.message}"
   end
 
   # Shared by the presence handler only (message ingestion has its own
   # contact/conversation resolution via set_contact/set_conversation) — a
   # presence pulse alone must never create a Contact/ContactInbox/Conversation.
-  def notify_presence(phone_number)
-    contact_inbox = inbox.contact_inboxes.find_by(source_id: phone_number)
-    return unless contact_inbox
-
-    conversation = contact_inbox.conversations.where.not(status: :resolved).last
+  def notify_presence(raw_number)
+    conversation = Whatsapp::PresenceContactResolver.resolve_conversation(inbox, raw_number)
     return unless conversation
 
     BotRuntime::PresenceDelegationService.new(conversation).delegate

@@ -110,5 +110,31 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionGoService do
 
       service_for('ChatPresence', data).perform
     end
+
+    # Regression: IsGroup is not a confirmed field in whatsmeow's ChatPresence
+    # payload (per the design doc's verified field table) — a payload that
+    # omits it entirely must still be recognized as a group chat from the jid.
+    it 'ignores group chat presence even when IsGroup is absent from the payload' do
+      data = { Chat: '123456-group@g.us', State: 'composing' }
+
+      expect(inbox).not_to receive(:contact_inboxes)
+
+      service_for('ChatPresence', data).perform
+    end
+
+    # Regression: the ContactInbox for a DDD >= 31 mobile is stored with the
+    # nono dígito stripped, but the raw Chat jid always carries it.
+    it 'resolves the ContactInbox stored under the normalized (nono dígito stripped) source_id' do
+      raw_jid_digits = '5574999879409' # DDD 74, raw JID keeps the 9
+      normalized_source_id = '557499879409' # stored form, 9 stripped
+      data = { Chat: "#{raw_jid_digits}@s.whatsapp.net", IsGroup: false, State: 'composing' }
+
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: raw_jid_digits).and_return(nil)
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: normalized_source_id).and_return(contact_inbox)
+
+      expect(BotRuntime::PresenceDelegationService).to receive(:new).with(conversation).and_return(instance_double(BotRuntime::PresenceDelegationService, delegate: true))
+
+      service_for('ChatPresence', data).perform
+    end
   end
 end

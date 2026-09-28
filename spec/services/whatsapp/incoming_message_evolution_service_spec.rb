@@ -158,5 +158,23 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
 
       expect { service_for(data).perform }.not_to raise_error
     end
+
+    # Regression: the ContactInbox for a DDD >= 31 mobile is stored with the
+    # nono dígito stripped (Whatsapp::PhoneNumberNormalizer.call), but the raw
+    # JID always carries it. A presence lookup using the raw digits directly
+    # (as this handler did before Whatsapp::PresenceContactResolver) would
+    # never match — silently disabling the feature for most Brazilian DDDs.
+    it 'resolves the ContactInbox stored under the normalized (nono dígito stripped) source_id' do
+      raw_jid_digits = '5574999879409' # DDD 74, raw JID keeps the 9
+      normalized_source_id = '557499879409' # stored form, 9 stripped
+      data = { id: "#{raw_jid_digits}@s.whatsapp.net", presences: { "#{raw_jid_digits}@s.whatsapp.net" => { lastKnownPresence: 'composing' } } }
+
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: raw_jid_digits).and_return(nil)
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: normalized_source_id).and_return(contact_inbox)
+
+      expect(BotRuntime::PresenceDelegationService).to receive(:new).with(conversation).and_return(instance_double(BotRuntime::PresenceDelegationService, delegate: true))
+
+      service_for(data).perform
+    end
   end
 end

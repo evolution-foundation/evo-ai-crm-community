@@ -34,24 +34,25 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
   def process_chat_presence
     data = processed_params[:data]
     return if data.blank?
-    return if data[:IsGroup] == true
-
-    return unless Whatsapp::PresenceEventFilter.typing?(:evolution_go, data[:State])
 
     jid = data[:Chat].to_s
     return if jid.blank?
+    # Belt-and-braces: IsGroup isn't in the design doc's confirmed ChatPresence
+    # payload fields, so don't rely on it alone to skip group presence.
+    return if data[:IsGroup] == true || jid.include?('@g.us')
+
+    return unless Whatsapp::PresenceEventFilter.typing?(:evolution_go, data[:State])
 
     phone_number = jid.split('@').first.gsub(/:\d+$/, '')
     notify_presence(phone_number)
+  rescue StandardError => e
+    Rails.logger.warn "Evolution Go API: ChatPresence ingestion failed: #{e.message}"
   end
 
   # Mirrors Whatsapp::IncomingMessageEvolutionService#notify_presence — a
   # presence pulse alone must never create a Contact/ContactInbox/Conversation.
-  def notify_presence(phone_number)
-    contact_inbox = inbox.contact_inboxes.find_by(source_id: phone_number)
-    return unless contact_inbox
-
-    conversation = contact_inbox.conversations.where.not(status: :resolved).last
+  def notify_presence(raw_number)
+    conversation = Whatsapp::PresenceContactResolver.resolve_conversation(inbox, raw_number)
     return unless conversation
 
     BotRuntime::PresenceDelegationService.new(conversation).delegate
