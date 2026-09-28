@@ -63,7 +63,6 @@ RSpec.describe 'Template import collision scope', type: :request do
     end
 
     # Inbox names are stored sanitized, and that stored form is what an export writes.
-
     def inbox_item(slug, name)
       { 'slug' => slug, 'name' => name, 'channel_type' => 'Channel::Api', 'channel_attributes' => {} }
     end
@@ -120,6 +119,17 @@ RSpec.describe 'Template import collision scope', type: :request do
       expect_renamed(items['own'], 'Own personal')
       expect_renamed(items['global'], 'Shared global')
     end
+
+    it 'looks up what the caller reads whatever visibility the imported macro carries' do
+      login_as(importer)
+      items = import('macros' => [
+                       macro_item('foreign', 'Foreign personal').merge('visibility' => 'global'),
+                       macro_item('fresh', 'Fresh macro').merge('visibility' => 'global')
+                     ])
+
+      expect_untouched(items['foreign'], 'Foreign personal')
+      expect_untouched(items['fresh'], 'Fresh macro')
+    end
   end
 
   # A pipeline name is unique across the table, so a collision with a pipeline the
@@ -157,10 +167,18 @@ RSpec.describe 'Template import collision scope', type: :request do
 
       expect(items['fresh']).to include('status' => 'renamed', 'new_name' => 'Fresh funnel (Template T) (2)')
     end
+
+    it 'suffixes two homonyms of one bundle apart instead of failing' do
+      login_as(importer)
+      items = import('pipelines' => [pipeline_item('first', 'Dup funnel'), pipeline_item('second', 'Dup funnel')])
+
+      expect(items['first']).to include('status' => 'renamed', 'new_name' => 'Dup funnel (Template T)')
+      expect(items['second']).to include('status' => 'renamed', 'new_name' => 'Dup funnel (Template T) (2)')
+    end
   end
 
-  # Account-wide categories are read in full by anyone who imports, so a collision
-  # there is the caller's own knowledge and still renames.
+  # Account-wide categories are shared with no record-level rule, so a collision
+  # there is not scoped and still renames.
   describe 'account-wide categories' do
     before { Team.create!(name: 'Shared team') }
 

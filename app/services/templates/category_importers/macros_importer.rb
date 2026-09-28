@@ -2,8 +2,9 @@
 
 module Templates
   module CategoryImporters
-    # Macros have no UNIQUE constraint on name, so ConflictResolver is a no-op.
-    # We still re-scrub actions on import in case the bundle was edited manually.
+    # Macros have no UNIQUE constraint on name. The resolver still renames a
+    # collision the caller can see, so a homonym of an unreadable macro is created
+    # as is. We still re-scrub actions on import in case the bundle was edited manually.
     class MacrosImporter < Base
       CATEGORY = 'macros'
       MODEL = ::Macro

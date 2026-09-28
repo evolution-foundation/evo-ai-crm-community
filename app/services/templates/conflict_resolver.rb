@@ -3,8 +3,9 @@
 module Templates
   # Resolves UNIQUE-constraint collisions during import using rename-with-suffix.
   #
-  # Algorithm: try original value. If it collides in the DB, append
-  # " (Template <name>)". If that still collides, append " (2)", " (3)", ...
+  # Algorithm: try original value. If it collides within the given relation,
+  # append " (Template <name>)". If that still collides, append " (2)", " (3)", ...
+  # #resolve_always_suffixed skips the first check and starts at the suffix.
   # Returns { value:, renamed: }.
   class ConflictResolver
     def initialize(template_name)
