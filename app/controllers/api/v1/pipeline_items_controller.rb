@@ -907,12 +907,22 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
                       when 'stage_name'
                         @pipeline_items.joins(:pipeline_stage).order("pipeline_stages.name #{sort_order}")
                       when 'contact_name'
-                        @pipeline_items.joins(conversation: :contact).order("contacts.name #{sort_order}")
+                        order_by_contact_name(sort_order)
                       else
                         @pipeline_items.order(created_at: :desc)
                       end
     # Tie-break so rows sharing a sort value never repeat or vanish across pages.
     @pipeline_items = @pipeline_items.order(:id)
+  end
+
+  # Resolves the card's contact the way PipelineItem#contact does: a lead card carries its
+  # own contact, a conversation card borrows the conversation's.
+  def order_by_contact_name(sort_order)
+    @pipeline_items
+      .joins('LEFT JOIN conversations sort_conversations ON sort_conversations.id = pipeline_items.conversation_id')
+      .joins('LEFT JOIN contacts sort_contacts ' \
+             'ON sort_contacts.id = COALESCE(pipeline_items.contact_id, sort_conversations.contact_id)')
+      .order(Arel.sql("sort_contacts.name #{sort_order}"))
   end
 
   def ensure_authorized_user

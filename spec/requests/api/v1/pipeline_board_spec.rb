@@ -227,6 +227,20 @@ RSpec.describe 'Pipeline board', type: :request do
           expect(json_response['data'].pluck('id')).to eq(expected.reverse.map(&:id)), sort_by
         end
       end
+
+      it 'sorts lead cards by their own contact among the conversation cards' do
+        beatriz = lead_card(name: 'Beatriz')
+
+        get url, params: { sort_by: 'contact_name', sort_order: 'desc' }
+
+        expect(json_response['data'].pluck('id')).to eq([bruno, beatriz, ana].map(&:id))
+        expect(json_response['meta']['pagination']['total']).to eq(3)
+
+        get url, params: { sort_by: 'contact_name', sort_order: 'asc' }
+
+        expect(json_response['data'].pluck('id')).to eq([ana, beatriz, bruno].map(&:id))
+        expect(json_response['meta']['pagination']['total']).to eq(3)
+      end
     end
 
     describe 'view=card' do
