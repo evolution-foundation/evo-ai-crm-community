@@ -1,13 +1,10 @@
 # frozen_string_literal: true
 
 module Templates
-  # Which relation the export may read for a category, given the caller.
-  #
-  # A router, not a policy: it says WHICH rule governs a category and delegates to
-  # it, so the export never second-guesses an answer that belongs to a model or a
-  # policy. Both enumeration points (the inventory and BundleBuilder#base_relation)
-  # go through here, because a fix applied to one and not the other still leaks
-  # through an explicit id while the UI looks correct.
+  # Which relation a template bundle may read for a category, given the caller.
+  # A router, not a policy: it delegates to the rule that already governs each
+  # category. The export inventory, BundleBuilder#base_relation and the import's
+  # collision lookup all go through here, so a fix lands on every path at once.
   module VisibilityScope
     # Categories that are not account-wide, mapped to the rule that already governs
     # every other read of them. Everything absent is shared, and scoping it would

@@ -6,8 +6,15 @@ module Templates
       CATEGORY = 'pipelines'
       MODEL = ::Pipeline
       UNIQUE_FIELD = :name
+      # Pipeline names are unique table-wide, so the lookup cannot skip unreadable
+      # rows; suffixing every import keeps the report blind to what already exists.
+      ALWAYS_SUFFIX = true
 
       private
+
+      def collision_scope
+        ::Pipeline.all
+      end
 
       def attributes_for(item)
         attrs = item.except('slug', 'stages', 'service_definitions')

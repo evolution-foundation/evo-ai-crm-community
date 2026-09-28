@@ -41,7 +41,7 @@ module Templates
           attrs['name'] = "[Configurar] #{attrs['name']}"
         end
 
-        result = @conflict_resolver.resolve(::Inbox, :name, attrs['name'])
+        result = @conflict_resolver.resolve(::Inbox, :name, attrs['name'], within: collision_scope)
         attrs['name'] = result[:value]
 
         # Build channel with credentials forcibly zeroed (defense in depth).
