@@ -1,15 +1,21 @@
 # frozen_string_literal: true
 
 module Templates
-  # Resolves UNIQUE-constraint collisions during import using rename-with-suffix.
-  #
-  # Algorithm: try original value. If it collides within the given relation,
-  # append " (Template <name>)". If that still collides, append " (2)", " (3)", ...
-  # #resolve_always_suffixed skips the first check and starts at the suffix.
-  # Returns { value:, renamed: }.
+  # Resolves name collisions during import by renaming: " (Template <name>)", then
+  # " (2)", " (3)"... A plain resolver suffixes " template <name>" and " <n>" instead,
+  # for a field whose format rejects parentheses. #resolve_always_suffixed skips the
+  # check on the original value. Returns { value:, renamed: }.
   class ConflictResolver
-    def initialize(template_name)
+    def initialize(template_name, case_sensitive: true, plain: false)
       @template_name = template_name.presence || 'Template'
+      @case_sensitive = case_sensitive
+      @plain = plain
+    end
+
+    # Same template, for a model that rejects a name differing only in case
+    # (case_sensitive: false) or a field that takes only letters, digits and spaces.
+    def with(case_sensitive: true, plain: false)
+      self.class.new(@template_name, case_sensitive: case_sensitive, plain: plain)
     end
 
     # Resolves a single unique field.
@@ -40,10 +46,10 @@ module Templates
     private
 
     def suffixed(within, field, value, scope)
-      candidate = "#{value} (Template #{@template_name})"
+      candidate = candidate_for(value, nil)
       counter = 2
       while collision?(within, field, candidate, scope)
-        candidate = "#{value} (Template #{@template_name}) (#{counter})"
+        candidate = candidate_for(value, counter)
         counter += 1
         break if counter > 1000 # safety cap; nothing in v1 should hit this
       end
@@ -51,10 +57,24 @@ module Templates
       { value: candidate, renamed: true }
     end
 
+    def candidate_for(value, counter)
+      if @plain
+        template = @template_name.gsub(/[^\p{L}\p{N}]+/, ' ').strip
+        return [value, 'template', template, counter].compact_blank.join(' ')
+      end
+
+      candidate = "#{value} (Template #{@template_name})"
+      counter ? "#{candidate} (#{counter})" : candidate
+    end
+
     def collision?(within, field, value, scope)
-      relation = within.where(field => value)
+      relation = @case_sensitive ? within.where(field => value) : within.where(lower_eq(within.klass.arel_table[field], value))
       relation = relation.where(scope) if scope.any?
       relation.exists?
+    end
+
+    def lower_eq(column, value)
+      column.lower.eq(Arel::Nodes::NamedFunction.new('LOWER', [Arel::Nodes.build_quoted(value)]))
     end
   end
 end
