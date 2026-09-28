@@ -1,9 +1,8 @@
 class Labels::DeleteService
   pattr_initialize [:label_title!]
 
-  # `tagged_with` finds the row case-insensitively (LOWER(name) ILIKE) while this
-  # subtraction used to be exact, so "Urgente" was located and left in place when
-  # the title was "urgente". Subtract the same way the finder matches.
+  # Matches the way `tagged_with` finds the row (LOWER(name) ILIKE): an exact
+  # subtraction leaves "Urgente" in place when removing "urgente".
   def self.without(label_list, title)
     label_list.to_a.reject { |applied| applied.to_s.casecmp?(title.to_s) }
   end

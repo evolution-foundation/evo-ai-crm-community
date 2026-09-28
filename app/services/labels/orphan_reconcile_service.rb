@@ -6,7 +6,6 @@ class Labels::OrphanReconcileService
   # Product labels are free text per product and share no catalog with contacts
   # and conversations, so their taggings are left alone.
   TAGGABLE_TYPES = %w[Contact Conversation].freeze
-  UUID_NAME = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
   def self.call(...) = new(...).call
 
@@ -92,7 +91,7 @@ class Labels::OrphanReconcileService
 
   def family_of(name)
     return :case if by_downcased.key?(name.downcase)
-    return :uuid if UUID_NAME.match?(name)
+    return :uuid if Labels::TokenResolver::UUID_FORMAT.match?(name)
 
     :missing
   end

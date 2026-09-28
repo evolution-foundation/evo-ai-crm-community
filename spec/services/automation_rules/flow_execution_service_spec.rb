@@ -31,10 +31,8 @@ RSpec.describe AutomationRules::FlowExecutionService do
     r
   end
   let(:contact) { Contact.create!(name: 'Lead', email: "lead-#{SecureRandom.hex(4)}@test.com") }
-  # `find_or_create_by`, not `create!`: applying a title now guarantees its
-  # catalog entry, so an example that tags the contact before touching these lazy
-  # lets would hit the uniqueness validation. Nothing here ever meant to assert
-  # that the Label did not exist yet — it only needs one to point at.
+  # `find_or_create_by`, not `create!`: applying a title catalogues it, so an
+  # example that tags the contact first already holds this Label.
   let(:label_vip) { Label.find_or_create_by(title: 'vip') { |l| l.color = '#fff' } }
   let(:label_beta) { Label.find_or_create_by(title: 'beta') { |l| l.color = '#000' } }
   let(:service) { described_class.new(rule, nil, nil, contact) }

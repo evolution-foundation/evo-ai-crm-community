@@ -3,9 +3,7 @@
 require 'rails_helper'
 require 'rake'
 
-# The behaviour lives in Labels::OrphanReconcileService and is covered there.
-# What this pins is the wiring: the task shipped once with a query Postgres
-# refused outright, which no amount of reading caught and one invocation did.
+# Behaviour is covered by the service spec; this only pins the task's wiring.
 RSpec.describe 'labels:reconcile_orphans rake task', type: :task do
   let(:task) do
     Rails.application.load_tasks unless Rake::Task.task_defined?('labels:reconcile_orphans')

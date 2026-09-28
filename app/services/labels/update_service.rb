@@ -25,8 +25,8 @@ class Labels::UpdateService
   private
 
   # In place, not through the setter: the setter dirty-tracks label_list and
-  # would emit conversation.updated per conversation. Only the match changes:
-  # `tagged_with` locates "Urgente" for "urgente", an exact remove did not.
+  # would emit conversation.updated per conversation. Matches ignoring case, as
+  # `tagged_with` does.
   def rename_on(conversation)
     conversation.label_list.to_a.each do |applied|
       conversation.label_list.remove(applied) if applied.to_s.casecmp?(old_label_title.to_s)

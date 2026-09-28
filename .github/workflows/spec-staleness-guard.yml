@@ -44,10 +44,8 @@ on:
       - 'app/controllers/api/v1/contacts_controller.rb'
       - 'app/jobs/delete_object_job.rb'
       - 'spec/jobs/delete_object_job_spec.rb'
-      # Applying a label has to guarantee its catalog entry, and the removal has
-      # to match the case-insensitive finder. The label and automation-rule globs
-      # are listed elsewhere here; what was missing is the catalog spec, the model
-      # that normalizes the title, and the reconcile rake with its spec.
+      # Applying a label guarantees its catalog entry; the label services and the
+      # automation rules have their own globs elsewhere in this list.
       - 'app/models/label.rb'
       - 'spec/models/concerns/labelable_catalog_spec.rb'
       - 'lib/tasks/labels_orphan_reconcile.rake'

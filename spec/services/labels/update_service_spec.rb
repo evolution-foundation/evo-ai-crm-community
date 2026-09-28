@@ -81,9 +81,7 @@ RSpec.describe Labels::UpdateService do
     expect(contact.reload.label_list).to contain_exactly('same')
   end
 
-  # The rename finds its rows with `tagged_with`, which matches ignoring case,
-  # while the subtraction used to be exact: a label stored as "Urgente" was
-  # located and then left in place, so the old title outlived its catalog entry.
+  # `tagged_with` finds "Urgente" for "urgente", so the rename has to replace it.
   describe 'a title applied with different casing' do
     let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
     let(:inbox) { Inbox.create!(name: 'Inbox', channel: channel) }
