@@ -196,15 +196,18 @@ on:
       # 200 everywhere and only this spec notices the dropped decoration.
       - 'app/services/facebook/moderation/response_generator_service.rb'
       - 'spec/services/facebook/moderation/response_generator_service_spec.rb'
-      # These specs are the only proof that export and import read each category
-      # through its visibility rule, and that a skipped template is reported, so
-      # any change to the templates services triggers them.
+      # These specs are the only proof that export and import read each category through
+      # its visibility rule, that a skipped template is reported and that a collision is
+      # renamed to a name the model accepts, so any templates service change triggers them.
       - 'app/services/templates/**'
       - 'spec/requests/api/v1/templates_export_visibility_rbac_spec.rb'
       - 'spec/requests/api/v1/templates_export_pipeline_visibility_rbac_spec.rb'
       - 'spec/requests/api/v1/templates_export_inbox_visibility_rbac_spec.rb'
       - 'spec/requests/api/v1/templates_import_visibility_rbac_spec.rb'
       - 'spec/services/templates/category_importers/message_templates_importer_spec.rb'
+      - 'spec/services/templates/category_importers/labels_importer_spec.rb'
+      - 'spec/services/templates/category_importers/teams_importer_spec.rb'
+      - 'spec/services/templates/conflict_resolver_spec.rb'
       # CRM-254/CRM-255: automation_rules is one jsonb column, so this controller decides
       # whether an update merges over what is stored or replaces it. Replacing drops the
       # stage description on a rules-only write — data loss that answers 200. The same
@@ -596,6 +599,9 @@ jobs:
             spec/requests/api/v1/templates_export_inbox_visibility_rbac_spec.rb \
             spec/requests/api/v1/templates_import_visibility_rbac_spec.rb \
             spec/services/templates/category_importers/message_templates_importer_spec.rb \
+            spec/services/templates/category_importers/labels_importer_spec.rb \
+            spec/services/templates/category_importers/teams_importer_spec.rb \
+            spec/services/templates/conflict_resolver_spec.rb \
             spec/requests/api/v1/pipeline_stages_spec.rb \
             spec/requests/api/v1/pipeline_stages_automation_e2e_spec.rb \
             spec/models/product_variant_spec.rb \

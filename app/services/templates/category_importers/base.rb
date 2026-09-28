@@ -11,11 +11,15 @@ module Templates
     # - SCOPE_FIELDS: optional fields to scope UNIQUE_FIELD lookup (e.g. for
     #   compound-unique constraints like message_templates.name+channel)
     # - ALWAYS_SUFFIX: optional; rename every record instead of only colliding ones
+    # - CASE_INSENSITIVE: optional; the model rejects a name that differs only in case
+    # - PLAIN_SUFFIX: optional; UNIQUE_FIELD's format rejects the default suffix
     #
     # Sub-classes typically override #attributes_for to map the bundle hash to
     # model attributes, and #after_create to register the slug for IdRemapper.
     class Base
       ALWAYS_SUFFIX = false
+      CASE_INSENSITIVE = false
+      PLAIN_SUFFIX = false
 
       attr_reader :report
 
@@ -61,7 +65,8 @@ module Templates
       end
 
       def resolve_unique_value(value, item)
-        @conflict_resolver.public_send(
+        resolver = @conflict_resolver.with(case_sensitive: !self.class::CASE_INSENSITIVE, plain: self.class::PLAIN_SUFFIX)
+        resolver.public_send(
           self.class::ALWAYS_SUFFIX ? :resolve_always_suffixed : :resolve,
           self.class::MODEL,
           self.class::UNIQUE_FIELD,

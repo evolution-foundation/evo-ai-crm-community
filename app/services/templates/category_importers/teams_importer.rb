@@ -6,6 +6,7 @@ module Templates
       CATEGORY = 'teams'
       MODEL = ::Team
       UNIQUE_FIELD = :name
+      CASE_INSENSITIVE = true
     end
   end
 end
