@@ -190,12 +190,9 @@ on:
       # 200 everywhere and only this spec notices the dropped decoration.
       - 'app/services/facebook/moderation/response_generator_service.rb'
       - 'spec/services/facebook/moderation/response_generator_service_spec.rb'
-      # The export enumerates macros, pipelines and inboxes; these specs are the whole
-      # proof it does so through each category's visibility rule, on all three paths
-      # (inventory, `all`, explicit id). The import spec proves a name collision is
-      # looked up only in what the caller reads, and the importer spec covers the
-      # report a skipped template writes. Nothing else covers any of them, so the
-      # code here triggers them.
+      # These specs are the only proof that export and import read each category
+      # through its visibility rule, and that a skipped template is reported, so
+      # any change to the templates services triggers them.
       - 'app/services/templates/**'
       - 'spec/requests/api/v1/templates_export_visibility_rbac_spec.rb'
       - 'spec/requests/api/v1/templates_export_pipeline_visibility_rbac_spec.rb'

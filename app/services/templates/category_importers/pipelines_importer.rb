@@ -6,11 +6,8 @@ module Templates
       CATEGORY = 'pipelines'
       MODEL = ::Pipeline
       UNIQUE_FIELD = :name
-      # A pipeline name is unique across the whole table, private pipelines included,
-      # so a collision cannot be looked up only among the readable ones: the create
-      # would fail on the unreadable one. Suffixing every pipeline keeps the report
-      # from depending on whether the original name exists. Only an already suffixed
-      # name can still step to " (2)", the same uniqueness any pipeline create exposes.
+      # Pipeline names are unique table-wide, so the lookup cannot skip unreadable
+      # rows; suffixing every import keeps the report blind to what already exists.
       ALWAYS_SUFFIX = true
 
       private
