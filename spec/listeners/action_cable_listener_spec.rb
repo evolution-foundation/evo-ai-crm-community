@@ -63,6 +63,35 @@ RSpec.describe ActionCableListener do
     end
   end
 
+  # Admins can read every inbox via `User#assigned_inboxes` (REST) without ever
+  # being added as a formal `InboxMember` of each one. Before this fix,
+  # `user_tokens` broadcast only to `conversation.inbox.members`, so an admin
+  # who never manually joined an inbox saw its conversations on page load but
+  # never got realtime `message.created`/etc pushes for them — the "have to
+  # refresh to see new messages" bug.
+  describe '#message_created — reaches admins who are not inbox members' do
+    let(:admin_role) { Role.find_by(key: 'administrator') || Role.create!(key: 'administrator', name: 'Administrator') }
+    let(:admin_user) do
+      u = User.create!(name: 'Admin', email: "listener-admin-#{SecureRandom.hex(4)}@test.com")
+      u.roles << admin_role
+      u
+    end
+
+    it "includes the admin's pubsub_token even without an InboxMember row" do
+      admin_user
+      expect(InboxMember.where(inbox: inbox, user: admin_user)).to be_empty
+
+      tokens_received = nil
+      allow(ActionCableBroadcastJob).to receive(:perform_later) do |tokens, _event, _data|
+        tokens_received = tokens
+      end
+
+      listener.message_created(EventData.new({ message: message }))
+
+      expect(tokens_received).to include(admin_user.pubsub_token)
+    end
+  end
+
   # EVO-1551 round 2 — CB-2 regression.
   # ActionCable listeners triggered by inbound WhatsApp messages run with
   # `Current.user = nil`. Before the fix, ContactPiiMasker.should_mask?

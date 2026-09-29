@@ -183,8 +183,12 @@ class ActionCableListener < BaseListener
   end
 
   def user_tokens(_account, agents)
-    # Members only: an admin wanting realtime on someone else's inbox joins it.
-    agents.filter_map(&:pubsub_token).uniq
+    # Inbox members, plus every admin: `User#assigned_inboxes` already grants
+    # admins REST visibility into every inbox regardless of `InboxMember`
+    # membership, so realtime push must reach them the same way — otherwise an
+    # admin who never manually joined an inbox sees its conversations on page
+    # load but never gets pushed updates for them (EVO realtime gap).
+    (agents.to_a + Role.administrator_users).filter_map(&:pubsub_token).uniq
   end
 
   def contact_tokens(contact_inbox, message)
