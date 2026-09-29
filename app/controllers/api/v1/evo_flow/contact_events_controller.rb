@@ -34,13 +34,17 @@ class Api::V1::EvoFlow::ContactEventsController < Api::V1::BaseController
   # Bearer / API Access Token.
   def index
     body = client.get("/contacts/#{params[:contact_id]}/events", translated_filters)
-    # evo-flow wraps successful responses as `{ success, data: { events,
-    # pagination }, meta }` (global ResponseTransformInterceptor). Enrich the
-    # events wherever they actually live — under `data` when enveloped, or at
-    # the top level for a bare `{ events: [...] }` shape (older/stubbed).
-    container = body.is_a?(Hash) && body['data'].is_a?(Hash) ? body['data'] : body
-    container['events'] = (container['events'] || []).map { |evt| enrich_event(evt) }
-    render json: body, status: :ok
+
+    if body.is_a?(Hash)
+      container = body['data'].is_a?(Hash) ? body['data'] : body
+      events = container['events'].is_a?(Array) ? container['events'] : []
+      container['events'] = events.map { |evt| enrich_event(evt) }
+      render json: body, status: :ok
+    elsif body.is_a?(Array)
+      render json: { events: body.map { |evt| enrich_event(evt) } }, status: :ok
+    else
+      render json: { events: [] }, status: :ok
+    end
   rescue EvoFlow::HTTPError => e
     handle_evo_flow_error(e)
   end
@@ -63,6 +67,8 @@ class Api::V1::EvoFlow::ContactEventsController < Api::V1::BaseController
   # (campaign/agent not found in Postgres or no enrichable key in properties),
   # keeping the response payload tight.
   def enrich_event(evt)
+    return evt unless evt.is_a?(Hash)
+
     props = evt['properties'] || {}
     enriched = {
       campaign_name: (enrich_campaign(props['campaign_id']) if props['campaign_id'].present?),
@@ -78,6 +84,9 @@ class Api::V1::EvoFlow::ContactEventsController < Api::V1::BaseController
     Rails.cache.fetch("evo_flow:enrich:campaign:#{id}", expires_in: 60.seconds, skip_nil: true) do
       Campaign.find_by(id: id)&.name
     end
+  rescue ActiveRecord::StatementInvalid
+    # The campaigns table does not exist in the Community Edition.
+    nil
   end
 
   # No cache: CHANNEL_LABELS is a frozen constant; an in-memory hash
