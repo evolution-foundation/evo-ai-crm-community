@@ -79,18 +79,21 @@ module Templates
     private
 
     def import_category(category, items, id_remapper, conflict_resolver)
-      return skipped_for_permission(category, items) unless CategoryPermission.creatable?(category, @current_user)
+      return skipped_for_permission(category, items, id_remapper) unless CategoryPermission.creatable?(category, @current_user)
 
       IMPORTER_MAP[category].new(
         items, id_remapper: id_remapper, conflict_resolver: conflict_resolver, current_user: @current_user
       ).import!
     end
 
-    # Same shape the importers report for an item that cannot come in; a message
-    # template whose inbox is skipped here is then skipped by its own importer.
-    def skipped_for_permission(category, items)
+    # Same shape the importers report for an item that cannot come in. The slugs are
+    # remembered, so a message template whose inbox is skipped here says so.
+    def skipped_for_permission(category, items, id_remapper)
       reason = "missing permission #{CategoryPermission.create_key(category)}"
-      items.map { |item| { 'category' => category, 'slug' => item['slug'], 'status' => 'skipped', 'reason' => reason } }
+      items.map do |item|
+        id_remapper.skip(category, item['slug'])
+        { 'category' => category, 'slug' => item['slug'], 'status' => 'skipped', 'reason' => reason }
+      end
     end
   end
 end

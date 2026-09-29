@@ -107,6 +107,53 @@ RSpec.describe 'Template bundles honour each category permission', type: :reques
     end
   end
 
+  # The key map is the whole fix, so every category is pinned, not just the ones above.
+  # Written out here, from each category's own endpoint, rather than read from the map
+  # under test: a wrong key in the map must not become the expectation.
+  describe 'every category' do
+    read_keys = {
+      'pipelines' => 'pipelines.read', 'agents' => 'agent_bots.read', 'teams' => 'teams.read',
+      'labels' => 'labels.read', 'custom_attributes' => 'custom_attribute_definitions.read',
+      'canned_responses' => 'canned_responses.read', 'macros' => 'macros.read',
+      'inboxes' => 'inboxes.read', 'message_templates' => 'message_templates.read'
+    }
+    create_keys = {
+      'pipelines' => 'pipelines.create', 'agents' => 'agent_bots.create', 'teams' => 'teams.create',
+      'labels' => 'labels.create', 'custom_attributes' => 'custom_attribute_definitions.create',
+      'canned_responses' => 'canned_responses.create', 'macros' => 'macros.manage',
+      'inboxes' => 'inboxes.create', 'message_templates' => 'message_templates.manage'
+    }
+
+    read_keys.each do |category, key|
+      it "leaves #{category} out of the inventory without #{key}" do
+        login_as(caller_user, 'templates.export', *(read_keys.values - [key]))
+        expect(inventory).not_to have_key(category)
+      end
+    end
+
+    it 'lists every category with every read permission' do
+      login_as(caller_user, 'templates.export', *read_keys.values)
+      expect(inventory.keys).to match_array(read_keys.keys)
+    end
+
+    create_keys.each do |category, key|
+      it "creates no #{category} without #{key}, and says why" do
+        model = Templates::BundleBuilder::MODEL_MAP.fetch(category)
+        login_as(caller_user, 'templates.import', *(create_keys.values - [key]))
+
+        expect { import(category => [{ 'slug' => 'x', 'name' => 'x' }]) }.not_to(change(model, :count))
+        expect(response.parsed_body.dig('data', 'items').first)
+          .to include('category' => category, 'status' => 'skipped', 'reason' => "missing permission #{key}")
+      end
+    end
+
+    it 'asks only keys some endpoint declares' do
+      Rails.application.eager_load!
+      keys = Templates::CategoryPermission::READ.values + Templates::CategoryPermission::CREATE.values
+      expect(keys - EvoPermissionConcern.declared_permission_keys.to_a).to be_empty
+    end
+  end
+
   # Resolved like require_permissions: no administrator shortcut, a service token passes.
   describe 'who the rule lets through' do
     before { Label.create!(title: 'vip') }
@@ -164,7 +211,7 @@ RSpec.describe 'Template bundles honour each category permission', type: :reques
 
     it 'leaves a message template whose inbox was skipped out as well' do
       login_as(caller_user, 'templates.import', *(creates - ['inboxes.create']))
-      expect(import(bundle)['t']['status']).to eq('skipped')
+      expect(import(bundle)['t']).to include('status' => 'skipped', 'reason' => "inbox slug 'i' was skipped, so this template was left out")
       expect(MessageTemplate.where(name: 'imported-template')).to be_empty
     end
   end

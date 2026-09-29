@@ -12,6 +12,17 @@ module Templates
   class IdRemapper
     def initialize
       @map = Hash.new { |h, k| h[k] = {} }
+      @skipped = Hash.new { |h, k| h[k] = Set.new }
+    end
+
+    # A slug the bundle carried but the import left out, so a dependent item can say
+    # why its reference did not resolve.
+    def skip(category, slug)
+      @skipped[category.to_s] << slug.to_s if slug.present?
+    end
+
+    def skipped?(category, slug)
+      @skipped[category.to_s].include?(slug.to_s)
     end
 
     def register(category, slug, new_id)
