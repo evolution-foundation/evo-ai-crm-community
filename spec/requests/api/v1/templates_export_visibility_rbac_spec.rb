@@ -7,8 +7,7 @@ require 'stringio'
 # CRM-205 — the template export read macros unscoped, so a templates.export holder
 # reached another user's PERSONAL macro by exporting it. Every macro enumeration in
 # the export path (inventory, `all`, explicit id) now asks Macro.with_visibility,
-# the same scope the member actions ask since CRM-195 — including its answer for a
-# userless caller, which the export must not second-guess.
+# the same scope the member actions ask.
 RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :request do
   let(:exporter) { User.create!(name: 'Exporter', email: "exp-#{SecureRandom.hex(4)}@example.com") }
   let(:other_user) { User.create!(name: 'Other', email: "other-#{SecureRandom.hex(4)}@example.com") }
@@ -116,12 +115,7 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
     end
   end
 
-  # A service token is with_visibility's call, not the export's: it gets everything, as
-  # check_permission! already lets it in. A bare userless caller holds no permission, so
-  # the category gate refuses it before with_visibility is asked.
-  describe 'userless callers follow with_visibility' do
-    # A bare userless caller holds no permission, so the category gate refuses it before
-    # the category's own rule is asked; only the service token below reaches that rule.
+  describe 'userless callers reach with_visibility only with a service token' do
     it 'leaves macros out for a bare userless caller, and does not raise' do
       Current.reset
 

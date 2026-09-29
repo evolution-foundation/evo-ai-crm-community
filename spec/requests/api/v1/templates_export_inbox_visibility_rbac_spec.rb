@@ -200,11 +200,9 @@ RSpec.describe 'Template export inbox visibility scope', type: :request do
     end
   end
 
-  # --- the userless callers: the export delegates, it does not decide ----------
+  # --- the userless callers ----------------------------------------------------
 
-  describe 'userless callers follow the inbox rule' do
-    # A bare userless caller holds no permission, so the category gate refuses it before
-    # the category's own rule is asked; only the service token below reaches that rule.
+  describe 'userless callers reach the inbox rule only with a service token' do
     it 'leaves inboxes out for a bare userless caller, and does not raise' do
       Current.reset
 

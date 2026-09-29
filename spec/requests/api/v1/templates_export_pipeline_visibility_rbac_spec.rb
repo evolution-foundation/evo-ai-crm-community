@@ -176,13 +176,9 @@ RSpec.describe 'Template export pipeline visibility scope (CRM-206)', type: :req
     end
   end
 
-  # --- the userless caller: the export delegates, it does not decide -----------
+  # --- the userless callers ----------------------------------------------------
 
-  # The export does not answer for the category: a service token reaches the pipeline
-  # rule, and a bare userless caller is refused by the category permission first.
-  describe 'userless callers follow the pipeline rule' do
-    # A bare userless caller holds no permission, so the category gate refuses it before
-    # the category's own rule is asked; only the service token below reaches that rule.
+  describe 'userless callers reach the pipeline rule only with a service token' do
     it 'leaves pipelines out for a bare userless caller, and does not raise' do
       Current.reset
 
