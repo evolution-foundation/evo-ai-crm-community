@@ -53,35 +53,35 @@ module EvoFlow
     def post(path, payload)
       response = self.class.post(join(@api_url, path),
                                  body: payload.to_json,
-                                 headers: request_headers,
+                                 headers: request_headers(with_content_type: true),
                                  timeout: @timeout)
       handle_response(response)
     # Net::OpenTimeout/Net::ReadTimeout already inherit from Timeout::Error.
     # OpenSSL::SSL::SSLError is its own hierarchy and must be listed explicitly.
     rescue HTTParty::Error, SocketError, Timeout::Error, SystemCallError,
-           OpenSSL::SSL::SSLError => e
+           OpenSSL::SSL::SSLError, EOFError, Net::ProtocolError => e
       raise EvoFlow::HTTPError.new("evo-flow request failed: #{e.message}", nil, nil)
     end
 
     def get(path, params = {})
       response = self.class.get(join(@api_url, path),
                                 query: params.compact,
-                                headers: request_headers,
+                                headers: request_headers(with_content_type: false),
                                 timeout: @timeout)
       handle_response(response)
     rescue HTTParty::Error, SocketError, Timeout::Error, SystemCallError,
-           OpenSSL::SSL::SSLError => e
+           OpenSSL::SSL::SSLError, EOFError, Net::ProtocolError => e
       raise EvoFlow::HTTPError.new("evo-flow request failed: #{e.message}", nil, nil)
     end
 
     def put(path, payload)
       response = self.class.put(join(@api_url, path),
                                 body: payload.to_json,
-                                headers: request_headers,
+                                headers: request_headers(with_content_type: true),
                                 timeout: @timeout)
       handle_response(response)
     rescue HTTParty::Error, SocketError, Timeout::Error, SystemCallError,
-           OpenSSL::SSL::SSLError => e
+           OpenSSL::SSL::SSLError, EOFError, Net::ProtocolError => e
       raise EvoFlow::HTTPError.new("evo-flow request failed: #{e.message}", nil, nil)
     end
 
@@ -96,7 +96,7 @@ module EvoFlow
     def request(verb, path, payload: nil, query: nil)
       raise ArgumentError, "unsupported evo-flow verb: #{verb.inspect}" unless SUPPORTED_VERBS.include?(verb)
 
-      options = { headers: request_headers, timeout: @timeout }
+      options = { headers: request_headers(with_content_type: !payload.nil?), timeout: @timeout }
       options[:body] = payload.to_json unless payload.nil?
       options[:query] = query.compact unless query.nil?
 
@@ -104,7 +104,7 @@ module EvoFlow
 
       [response.code, handle_response(response)]
     rescue HTTParty::Error, SocketError, Timeout::Error, SystemCallError,
-           OpenSSL::SSL::SSLError => e
+           OpenSSL::SSL::SSLError, EOFError, Net::ProtocolError => e
       raise EvoFlow::HTTPError.new("evo-flow request failed: #{e.message}", nil, nil)
     end
 
@@ -112,11 +112,11 @@ module EvoFlow
     # case parse_body yields nil — fine to render).
     def delete(path)
       response = self.class.delete(join(@api_url, path),
-                                   headers: request_headers,
+                                   headers: request_headers(with_content_type: false),
                                    timeout: @timeout)
       handle_response(response)
     rescue HTTParty::Error, SocketError, Timeout::Error, SystemCallError,
-           OpenSSL::SSL::SSLError => e
+           OpenSSL::SSL::SSLError, EOFError, Net::ProtocolError => e
       raise EvoFlow::HTTPError.new("evo-flow request failed: #{e.message}", nil, nil)
     end
 
@@ -158,8 +158,10 @@ module EvoFlow
       URI.join("#{base.chomp('/')}/", path.to_s.sub(%r{\A/+}, '')).to_s
     end
 
-    def request_headers
-      { 'Content-Type' => 'application/json', 'X-Integration-API-Key' => @api_key }.merge(@extra_headers)
+    def request_headers(with_content_type: true)
+      headers = { 'X-Integration-API-Key' => @api_key }
+      headers['Content-Type'] = 'application/json' if with_content_type
+      headers.merge(@extra_headers)
     end
 
     def handle_response(response)
