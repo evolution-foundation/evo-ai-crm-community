@@ -171,12 +171,13 @@ RSpec.describe EvoFlow::Client do
     let(:events_path) { '/contacts/42/events' }
     let(:events_url) { "#{api_url}/contacts/42/events" }
 
-    it 'GETs the full /api/v1 URL with the integration API key header and returns parsed body' do
+    it 'Business Rule: GET requests must not include Content-Type to prevent strict load balancers from dropping the connection with EOFError' do
       stub = stub_request(:get, events_url)
              .with(
                query: { 'limit' => '10' },
                headers: { 'X-Integration-API-Key' => api_key }
              )
+             .with { |req| !req.headers.key?('Content-Type') }
              .to_return(
                status: 200,
                body: { events: [], pagination: { hasNext: false } }.to_json,
@@ -271,9 +272,10 @@ RSpec.describe EvoFlow::Client do
     let(:segment_path) { '/segments/seg-1' }
     let(:segment_url) { "#{api_url}/segments/seg-1" }
 
-    it 'DELETEs the full /api/v1 URL with auth header and returns the parsed body' do
+    it 'Business Rule: DELETE requests must not include Content-Type to prevent strict load balancers from dropping the connection with EOFError' do
       stub = stub_request(:delete, segment_url)
              .with(headers: { 'X-Integration-API-Key' => api_key })
+             .with { |req| !req.headers.key?('Content-Type') }
              .to_return(
                status: 200,
                body: { id: 'seg-1', deleted: true }.to_json,
@@ -379,10 +381,10 @@ RSpec.describe EvoFlow::Client do
         .and_return(described_class::DEFAULT_API_URL)
       allow(ENV).to receive(:fetch).with('AUTH_APIKEY_INTEGRATION_LOCAL', nil).and_return('k')
 
-      stub = stub_request(:post, 'http://evo-flow:3000/api/v1/events/track')
+      stub = stub_request(:post, 'http://evo-flow:3334/api/v1/events/track')
              .to_return(status: 200, body: '{}')
 
-      described_class.new.post('/events/track', payload)
+      described_class.new.post('/events/track', {})
 
       expect(stub).to have_been_requested
     end

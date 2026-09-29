@@ -33,7 +33,8 @@ class AgentBot < ApplicationRecord
 
   validates :outgoing_url, length: { maximum: Limits::URL_LENGTH_LIMIT }
   validates :api_key, length: { maximum: 1000 }, allow_blank: true
-  validates :api_key, presence: true, if: :evo_ai_provider?
+  validates :api_key, presence: true, if: -> { evo_ai_provider? && credential_id.blank? }
+  validates :credential_id, presence: true, if: -> { evo_ai_provider? && api_key.blank? }
   # N8n can optionally use basic auth, so api_key is not required
   validates :debounce_time, presence: true, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 60 }
 
