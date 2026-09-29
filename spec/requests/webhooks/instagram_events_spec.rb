@@ -218,7 +218,8 @@ RSpec.describe 'Webhooks Instagram events', type: :request do
       Rack::Attack.enabled = true
       Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
       Rack::Attack.reset!
-      example.run
+      # The counter is bucketed by wall-clock minute; a run that crosses one starts over.
+      freeze_time { example.run }
       Rack::Attack.enabled = original_enabled
       Rack::Attack.cache.store = original_store
       Rack::Attack.reset!
