@@ -1,6 +1,18 @@
 require 'base64'
 
 class Whatsapp::Providers::EvolutionService < Whatsapp::Providers::BaseService
+  # Single source of truth for the webhook events a new/reconnected Evolution
+  # API instance is provisioned with. Referenced by both
+  # Api::V1::Evolution::AuthorizationsController/QrcodesController (via
+  # EvolutionConcern#create_evolution_instance!) and WhatsappSyncInitiatorJob
+  # — previously two independent, drifted arrays (see
+  # docs/superpowers/specs/2026-09-28-whatsapp-inbound-typing-debounce-design.md).
+  DEFAULT_WEBHOOK_EVENTS = %w[
+    CONNECTION_UPDATE CONTACTS_SET CONTACTS_UPDATE CONTACTS_UPSERT
+    LABELS_ASSOCIATION LABELS_EDIT LOGOUT_INSTANCE MESSAGES_DELETE
+    MESSAGES_UPDATE MESSAGES_UPSERT SEND_MESSAGE PRESENCE_UPDATE
+  ].freeze
+
   def send_message(phone_number, message)
     @message = message
     @phone_number = phone_number

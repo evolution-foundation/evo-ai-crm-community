@@ -112,4 +112,69 @@ RSpec.describe Whatsapp::IncomingMessageEvolutionService do
       service.send(:handle_connection_open, nil)
     end
   end
+
+  describe 'presence.update event' do
+    let(:inbox) { instance_double(Inbox, archived?: false, contact_inboxes: contact_inboxes_relation) }
+    let(:contact_inboxes_relation) { instance_double(ActiveRecord::Relation, find_by: contact_inbox) }
+    let(:contact_inbox) { instance_double(ContactInbox, conversations: conversations_relation) }
+    let(:conversations_relation) { instance_double(ActiveRecord::Relation, where: where_chain) }
+    let(:where_chain) { double('WhereChain', not: not_resolved_relation) }
+    let(:not_resolved_relation) { instance_double(ActiveRecord::Relation, last: conversation) }
+    let(:conversation) { instance_double(Conversation, display_id: 5, contact_id: 'contact-1') }
+
+    def service_for(data)
+      described_class.new(inbox: inbox, params: { event: 'presence.update', data: data, instance: 'test' })
+    end
+
+    it 'extends the debounce for a composing signal' do
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'composing' } } }
+
+      expect(BotRuntime::PresenceDelegationService).to receive(:new).with(conversation).and_return(instance_double(BotRuntime::PresenceDelegationService, delegate: true))
+
+      service_for(data).perform
+    end
+
+    it 'does nothing for a paused signal' do
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'paused' } } }
+
+      expect(BotRuntime::PresenceDelegationService).not_to receive(:new)
+
+      service_for(data).perform
+    end
+
+    it 'ignores group presence (@g.us)' do
+      data = { id: '123456-group@g.us', presences: { 'x@g.us' => { lastKnownPresence: 'composing' } } }
+
+      expect(inbox).not_to receive(:contact_inboxes)
+
+      service_for(data).perform
+    end
+
+    it 'discards silently when no ContactInbox matches the sender' do
+      allow(contact_inboxes_relation).to receive(:find_by).and_return(nil)
+      data = { id: '5511999999999@s.whatsapp.net', presences: { '5511999999999@s.whatsapp.net' => { lastKnownPresence: 'composing' } } }
+
+      expect(BotRuntime::PresenceDelegationService).not_to receive(:new)
+
+      expect { service_for(data).perform }.not_to raise_error
+    end
+
+    # Regression: the ContactInbox for a DDD >= 31 mobile is stored with the
+    # nono dígito stripped (Whatsapp::PhoneNumberNormalizer.call), but the raw
+    # JID always carries it. A presence lookup using the raw digits directly
+    # (as this handler did before Whatsapp::PresenceContactResolver) would
+    # never match — silently disabling the feature for most Brazilian DDDs.
+    it 'resolves the ContactInbox stored under the normalized (nono dígito stripped) source_id' do
+      raw_jid_digits = '5574999879409' # DDD 74, raw JID keeps the 9
+      normalized_source_id = '557499879409' # stored form, 9 stripped
+      data = { id: "#{raw_jid_digits}@s.whatsapp.net", presences: { "#{raw_jid_digits}@s.whatsapp.net" => { lastKnownPresence: 'composing' } } }
+
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: raw_jid_digits).and_return(nil)
+      allow(contact_inboxes_relation).to receive(:find_by).with(source_id: normalized_source_id).and_return(contact_inbox)
+
+      expect(BotRuntime::PresenceDelegationService).to receive(:new).with(conversation).and_return(instance_double(BotRuntime::PresenceDelegationService, delegate: true))
+
+      service_for(data).perform
+    end
+  end
 end

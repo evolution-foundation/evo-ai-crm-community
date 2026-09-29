@@ -320,4 +320,18 @@ RSpec.describe Whatsapp::Providers::EvolutionService do
       expect(service.send_message(phone_number, message)).to be_nil
     end
   end
+
+  describe 'DEFAULT_WEBHOOK_EVENTS' do
+    it 'includes PRESENCE_UPDATE alongside every previously-provisioned event' do
+      expect(described_class::DEFAULT_WEBHOOK_EVENTS).to include(
+        'CONNECTION_UPDATE', 'CONTACTS_SET', 'CONTACTS_UPDATE', 'CONTACTS_UPSERT',
+        'LABELS_ASSOCIATION', 'LABELS_EDIT', 'LOGOUT_INSTANCE', 'MESSAGES_DELETE',
+        'MESSAGES_UPDATE', 'MESSAGES_UPSERT', 'SEND_MESSAGE', 'PRESENCE_UPDATE'
+      )
+    end
+
+    it 'is frozen' do
+      expect(described_class::DEFAULT_WEBHOOK_EVENTS).to be_frozen
+    end
+  end
 end

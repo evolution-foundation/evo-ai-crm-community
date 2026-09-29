@@ -191,20 +191,7 @@ class WhatsappSyncInitiatorJob < ApplicationJob
   end
 
   def webhook_events_for_sync
-    events = %w[
-      MESSAGES_UPSERT
-      MESSAGES_UPDATE
-      MESSAGES_DELETE
-    ]
-
-    # Add sync events if sync is enabled
-    events += %w[
-      MESSAGES_SET
-      CONTACTS_UPSERT
-      CONTACTS_UPDATE
-    ]
-
-    events
+    Whatsapp::Providers::EvolutionService::DEFAULT_WEBHOOK_EVENTS + %w[MESSAGES_SET]
   end
 
   # WhatsApp Cloud methods (unchanged)

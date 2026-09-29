@@ -10,14 +10,22 @@ module BotRuntime
 
     def send_event(event)
       CIRCUIT_BREAKER.call do
-        perform_request(event)
+        perform_request('/events', event)
       end
+    end
+
+    # Presence is a best-effort, fire-and-forget signal — deliberately NOT
+    # routed through CIRCUIT_BREAKER, which guards real message delivery. A
+    # burst of presence failures (e.g. a provider sending malformed payloads)
+    # must never open the breaker and block actual AI replies.
+    def send_presence_event(event)
+      perform_request('/events/presence', event)
     end
 
     private
 
-    def perform_request(event)
-      uri = URI.parse("#{BotRuntime::Config.url}/events")
+    def perform_request(path, event)
+      uri = URI.parse("#{BotRuntime::Config.url}#{path}")
 
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = uri.scheme == 'https'

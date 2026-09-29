@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rails_helper'
+require 'webmock/rspec'
 
 # Unit-level coverage for EvolutionGoConcern's credential resolution. Older
 # Evolution Go channels created before the provider_config persistence fix may
@@ -135,6 +136,18 @@ RSpec.describe EvolutionGoConcern, type: :concern do
 
         host.evolution_go_credentials_for(channel)
       end
+    end
+  end
+
+  describe '#connect_instance' do
+    it 'subscribes to ChatPresence alongside the existing MESSAGE/READ_RECEIPT/CONNECTION events' do
+      controller = Api::V1::EvolutionGo::AuthorizationsController.new
+
+      stub_request(:post, 'https://go.example.com/instance/connect')
+        .with { |request| JSON.parse(request.body)['subscribe'] == %w[MESSAGE READ_RECEIPT CONNECTION ChatPresence] }
+        .to_return(status: 200, body: '{}')
+
+      controller.send(:connect_instance, 'https://go.example.com', 'instance-token')
     end
   end
 end
