@@ -23,7 +23,7 @@ module Templates
       # is a shared asset, but the slug is the inbox NAME, so it is only emitted for
       # an inbox the caller can read; the importer already skips a template with none.
       def inbox_slug
-        inbox = Templates::VisibilityScope.for('inboxes', ::Inbox, @current_user)
+        inbox = Templates::VisibilityScope.exportable('inboxes', ::Inbox, @current_user)
                                           .find_by(channel_id: @record.channel_id, channel_type: @record.channel_type)
         inbox ? Templates::IdRemapper.slug_for(inbox.name) : nil
       end

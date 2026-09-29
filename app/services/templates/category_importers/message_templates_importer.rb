@@ -52,6 +52,7 @@ module Templates
       # because it is channel-less or the exporter could not read the one it is bound to.
       def skip_reason(inbox_slug)
         return 'the bundle names no inbox for this template' if inbox_slug.blank?
+        return "inbox slug '#{inbox_slug}' was skipped, so this template was left out" if @id_remapper.skipped?('inboxes', inbox_slug)
 
         "inbox slug '#{inbox_slug}' not found in import set"
       end

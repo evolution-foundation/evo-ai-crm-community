@@ -25,29 +25,33 @@ module Templates
 
     # Returns the inventory of exportable entities grouped by category.
     # Used by the frontend wizard to render checkboxes.
+    # A category the caller may not read is left out, and never queried.
     def self.exportable_inventory(current_user:)
-      {
-        # CRM-206: unscoped, this listed every pipeline — leaking another user's
-        # private funnel by name, and then by id through the export itself.
-        'pipelines' => VisibilityScope.for('pipelines', ::Pipeline, current_user)
-          .reorder(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } },
-        'agents' => ::AgentBot.order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } },
-        'teams' => ::Team.order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } },
-        'labels' => ::Label.order(:title).pluck(:id, :title).map { |id, name| { id: id, name: name } },
-        'custom_attributes' => ::CustomAttributeDefinition.order(:attribute_display_name)
-          .pluck(:id, :attribute_display_name, :attribute_model)
-          .map { |id, name, model| { id: id, name: "#{name} (#{model})" } },
-        'canned_responses' => ::CannedResponse.order(:short_code).pluck(:id, :short_code).map { |id, name| { id: id, name: name } },
-        # CRM-205: the same scope every other macro read path asks.
-        'macros' => VisibilityScope.for('macros', ::Macro, current_user)
-          .reorder(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } },
-        # Unscoped, this listed every inbox by name — and the id then opened its
-        # settings through the export itself.
-        'inboxes' => VisibilityScope.for('inboxes', ::Inbox, current_user)
-          .reorder(:name).pluck(:id, :name, :channel_type)
-          .map { |id, name, ct| { id: id, name: "#{name} (#{ct.demodulize})" } },
-        'message_templates' => ::MessageTemplate.order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } }
-      }
+      INVENTORY.select { |category, _| CategoryPermission.readable?(category, current_user) }
+               .transform_values { |list| list.call(current_user) }
     end
+
+    named = ->(rows) { rows.map { |id, name| { id: id, name: name } } }
+    # Macros, pipelines and inboxes are read in part and go through VisibilityScope.for;
+    # the rest is account-wide.
+    INVENTORY = {
+      'pipelines' => ->(user) { named.call(VisibilityScope.for('pipelines', ::Pipeline, user).reorder(:name).pluck(:id, :name)) },
+      'agents' => ->(_user) { named.call(::AgentBot.order(:name).pluck(:id, :name)) },
+      'teams' => ->(_user) { named.call(::Team.order(:name).pluck(:id, :name)) },
+      'labels' => ->(_user) { named.call(::Label.order(:title).pluck(:id, :title)) },
+      'custom_attributes' => lambda { |_user|
+        ::CustomAttributeDefinition.order(:attribute_display_name)
+                                   .pluck(:id, :attribute_display_name, :attribute_model)
+                                   .map { |id, name, model| { id: id, name: "#{name} (#{model})" } }
+      },
+      'canned_responses' => ->(_user) { named.call(::CannedResponse.order(:short_code).pluck(:id, :short_code)) },
+      'macros' => ->(user) { named.call(VisibilityScope.for('macros', ::Macro, user).reorder(:name).pluck(:id, :name)) },
+      'inboxes' => lambda { |user|
+        VisibilityScope.for('inboxes', ::Inbox, user).reorder(:name).pluck(:id, :name, :channel_type)
+                       .map { |id, name, ct| { id: id, name: "#{name} (#{ct.demodulize})" } }
+      },
+      'message_templates' => ->(_user) { named.call(::MessageTemplate.order(:name).pluck(:id, :name)) }
+    }.freeze
+    private_constant :INVENTORY
   end
 end

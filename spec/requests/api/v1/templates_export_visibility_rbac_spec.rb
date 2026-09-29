@@ -7,8 +7,7 @@ require 'stringio'
 # CRM-205 — the template export read macros unscoped, so a templates.export holder
 # reached another user's PERSONAL macro by exporting it. Every macro enumeration in
 # the export path (inventory, `all`, explicit id) now asks Macro.with_visibility,
-# the same scope the member actions ask since CRM-195 — including its answer for a
-# userless caller, which the export must not second-guess.
+# the same scope the member actions ask.
 RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :request do
   let(:exporter) { User.create!(name: 'Exporter', email: "exp-#{SecureRandom.hex(4)}@example.com") }
   let(:other_user) { User.create!(name: 'Other', email: "other-#{SecureRandom.hex(4)}@example.com") }
@@ -29,7 +28,8 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
       Current.evo_permission_cache ||= {}
     end
     allow_any_instance_of(EvoAuthService).to receive(:check_user_permission) do |_svc, _uid, permission|
-      granted.include?(permission)
+      # Visibility is under test here, not the category permission: grant every read.
+      granted.include?(permission) || Templates::CategoryPermission::READ.value?(permission)
     end
   end
 
@@ -115,17 +115,11 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
     end
   end
 
-  # A userless caller is with_visibility's call, not the export's: globals for a bare
-  # caller, everything for a service token (which check_permission! already lets in).
-  # The export delegating instead of fail-closing is what keeps the two in step.
-  describe 'userless callers follow with_visibility' do
-    it 'lists globals only for a bare userless caller — no personal macro, no raise' do
+  describe 'userless callers reach with_visibility only with a service token' do
+    it 'leaves macros out for a bare userless caller, and does not raise' do
       Current.reset
-      expect(own_personal).to be_present # macros exist in the DB…
 
-      names = Templates::ExportService.exportable_inventory(current_user: nil)['macros'].pluck(:name)
-
-      expect(names).to eq(['Team global']) # …but a bare caller sees only globals
+      expect(Templates::ExportService.exportable_inventory(current_user: nil)).not_to have_key('macros')
     end
 
     it 'lists every macro for a service token, matching what the model grants it' do
