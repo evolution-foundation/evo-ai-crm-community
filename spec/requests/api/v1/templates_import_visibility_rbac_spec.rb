@@ -19,7 +19,8 @@ RSpec.describe 'Template import collision scope', type: :request do
       Current.evo_can_read_all_inboxes = read_all_inboxes
     end
     allow_any_instance_of(EvoAuthService).to receive(:check_user_permission) do |_svc, _uid, permission|
-      permission == 'templates.import'
+      # The collision scope is under test here, not the category permission: grant every create.
+      permission == 'templates.import' || Templates::CategoryPermission::CREATE.value?(permission)
     end
   end
 

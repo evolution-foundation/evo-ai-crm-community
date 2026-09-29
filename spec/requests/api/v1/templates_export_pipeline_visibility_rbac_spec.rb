@@ -35,7 +35,8 @@ RSpec.describe 'Template export pipeline visibility scope (CRM-206)', type: :req
       Current.evo_permission_cache ||= {}
     end
     allow_any_instance_of(EvoAuthService).to receive(:check_user_permission) do |_svc, _uid, permission|
-      granted.include?(permission)
+      # Visibility is under test here, not the category permission: grant every read.
+      granted.include?(permission) || Templates::CategoryPermission::READ.value?(permission)
     end
   end
 
@@ -177,17 +178,15 @@ RSpec.describe 'Template export pipeline visibility scope (CRM-206)', type: :req
 
   # --- the userless caller: the export delegates, it does not decide -----------
 
-  # The CRM-205 review's High finding was the export answering this for itself. The
-  # answer belongs to the category's rule, and the two userless callers differ.
+  # The export does not answer for the category: a service token reaches the pipeline
+  # rule, and a bare userless caller is refused by the category permission first.
   describe 'userless callers follow the pipeline rule' do
-    it 'lists public + default only for a bare userless caller — no private, no raise' do
+    # A bare userless caller holds no permission, so the category gate refuses it before
+    # the category's own rule is asked; only the service token below reaches that rule.
+    it 'leaves pipelines out for a bare userless caller, and does not raise' do
       Current.reset
 
-      names = Templates::ExportService.exportable_inventory(current_user: nil)['pipelines'].pluck(:name)
-
-      # Private pipelines exist in the DB; a bare caller sees none of them.
-      expect(names).to include('Shared public funnel')
-      expect(names).not_to include('Foreign private funnel', 'Exporter private funnel')
+      expect(Templates::ExportService.exportable_inventory(current_user: nil)).not_to have_key('pipelines')
     end
 
     it 'lists every pipeline for a service token, matching PipelinePolicy::Scope' do

@@ -44,6 +44,8 @@ module Templates
       contents = {}
       buffer = Zip::OutputStream.write_buffer do |zip|
         Schema::CATEGORIES.each do |category|
+          next unless CategoryPermission.readable?(category, @current_user)
+
           ids = ids_for(category)
           next if ids.blank?
 
@@ -99,7 +101,7 @@ module Templates
     # Scoping here covers BOTH selection paths — `all` and an explicit id crafted
     # from a leaked UUID (CRM-205 macros, CRM-206 pipelines).
     def base_relation(category)
-      VisibilityScope.for(category, MODEL_MAP[category], @current_user)
+      VisibilityScope.exportable(category, MODEL_MAP[category], @current_user)
     end
   end
 end

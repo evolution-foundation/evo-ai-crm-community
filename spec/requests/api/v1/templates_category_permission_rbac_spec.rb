@@ -72,7 +72,7 @@ RSpec.describe 'Template bundles honour each category permission', type: :reques
       'labels' => 'labels.read'
     }.each do |category, key|
       context "without #{key}" do
-        let(:everything) { %w[inboxes.read agent_bots.read labels.read message_templates.read] - [key] }
+        let(:everything) { Templates::CategoryPermission::READ.values - [key] }
         let(:record_id) { { 'inboxes' => inbox, 'agents' => agent, 'labels' => label }[category].id }
 
         it 'leaves the category out of the inventory' do
@@ -104,6 +104,25 @@ RSpec.describe 'Template bundles honour each category permission', type: :reques
       login_as(caller_user, 'templates.export', 'message_templates.read', 'inboxes.read')
       exported = category_in_bundle(export('message_templates' => { ids: [template.id] }), 'message_templates')
       expect(exported.first['inbox_slug']).to eq('sales-desk')
+    end
+  end
+
+  # Resolved like require_permissions: no administrator shortcut, a service token passes.
+  describe 'who the rule lets through' do
+    before { Label.create!(title: 'vip') }
+
+    it 'gives an administrator without the category permission nothing of it' do
+      allow(caller_user).to receive(:administrator?).and_return(true)
+      login_as(caller_user, 'templates.export')
+      expect(inventory).not_to have_key('labels')
+    end
+
+    it 'lets a service token read and create every category' do
+      Current.reset
+      Current.service_authenticated = true
+      expect(Templates::ExportService.exportable_inventory(current_user: nil).keys)
+        .to match_array(Templates::CategoryPermission::READ.keys)
+      expect(Templates::CategoryPermission.creatable?('inboxes', nil)).to be(true)
     end
   end
 

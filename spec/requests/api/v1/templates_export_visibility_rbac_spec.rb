@@ -29,7 +29,8 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
       Current.evo_permission_cache ||= {}
     end
     allow_any_instance_of(EvoAuthService).to receive(:check_user_permission) do |_svc, _uid, permission|
-      granted.include?(permission)
+      # Visibility is under test here, not the category permission: grant every read.
+      granted.include?(permission) || Templates::CategoryPermission::READ.value?(permission)
     end
   end
 
@@ -115,17 +116,16 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
     end
   end
 
-  # A userless caller is with_visibility's call, not the export's: globals for a bare
-  # caller, everything for a service token (which check_permission! already lets in).
-  # The export delegating instead of fail-closing is what keeps the two in step.
+  # A service token is with_visibility's call, not the export's: it gets everything, as
+  # check_permission! already lets it in. A bare userless caller holds no permission, so
+  # the category gate refuses it before with_visibility is asked.
   describe 'userless callers follow with_visibility' do
-    it 'lists globals only for a bare userless caller — no personal macro, no raise' do
+    # A bare userless caller holds no permission, so the category gate refuses it before
+    # the category's own rule is asked; only the service token below reaches that rule.
+    it 'leaves macros out for a bare userless caller, and does not raise' do
       Current.reset
-      expect(own_personal).to be_present # macros exist in the DB…
 
-      names = Templates::ExportService.exportable_inventory(current_user: nil)['macros'].pluck(:name)
-
-      expect(names).to eq(['Team global']) # …but a bare caller sees only globals
+      expect(Templates::ExportService.exportable_inventory(current_user: nil)).not_to have_key('macros')
     end
 
     it 'lists every macro for a service token, matching what the model grants it' do

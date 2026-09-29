@@ -33,5 +33,13 @@ module Templates
       rule = RULES[category]
       rule ? rule.call(user) : model.all
     end
+
+    # What the export may hand out: nothing of a category the caller may not read,
+    # then the category's own rule. The import's collision lookup keeps #for.
+    def self.exportable(category, model, user)
+      return model.none unless CategoryPermission.readable?(category, user)
+
+      self.for(category, model, user)
+    end
   end
 end

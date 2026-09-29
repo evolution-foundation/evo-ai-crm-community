@@ -24,7 +24,8 @@ RSpec.describe 'Template export inbox visibility scope', type: :request do
       Current.evo_can_read_all_inboxes = read_all_inboxes
     end
     allow_any_instance_of(EvoAuthService).to receive(:check_user_permission) do |_svc, _uid, permission|
-      granted.include?(permission)
+      # Visibility is under test here, not the category permission: grant every read.
+      granted.include?(permission) || Templates::CategoryPermission::READ.value?(permission)
     end
   end
 
@@ -202,10 +203,12 @@ RSpec.describe 'Template export inbox visibility scope', type: :request do
   # --- the userless callers: the export delegates, it does not decide ----------
 
   describe 'userless callers follow the inbox rule' do
-    it 'lists no inbox for a bare userless caller, and does not raise' do
+    # A bare userless caller holds no permission, so the category gate refuses it before
+    # the category's own rule is asked; only the service token below reaches that rule.
+    it 'leaves inboxes out for a bare userless caller, and does not raise' do
       Current.reset
 
-      expect(Templates::ExportService.exportable_inventory(current_user: nil)['inboxes']).to eq([])
+      expect(Templates::ExportService.exportable_inventory(current_user: nil)).not_to have_key('inboxes')
     end
 
     it 'lists every inbox for a service token, as InboxPolicy#show? answers for it' do
