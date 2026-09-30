@@ -10,6 +10,7 @@ module Whatsapp
     # well under a second; anything past this is a hung or pathological input,
     # and it runs inline on the Sidekiq thread that sends the message.
     FFMPEG_TIMEOUT_SECONDS = 30
+    FFPROBE_TIMEOUT_SECONDS = 5
 
     # Convert audio file to OGG format with Opus codec
     # @param input_path [String] Path to the input audio file
@@ -66,7 +67,7 @@ module Whatsapp
         'ffprobe', '-v', 'error', '-select_streams', 'a:0',
         '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', input_path
       ]
-      output, status = run_with_timeout(command)
+      output, status = run_with_timeout(command, timeout_seconds: FFPROBE_TIMEOUT_SECONDS)
       return nil unless status.success?
 
       codec = output.strip
@@ -76,10 +77,29 @@ module Whatsapp
       nil
     end
 
-    # Run ffmpeg/ffprobe without a shell and kill the process group if it
-    # outlives FFMPEG_TIMEOUT_SECONDS, so a hung encode cannot pin the worker.
+    # Duration is used to enforce the audio-processing ceiling before a file is
+    # sent to an external transcription provider. A malformed file or unavailable
+    # ffprobe returns nil; callers must treat that as an unverified duration.
+    # @return [Float, nil] duration in seconds
+    def self.audio_duration(input_path)
+      command = [
+        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', input_path
+      ]
+      output, status = run_with_timeout(command, timeout_seconds: FFPROBE_TIMEOUT_SECONDS)
+      return nil unless status.success?
+
+      duration = Float(output.strip)
+      duration.positive? ? duration : nil
+    rescue StandardError => e
+      Rails.logger.warn "Could not probe audio duration: #{e.class}"
+      nil
+    end
+
+    # Run ffmpeg/ffprobe without a shell and kill the process group after the
+    # operation-specific timeout, so a hung media process cannot pin the worker.
     # @return [Array(String, Process::Status)] combined output and exit status
-    def self.run_with_timeout(command)
+    def self.run_with_timeout(command, timeout_seconds: FFMPEG_TIMEOUT_SECONDS)
       Open3.popen2e(*command, pgroup: true) do |stdin, out_err, wait_thr|
         stdin.close
 
@@ -88,10 +108,10 @@ module Whatsapp
         reader = Thread.new { out_err.read }
         reader.report_on_exception = false
 
-        unless wait_thr.join(FFMPEG_TIMEOUT_SECONDS)
+        unless wait_thr.join(timeout_seconds)
           terminate_process_group(wait_thr.pid)
           reader.join(1)
-          raise ConversionError, "#{command.first} timed out after #{FFMPEG_TIMEOUT_SECONDS}s"
+          raise ConversionError, "#{command.first} timed out after #{timeout_seconds}s"
         end
 
         [reader.value.to_s, wait_thr.value]

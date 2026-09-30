@@ -1,136 +1,136 @@
 class Messages::AudioTranscriptionService
   include Events::Types
+  include Messages::AudioTranscriptionLifecycle
+  include Messages::AudioTranscriptionResults
+  include Messages::AudioTranscriptionPersistence
+  include Messages::AudioTranscriptionProvider
+  include Messages::AudioTranscriptionStorage
   pattr_initialize [:attachment!]
 
-  def perform
+  MAX_AUDIO_BYTES = 15 * 1024 * 1024
+  # Hard business ceiling shared by UI transcription and agent input. Legacy
+  # AUDIO_TRANSCRIPTION_MAX_DURATION_SECONDS values are intentionally ignored.
+  MAX_AUDIO_DURATION_SECONDS = 4 * 60
+  RETRY_AFTER_PROVIDER_FAILURE = 5.minutes
+  LONG_AUDIO_TIMEOUT_THRESHOLD_SECONDS = 60
+  HTTP_OPEN_TIMEOUT_SECONDS = 5
+  # OpenRouter documents a 60s upstream transcription timeout; leave headroom
+  # for its gateway so the Sidekiq worker gets a controlled timeout first.
+  HTTP_READ_TIMEOUT_SECONDS = 55
+  OPENROUTER_LONG_AUDIO_READ_TIMEOUT_SECONDS = 58
+
+  def perform(for_agent: false)
+    initialize_transcription_attempt
     Rails.logger.info "AudioTranscriptionService: Starting for attachment #{attachment.id}"
 
-    unless attachment.audio?
-      Rails.logger.warn "AudioTranscriptionService: Attachment #{attachment.id} is not audio"
-      return { error: 'Attachment is not audio' }
-    end
+    preflight_result = prepare_transcription(for_agent)
+    return preflight_result if preflight_result
 
-    if attachment.meta&.[]('transcribed_text').present?
-      Rails.logger.info "AudioTranscriptionService: Transcription already exists for attachment #{attachment.id}"
-      return { error: 'Transcription already exists' }
-    end
-
-    unless transcription_enabled?
-      Rails.logger.warn "AudioTranscriptionService: Transcription not enabled"
-      return { error: 'Transcription not enabled' }
-    end
-
-    Rails.logger.info "AudioTranscriptionService: Transcription enabled, starting transcription..."
-    transcribed_text = transcribe_audio
-
-    unless transcribed_text.present?
-      Rails.logger.warn "AudioTranscriptionService: Transcription returned empty result for attachment #{attachment.id}"
-      return { error: 'Transcription failed' }
-    end
-
-    Rails.logger.info "AudioTranscriptionService: Transcription successful, saving to attachment #{attachment.id}"
-
-    # Save transcription to attachment meta
-    attachment.meta ||= {}
-    attachment.meta['transcribed_text'] = transcribed_text
-    attachment.save!
-
-    # Reload attachment and message to ensure fresh data for broadcast
-    message = attachment.message
-    attachment.reload
-    message.reload
-
-    # Clear attachments association cache to ensure fresh data when push_event_data is called
-    # This forces Rails to reload attachments from database when push_event_data accesses them
-    message.association(:attachments).reset
-
-    # Broadcast message update to frontend so transcription appears
-    Rails.configuration.dispatcher.dispatch(
-      MESSAGE_UPDATED,
-      Time.zone.now,
-      message: message,
-      previous_changes: { 'attachments' => [attachment.id] }
-    )
-
-    Rails.logger.info "AudioTranscriptionService: Transcription saved successfully for attachment #{attachment.id}"
-    { success: true, transcribed_text: transcribed_text }
+    process_claimed_transcription
   rescue StandardError => e
-    Rails.logger.error "AudioTranscriptionService: Error for attachment #{attachment.id}: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-    { error: e.message }
+    Rails.logger.error "AudioTranscriptionService: Error for attachment #{attachment.id}: #{e.class}"
+    persist_audio_failure('provider_failed', retry_after: RETRY_AFTER_PROVIDER_FAILURE.from_now) if @transcription_lease_acquired
+    { error: 'Audio transcription failed', status: :provider_failed }
+  ensure
+    @audio_file&.close!
+    @transcription_lease&.release
   end
 
   private
 
-  def transcription_enabled?
-    # Priority 1: Check global configuration
-    # If global config is explicitly set (not nil), use it exclusively
-    global_enabled = GlobalConfigService.load('OPENAI_ENABLE_AUDIO_TRANSCRIPTION', nil)
-    unless global_enabled.nil?
-      # Convert to boolean - handle both boolean and string values
-      # GlobalConfig should typecast boolean values, but we handle both cases
-      enabled = if global_enabled.is_a?(TrueClass) || global_enabled.is_a?(FalseClass)
-                  global_enabled
-                else
-                  # Handle string values
-                  case global_enabled.to_s.downcase
-                  when 'true', '1', 'yes', 'on'
-                    true
-                  when 'false', '0', 'no', 'off', ''
-                    false
-                  else
-                    false
-                  end
-                end
-
-      Rails.logger.info "AudioTranscriptionService: Global config value: #{global_enabled.inspect} (#{global_enabled.class}), converted to: #{enabled.inspect}"
-
-      Rails.logger.info "AudioTranscriptionService: Transcription #{enabled ? 'enabled' : 'disabled'} via global config"
-      return enabled
+  def transcription_enabled?(for_agent: false)
+    if for_agent
+      value = GlobalConfigService.load('AUDIO_TRANSCRIPTION_TO_AGENT_ENABLED', 'true')
+      return ActiveModel::Type::Boolean.new.cast(value)
     end
 
-    # Priority 2: Check OpenAI integration hook settings
+    legacy_transcription_enabled?
+  end
+
+  def legacy_transcription_enabled?
+    global_enabled = GlobalConfigService.load('OPENAI_ENABLE_AUDIO_TRANSCRIPTION', nil)
+    return normalized_transcription_config(global_enabled) unless global_enabled.nil?
+
     openai_hook = Integrations::Hook.find_by(app_id: 'openai')
     return false unless openai_hook&.enabled?
 
     openai_hook.settings&.[]('enable_audio_transcription') == true
   end
 
-  def transcribe_audio
+  def normalized_transcription_config(value)
+    enabled = if value.is_a?(TrueClass) || value.is_a?(FalseClass)
+                value
+              else
+                %w[true 1 yes on].include?(value.to_s.downcase)
+              end
+    Rails.logger.info(
+      "AudioTranscriptionService: Global config value: #{value.inspect} (#{value.class}), converted to: #{enabled.inspect}"
+    )
+    Rails.logger.info "AudioTranscriptionService: Transcription #{enabled ? 'enabled' : 'disabled'} via global config"
+    enabled
+  end
+
+  def transcribe_audio(audio_file: nil, duration: nil)
     return nil unless attachment.file.attached?
 
-    api_key = get_openai_api_key
-    if api_key.blank?
-      # The toggle is on but no credential resolves. Saying so explicitly beats
-      # behaving like the feature was switched off, which is what hid the
-      # missing credential from the user before.
-      Rails.logger.warn(
-        'AudioTranscriptionService: transcription is enabled but no AI credential resolved ' \
-        '(register one under Settings > AI Credentials)'
-      )
-      return nil
+    api_key = transcription_api_key
+    return nil if api_key.blank?
+
+    transcribe_audio_content(api_key, audio_file, duration)
+  rescue StandardError => e
+    Rails.logger.error "AudioTranscriptionService: Transcription request failed: #{e.class}"
+    @transcription_failure_status = :provider_failed
+    nil
+  end
+
+  def transcribe_audio_content(api_key, audio_file, duration)
+    owns_audio_file = audio_file.nil?
+    audio_file ||= download_audio_file
+    return unless audio_file
+    return unless audio_within_duration_limit?(audio_file, duration: duration)
+
+    call_openai_whisper_api(api_key, audio_file, duration: duration)&.dig('text')
+  ensure
+    audio_file&.close! if owns_audio_file
+  end
+
+  def transcription_api_key
+    api_key = openai_api_key
+    return api_key if api_key.present?
+
+    # Keep missing credentials distinct from a provider rejection/timeout.
+    Rails.logger.warn(
+      'AudioTranscriptionService: transcription is enabled but no AI credential resolved ' \
+      '(register one under Settings > AI Credentials)'
+    )
+    @transcription_failure_status = :credentials_unavailable
+    nil
+  end
+
+  def audio_duration(audio_file)
+    Whatsapp::AudioConverterService.audio_duration(audio_file.path)
+  end
+
+  def audio_within_duration_limit?(audio_file, duration: nil)
+    duration ||= audio_duration(audio_file)
+    unless duration
+      Rails.logger.warn 'AudioTranscriptionService: Audio duration could not be verified; refusing transcription'
+      return false
     end
 
-    # Download audio file
-    audio_file = download_audio_file
-    return nil unless audio_file
+    max_duration = max_audio_duration_seconds
+    if duration > max_duration
+      Rails.logger.warn "AudioTranscriptionService: Audio duration exceeds configured limit (#{max_duration}s)"
+      return false
+    end
 
-    # Call OpenAI Whisper API
-    response = call_openai_whisper_api(api_key, audio_file)
-
-    # Clean up temp file
-    File.delete(audio_file.path) if File.exist?(audio_file.path)
-
-    response&.dig('text')
-  rescue StandardError => e
-    Rails.logger.error "OpenAI Whisper API error: #{e.message}"
-    nil
+    true
   end
 
   # Whisper is a different endpoint from chat/completions, but the credential is
   # the same one every AI feature resolves. The precedence used to be copied
   # here; it now lives in Ai::CredentialResolver, its single owner.
-  def get_openai_api_key
+  def openai_api_key
     credential_endpoint.key
   end
 
@@ -139,106 +139,7 @@ class Messages::AudioTranscriptionService
     @credential_endpoint ||= Ai::CredentialResolver.resolve_endpoint(for_consumer: :audio_transcription)
   end
 
-  def download_audio_file
-    return nil unless attachment.file.attached?
-
-    # Retry with exponential backoff to handle race condition where file
-    # might not be fully uploaded to S3 yet
-    max_retries = 3
-    retry_delay = 1 # seconds
-
-    max_retries.times do |attempt|
-      begin
-        # Create temp file with valid extension
-        file_extension = attachment.extension.presence || 'ogg'
-        temp_file = Tempfile.new(['audio', ".#{file_extension}"])
-        temp_file.binmode
-
-        # Download from ActiveStorage
-        attachment.file.download do |chunk|
-          temp_file.write(chunk)
-        end
-
-        temp_file.rewind
-        Rails.logger.info "AudioTranscriptionService: Successfully downloaded audio file (attempt #{attempt + 1})"
-        return temp_file
-      rescue ActiveStorage::FileNotFoundError => e
-        if attempt < max_retries - 1
-          wait_time = retry_delay * (2 ** attempt)
-          Rails.logger.warn "AudioTranscriptionService: File not found, retrying in #{wait_time}s (attempt #{attempt + 1}/#{max_retries})"
-          sleep(wait_time)
-        else
-          Rails.logger.error "AudioTranscriptionService: Error downloading audio file after #{max_retries} attempts: #{e.message}"
-          return nil
-        end
-      rescue StandardError => e
-        Rails.logger.error "AudioTranscriptionService: Error downloading audio file: #{e.message}"
-        return nil
-      end
-    end
-
-    nil
-  end
-
-  def call_openai_whisper_api(api_key, audio_file)
-    require 'net/http'
-    require 'uri'
-
-    # A key issued by a local gateway must not go to api.openai.com just because
-    # the installation setting still points there.
-    base_url = credential_endpoint.base_url.presence ||
-               GlobalConfigService.load('OPENAI_API_URL', 'https://api.openai.com/v1')
-    transcription_url = "#{base_url}/audio/transcriptions"
-
-    uri = URI(transcription_url)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
-
-    request = Net::HTTP::Post.new(uri.path)
-    request['Authorization'] = "Bearer #{api_key}"
-
-    # Ensure we have a valid extension (default to 'ogg' for audio files)
-    file_extension = attachment.extension.presence || 'ogg'
-    filename = "audio.#{file_extension}"
-
-    form_data = [
-      ['file', audio_file, { filename: filename }],
-      ['model', 'whisper-1']
-    ]
-
-    # Only add language if detect_language returns a non-nil value
-    detected_language = detect_language
-    form_data << ['language', detected_language] if detected_language.present?
-
-    request.set_form(form_data, 'multipart/form-data')
-
-    Rails.logger.info "OpenAI Whisper API request to #{transcription_url} for attachment #{attachment.id}"
-    response = http.request(request)
-    Rails.logger.info "OpenAI Whisper API response: #{response.code} - #{response.body[0..200]}"
-
-    if response.code == '200'
-      JSON.parse(response.body)
-    else
-      Rails.logger.error "OpenAI Whisper API error: #{response.code} - #{response.body}"
-      nil
-    end
-  rescue StandardError => e
-    Rails.logger.error "OpenAI Whisper API request error: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-    nil
-  end
-
-  def detect_language
-    # Try to detect language from global locale config
-    locale = GlobalConfigService.load('DEFAULT_LOCALE', nil)
-    return 'pt' if locale&.start_with?('pt')
-    return 'es' if locale&.start_with?('es')
-    return 'fr' if locale&.start_with?('fr')
-    return 'de' if locale&.start_with?('de')
-    return 'it' if locale&.start_with?('it')
-
-    # Default to auto-detect
-    nil
+  def max_audio_duration_seconds
+    MAX_AUDIO_DURATION_SECONDS
   end
 end
-

@@ -60,6 +60,16 @@ RSpec.describe Ai::CredentialResolver, '.resolve_endpoint' do
     expect(described_class.resolve_endpoint(for_consumer: :inbox_assist).base_url).to be_nil
   end
 
+  it 'returns the winning provider with its key and endpoint' do
+    register(scope: 'installation', provider: 'openai')
+    register(scope: 'account', provider: 'openrouter')
+
+    endpoint = described_class.resolve_endpoint(for_consumer: :audio_transcription)
+
+    expect(endpoint.provider).to eq('openrouter')
+    expect(endpoint.base_url).to be_nil
+  end
+
   # The half that was broken: the winning credential decides BOTH halves. An
   # account credential outranks the installation one, so its endpoint must come
   # with it instead of the installation one's.

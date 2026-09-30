@@ -214,6 +214,9 @@ For full API documentation, see [docs.evolutionfoundation.com.br](https://docs.e
 - **RESTful API** with comprehensive Swagger documentation
 - **High-performance messages** with optional ScyllaDB (<1ms latency)
 - **Background jobs** with Sidekiq
+- **Audio transcription** for inbound WhatsApp audio: the UI and Sofia share an atomic per-attachment lease. Files must be at most 4 minutes and 15 MiB; unknown durations fail closed before provider calls. Transcripts are explicitly marked as automatic and potentially erroneous; agents should use conversation context but confirm ambiguous names, dates, and quantities. Images remain typed `image/*` multimodal parts. Audio-only failures receive one fixed CRM reply, while mixed messages retain text and non-audio attachments for one agent response with failure context. Provider failures back off for 5 minutes. OpenRouter read timeouts are capped at 55 seconds, or 58 seconds for audio over 60 seconds, below its [documented upstream timeout](https://openrouter.ai/blog/tutorials/transcription-on-openrouter/).
+
+  Bot Runtime retries lease contention every 5 seconds for at most 27 retries (135 seconds), slightly longer than the 2-minute lease. Automatic audio chunking is intentionally not enabled: it would add provider requests/cost and needs validated chunk ordering, overlap at boundaries, partial-failure handling, and a renewable lease. Reconsider it only if sanitized duration-band/provider latency and timeout logs show that supported (≤4-minute) clips frequently exceed the upstream deadline; benchmark transcript accuracy and total cost before enabling it.
 - **Event-driven** architecture for extensibility
 - **File storage** support for S3, GCS, Azure Blob
 - **Rich message templates** with drag-and-drop editor

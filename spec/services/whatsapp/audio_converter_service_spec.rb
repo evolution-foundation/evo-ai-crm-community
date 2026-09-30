@@ -85,7 +85,7 @@ RSpec.describe Whatsapp::AudioConverterService do
       ogg = Rails.root.join('tmp', "wa_in_#{SecureRandom.hex(4)}.ogg").to_s
       system(
         'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
-        '-i', 'sine=frequency=440:duration=1', '-c:a', 'libvorbis', ogg
+        '-i', 'sine=frequency=440:duration=1', '-ac', '2', '-strict', '-2', '-c:a', 'vorbis', ogg
       )
 
       expect(described_class.audio_codec(ogg)).to eq('vorbis')
@@ -100,6 +100,29 @@ RSpec.describe Whatsapp::AudioConverterService do
       expect(described_class.audio_codec(garbage)).to be_nil
     ensure
       File.delete(garbage) if garbage && File.exist?(garbage)
+    end
+  end
+
+  describe '.audio_duration' do
+    it 'measures an audio file using ffprobe' do
+      path = Rails.root.join('tmp', "wa_duration_#{SecureRandom.hex(4)}.ogg").to_s
+      system(
+        'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+        '-i', 'sine=frequency=440:duration=2', '-c:a', 'libopus', path
+      )
+
+      expect(described_class.audio_duration(path)).to be_within(0.2).of(2.0)
+    ensure
+      File.delete(path) if path && File.exist?(path)
+    end
+
+    it 'returns nil for a malformed media file' do
+      path = Rails.root.join('tmp', "wa_duration_#{SecureRandom.hex(4)}.ogg").to_s
+      File.write(path, 'not audio')
+
+      expect(described_class.audio_duration(path)).to be_nil
+    ensure
+      File.delete(path) if path && File.exist?(path)
     end
   end
 

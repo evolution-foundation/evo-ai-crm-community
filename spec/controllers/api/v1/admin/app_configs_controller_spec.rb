@@ -292,6 +292,24 @@ RSpec.describe Api::V1::Admin::AppConfigsController, type: :controller do
           expect(configs['SMTP_PORT']).to eq('465')
         end
 
+        it 'saves the independent audio transcription controls' do
+          post :create, params: {
+            config_type: 'openai',
+            app_config: {
+              AUDIO_TRANSCRIPTION_TO_AGENT_ENABLED: 'true',
+              AUDIO_TRANSCRIPTION_MODEL: 'whisper-large-v3',
+              AUDIO_TRANSCRIPTION_MAX_DURATION_SECONDS: '420'
+            }
+          }, format: :json
+
+          expect(response).to have_http_status(:ok)
+          configs = response.parsed_body.dig('data', 'configs')
+          expect(configs['AUDIO_TRANSCRIPTION_TO_AGENT_ENABLED']).to eq('true')
+          expect(configs['AUDIO_TRANSCRIPTION_MODEL']).to eq('whisper-large-v3')
+          expect(configs).not_to have_key('AUDIO_TRANSCRIPTION_MAX_DURATION_SECONDS')
+          expect(InstallationConfig.find_by(name: 'AUDIO_TRANSCRIPTION_MAX_DURATION_SECONDS')).to be_nil
+        end
+
         it 'ignores keys not in the allowed list' do
           post :create, params: {
             config_type: 'smtp',

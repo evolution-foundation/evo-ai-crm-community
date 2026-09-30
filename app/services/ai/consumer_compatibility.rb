@@ -13,7 +13,11 @@ class Ai::ConsumerCompatibility
   CONSUMERS = {
     ai_agents: ALL_PROVIDERS,
     inbox_assist: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
-    audio_transcription: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
+    # Groq and OpenRouter both expose the OpenAI-compatible audio/transcriptions
+    # contract even though the core does not classify them as general chat
+    # providers. Keep this allowlist scoped to transcription; accepting them for
+    # chat-based CRM helpers would be a separate capability decision.
+    audio_transcription: (Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS + %w[groq openrouter]).freeze,
     label_suggestion: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     moderation: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS
   }.freeze

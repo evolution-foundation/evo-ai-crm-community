@@ -20,7 +20,7 @@ RSpec.describe Ai::ConsumerCompatibility do
   # These four build an OpenAI-shaped request (chat/completions, or Whisper for
   # transcription). A non-OpenAI provider there is a different protocol, not a
   # misconfiguration, so it must never reach the wire.
-  %i[inbox_assist audio_transcription label_suggestion moderation].each do |consumer|
+  %i[inbox_assist label_suggestion moderation].each do |consumer|
     it "restricts #{consumer} to OpenAI-compatible providers" do
       expect(described_class.accepts?(consumer, 'openai')).to be(true)
       expect(described_class.accepts?(consumer, 'azure')).to be(true)
@@ -29,6 +29,15 @@ RSpec.describe Ai::ConsumerCompatibility do
       expect(described_class.accepts?(consumer, 'anthropic')).to be(false)
       expect(described_class.accepts?(consumer, 'gemini')).to be(false)
       expect(described_class.accepts?(consumer, 'bedrock')).to be(false)
+    end
+  end
+
+  it 'allows Groq and OpenRouter credentials only for the transcription endpoint' do
+    %w[groq openrouter].each do |provider|
+      expect(described_class.accepts?(:audio_transcription, provider)).to be(true)
+      expect(described_class.accepts?(:inbox_assist, provider)).to be(false)
+      expect(described_class.accepts?(:label_suggestion, provider)).to be(false)
+      expect(described_class.accepts?(:moderation, provider)).to be(false)
     end
   end
 
