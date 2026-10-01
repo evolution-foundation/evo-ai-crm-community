@@ -7,7 +7,8 @@ json.website_channel_config do
   json.disable_branding false
   json.enabled_features @web_widget.selected_feature_flags
   json.enabled_languages available_locales_with_name
-  json.locale @web_widget.locale || ENV.fetch('DEFAULT_LOCALE', 'en')
+  # nil lets the widget follow the visitor's browser language.
+  json.locale @web_widget.locale
   json.out_of_office_message @web_widget.inbox.out_of_office_message
   json.pre_chat_form_enabled @web_widget.pre_chat_form_enabled
   json.pre_chat_form_options do
