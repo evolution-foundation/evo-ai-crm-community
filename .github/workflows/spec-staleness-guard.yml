@@ -458,6 +458,8 @@ on:
       - 'app/controllers/api/v1/contacts/conversations_controller.rb'
       - 'app/controllers/concerns/conversation_list_lookups.rb'
       - 'spec/requests/api/v1/contacts/conversations_spec.rb'
+      - 'app/views/api/v1/widget/configs/create.json.jbuilder'
+      - 'spec/requests/api/v1/widget/configs_spec.rb'
 
 permissions:
   contents: read
@@ -661,4 +663,5 @@ jobs:
             spec/migrations/20260914120000_drop_mentions_table_spec.rb \
             spec/finders/message_finder_spec.rb \
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
+            spec/requests/api/v1/widget/configs_spec.rb \
             --format progress
