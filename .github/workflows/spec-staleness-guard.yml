@@ -460,6 +460,12 @@ on:
       - 'spec/requests/api/v1/contacts/conversations_spec.rb'
       - 'app/views/api/v1/widget/configs/create.json.jbuilder'
       - 'spec/requests/api/v1/widget/configs_spec.rb'
+      # The service and the InboxMember callbacks drive the round-robin queue
+      # through the Alfred wrapper, whose lrem swaps redis-rb's argument order.
+      - 'app/services/auto_assignment/**'
+      - 'app/models/inbox_member.rb'
+      - 'lib/redis/alfred.rb'
+      - 'spec/services/auto_assignment/**'
 
 permissions:
   contents: read
@@ -664,4 +670,5 @@ jobs:
             spec/finders/message_finder_spec.rb \
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
+            spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
             --format progress
