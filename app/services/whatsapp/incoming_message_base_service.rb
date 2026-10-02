@@ -249,6 +249,19 @@ class Whatsapp::IncomingMessageBaseService
     true
   end
 
+  # whatsmeow serializes the enum as an integer; older payloads/specs carry the name.
+  REVOKE_PROTOCOL_TYPES = [0, '0', 'REVOKE'].freeze
+
+  # An edit (MESSAGE_EDIT) also carries the original key, so only a revoke may mark it.
+  # A missing type with a key counts as a revoke: protobufjs (Baileys) drops the
+  # zero-valued enum, which is REVOKE.
+  def revoke_protocol?(protocol_message)
+    type = protocol_message[:type]
+    return revoked_message_source_id(protocol_message).present? if type.nil?
+
+    type.in?(REVOKE_PROTOCOL_TYPES)
+  end
+
   def revoked_message_source_id(protocol_message)
     return if protocol_message.blank?
 

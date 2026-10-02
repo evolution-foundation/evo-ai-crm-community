@@ -61,8 +61,6 @@ module Whatsapp::EvolutionHandlers::Helpers
     when 'file'
       @raw_message.dig(:message, :documentMessage, :caption) ||
         @raw_message.dig(:message, :documentWithCaptionMessage, :message, :documentMessage, :caption)
-    when 'reaction'
-      @raw_message.dig(:message, :reactionMessage, :text)
     when 'location'
       location_msg = @raw_message.dig(:message, :locationMessage)
       return unless location_msg
@@ -142,8 +140,8 @@ module Whatsapp::EvolutionHandlers::Helpers
   end
 
   def ignore_message?
-    # Skip unsupported message types
-    return true if message_type.in?(%w[protocol unsupported])
+    # Reaction carries a non-blank emoji, so only the type skip keeps it from becoming a bubble (CRM-22).
+    return true if message_type.in?(%w[protocol unsupported reaction])
 
     # Skip if no content available
     return true if message_content.blank? && !media_attachment?

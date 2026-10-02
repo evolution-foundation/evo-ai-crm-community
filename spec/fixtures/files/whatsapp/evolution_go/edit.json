@@ -1,0 +1,36 @@
+{
+  "_source": "derived:evolution-go@706c9a4 whatsmeow.go (events.Message, Info PascalCase, Message camelCase, enums as int, UnwrapRaw applied)",
+  "event": "Message",
+  "instanceId": "inst-test",
+  "instanceToken": "token-test",
+  "data": {
+    "Info": {
+      "ID": "3EB0GOEDIT0001",
+      "Chat": "5511900000001@s.whatsapp.net",
+      "Sender": "5511900000001@s.whatsapp.net",
+      "IsFromMe": false,
+      "IsGroup": false,
+      "PushName": "Contato Teste",
+      "Type": "text",
+      "MediaType": "",
+      "Timestamp": "2026-10-01T12:00:00Z"
+    },
+    "Message": {
+      "protocolMessage": {
+        "key": {
+          "remoteJID": "5511900000001@s.whatsapp.net",
+          "fromMe": false,
+          "ID": "3EB0ORIGINAL0001"
+        },
+        "type": 14,
+        "editedMessage": {
+          "conversation": "texto editado"
+        },
+        "timestampMS": 1790000000003
+      }
+    },
+    "IsEphemeral": false,
+    "IsViewOnce": false,
+    "IsEdit": true
+  }
+}

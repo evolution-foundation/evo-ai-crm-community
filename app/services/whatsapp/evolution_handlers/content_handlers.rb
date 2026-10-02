@@ -36,12 +36,7 @@ module Whatsapp::EvolutionHandlers::ContentHandlers
       external_created_at: evolution_extract_message_timestamp(@raw_message[:messageTimestamp])
     }
 
-    if message_type == 'reaction'
-      content_attributes[:in_reply_to_external_id] = @raw_message.dig(:message, :reactionMessage, :key, :id)
-      content_attributes[:is_reaction] = true
-    elsif message_type == 'unsupported'
-      content_attributes[:is_unsupported] = true
-    end
+    content_attributes[:is_unsupported] = true if message_type == 'unsupported'
 
     content_attributes[:sender_name] = participant_push_name if jid_type == 'group' && participant_push_name.present?
     content_attributes[:media_type] = message_type if media_attachment?

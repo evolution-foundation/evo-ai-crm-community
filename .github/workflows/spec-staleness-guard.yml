@@ -282,6 +282,20 @@ on:
       - 'spec/listeners/reporting_event_listener_device_echo_spec.rb'
       - 'spec/services/dashboard/customer_dashboard_service_ai_vs_human_spec.rb'
       - 'spec/services/facebook/moderation/action_executor_service_reply_author_spec.rb'
+      # CRM-22: a WhatsApp control message (reaction, poll, edit, context-only) that slips
+      # past the type skip becomes an empty bubble, and an edit mistaken for a revoke marks
+      # the original as deleted by the contact. Both fail silently. No other lane runs them.
+      - 'app/services/whatsapp/evolution_handlers/helpers.rb'
+      - 'app/services/whatsapp/evolution_go_handlers/helpers.rb'
+      - 'app/services/whatsapp/evolution_go_handlers/content_handlers.rb'
+      - 'app/services/whatsapp/incoming_message_evolution_service.rb'
+      - 'app/services/whatsapp/incoming_message_evolution_go_service.rb'
+      - 'spec/fixtures/files/whatsapp/**'
+      - 'spec/services/whatsapp/evolution_handlers/helpers_spec.rb'
+      - 'spec/services/whatsapp/evolution_inbound_control_messages_spec.rb'
+      - 'spec/services/whatsapp/evolution_go_inbound_control_messages_spec.rb'
+      - 'spec/services/whatsapp/message_revoke_handling_spec.rb'
+      - 'spec/services/whatsapp/evolution_revoke_integration_spec.rb'
       # CRM-318: the screen that opened the Hub tab only leaves "Aguardando" because
       # the two lifecycle handlers announce the transition and the listener puts it on
       # the wire. Dropping any of the three is silent everywhere else — the channel
@@ -615,6 +629,11 @@ jobs:
             spec/requests/webhooks/meta_token_verify_spec.rb \
             spec/services/whatsapp/incoming_message_base_service_spec.rb \
             spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb \
+            spec/services/whatsapp/evolution_handlers/helpers_spec.rb \
+            spec/services/whatsapp/evolution_inbound_control_messages_spec.rb \
+            spec/services/whatsapp/evolution_go_inbound_control_messages_spec.rb \
+            spec/services/whatsapp/message_revoke_handling_spec.rb \
+            spec/services/whatsapp/evolution_revoke_integration_spec.rb \
             spec/services/whatsapp/device_echo_author_spec.rb \
             spec/models/message_device_echo_reporting_spec.rb \
             spec/listeners/reporting_event_listener_device_echo_spec.rb \
