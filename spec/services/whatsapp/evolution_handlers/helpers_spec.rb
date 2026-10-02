@@ -12,11 +12,7 @@ end
 
 return unless defined?(Rails)
 
-# EVO-1908: `reactionMessage` must be skipped incondicionalmente in the
-# Evolution API (baileys) handler. Prior to this fix, `message_type` classified
-# it as `'reaction'` and its content extractor returned the emoji itself, so
-# the base incoming service materialised a solitary bubble containing only the
-# reaction emoji.
+# CRM-22: a reaction carries the emoji as content, so only the type skip keeps it from becoming a bubble.
 RSpec.describe Whatsapp::EvolutionHandlers::Helpers do
   let(:host_class) do
     Class.new do

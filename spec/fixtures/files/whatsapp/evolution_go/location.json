@@ -1,0 +1,37 @@
+{
+  "_source": "derived:evolution-go@706c9a4 whatsmeow.go (events.Message, Info PascalCase, Message camelCase, enums as int, UnwrapRaw applied)",
+  "event": "Message",
+  "instanceId": "inst-test",
+  "instanceToken": "token-test",
+  "data": {
+    "Info": {
+      "ID": "3EB0GOLOC0001",
+      "Chat": "5511900000001@s.whatsapp.net",
+      "Sender": "5511900000001@s.whatsapp.net",
+      "IsFromMe": false,
+      "IsGroup": false,
+      "PushName": "Contato Teste",
+      "Type": "media",
+      "MediaType": "location",
+      "Timestamp": "2026-10-01T12:00:00Z"
+    },
+    "Message": {
+      "locationMessage": {
+        "degreesLatitude": -23.5505,
+        "degreesLongitude": -46.6333,
+        "name": "Praça da Sé",
+        "address": "Sé, São Paulo - SP"
+      },
+      "messageContextInfo": {
+        "deviceListMetadata": {
+          "senderTimestamp": "1790000000"
+        },
+        "deviceListMetadataVersion": 2,
+        "messageSecret": "c2VjcmV0"
+      }
+    },
+    "IsEphemeral": false,
+    "IsViewOnce": false,
+    "IsEdit": false
+  }
+}

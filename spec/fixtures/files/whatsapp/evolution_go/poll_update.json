@@ -1,0 +1,36 @@
+{
+  "_source": "derived:evolution-go@706c9a4 whatsmeow.go (events.Message, Info PascalCase, Message camelCase, enums as int, UnwrapRaw applied)",
+  "event": "Message",
+  "instanceId": "inst-test",
+  "instanceToken": "token-test",
+  "data": {
+    "Info": {
+      "ID": "3EB0GOPOLL0002",
+      "Chat": "5511900000001@s.whatsapp.net",
+      "Sender": "5511900000001@s.whatsapp.net",
+      "IsFromMe": false,
+      "IsGroup": false,
+      "PushName": "Contato Teste",
+      "Type": "poll",
+      "MediaType": "",
+      "Timestamp": "2026-10-01T12:00:00Z"
+    },
+    "Message": {
+      "pollUpdateMessage": {
+        "pollCreationMessageKey": {
+          "remoteJID": "5511900000001@s.whatsapp.net",
+          "fromMe": false,
+          "ID": "3EB0ORIGINAL0001"
+        },
+        "vote": {
+          "encPayload": "ZW5j",
+          "encIV": "aXY="
+        },
+        "senderTimestampMS": 1790000000002
+      }
+    },
+    "IsEphemeral": false,
+    "IsViewOnce": false,
+    "IsEdit": false
+  }
+}

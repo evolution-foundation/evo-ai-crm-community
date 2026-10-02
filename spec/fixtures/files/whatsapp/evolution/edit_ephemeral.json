@@ -1,0 +1,33 @@
+{
+  "_source": "derived:evolution-api@e273b904 messages.upsert; an edit inside a disappearing chat stays wrapped, so the server's protocolMessage routing (bs.ts:1310-1356) misses it",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVEDIT0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "ephemeralMessage": {
+        "message": {
+          "protocolMessage": {
+            "key": {
+              "remoteJid": "5511900000001@s.whatsapp.net",
+              "fromMe": false,
+              "id": "3EB0ORIGINAL0001"
+            },
+            "type": 14,
+            "editedMessage": {
+              "conversation": "texto editado"
+            },
+            "timestampMs": "1790000000003"
+          }
+        }
+      }
+    },
+    "messageType": "ephemeralMessage",
+    "messageTimestamp": 1790000000
+  }
+}

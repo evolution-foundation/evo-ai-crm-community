@@ -1,0 +1,29 @@
+{
+  "_source": "derived:evolution-api@e273b904 whatsapp.baileys.service.ts:5156-5214 (messages.upsert)",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVPOLL0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "pollCreationMessageV3": {
+        "name": "Qual horário?",
+        "options": [
+          {
+            "optionName": "Manhã"
+          },
+          {
+            "optionName": "Tarde"
+          }
+        ],
+        "selectableOptionsCount": 1
+      }
+    },
+    "messageType": "pollCreationMessageV3",
+    "messageTimestamp": 1790000000
+  }
+}

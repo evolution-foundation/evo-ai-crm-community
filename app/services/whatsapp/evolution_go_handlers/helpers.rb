@@ -127,26 +127,6 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     end
   end
 
-  def message_content
-    # Evolution Go: Extract content from Message object
-    message = @evolution_go_message
-    return nil unless message
-
-    # Text message
-    return message[:conversation] if message[:conversation].present?
-
-    # Extended text message
-    return message.dig(:extendedTextMessage, :text) if message[:extendedTextMessage].present?
-
-    # Other message types (media, etc.) - return nil for now
-    nil
-  end
-
-  def message_type
-    # Evolution Go: Use Type from Info
-    @evolution_go_info&.dig(:Type)&.downcase
-  end
-
   def message_processable?
     Rails.logger.info 'Evolution Go API: Checking if message is processable'
     Rails.logger.info "Evolution Go API: Message ID: #{raw_message_id}"
@@ -353,27 +333,5 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     else
       'unsupported'
     end
-  end
-
-  # EVO-1908: parity with EvolutionHandlers::Helpers#ignore_message? — control /
-  # empty-content messages must not produce blank bubbles. `reaction` is skipped
-  # incondicionalmente (não renderizamos bolha só-emoji).
-  def ignore_message?
-    return true if message_type.in?(%w[protocol unsupported context edited reaction])
-    return true if message_content.blank? && !media_attachment?
-
-    false
-  end
-
-  # Disappearing messages wrap the real payload inside `ephemeralMessage.message`.
-  # Without unwrap the outer type falls into `'unsupported'` and the inner content
-  # is lost.
-  def unwrap_ephemeral_message!
-    return unless @evolution_go_message.is_a?(Hash)
-
-    inner = @evolution_go_message[:ephemeralMessage].is_a?(Hash) ? @evolution_go_message[:ephemeralMessage][:message] : nil
-    return unless inner.is_a?(Hash) && inner.any?
-
-    @evolution_go_message = inner
   end
 end

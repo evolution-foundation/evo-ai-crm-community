@@ -1,0 +1,21 @@
+{
+  "_source": "derived:evolution-api@e273b904 whatsapp.baileys.service.ts:5156-5214 (messages.upsert)",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVCONT0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "contactMessage": {
+        "displayName": "Carol Souza",
+        "vcard": "BEGIN:VCARD\nVERSION:3.0\nN:Souza;Carol;;;\nFN:Carol Souza\nTEL;type=CELL;waid=5511900000002:+55 11 90000-0002\nEND:VCARD"
+      }
+    },
+    "messageType": "contactMessage",
+    "messageTimestamp": 1790000000
+  }
+}

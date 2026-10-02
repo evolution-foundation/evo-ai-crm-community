@@ -1,0 +1,24 @@
+{
+  "_source": "derived:evolution-api@e273b904 messages.upsert; protobufjs omits the zero-valued enum (REVOKE)",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVREVK0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "protocolMessage": {
+        "key": {
+          "remoteJid": "5511900000001@s.whatsapp.net",
+          "fromMe": false,
+          "id": "3EB0ORIGINAL0001"
+        }
+      }
+    },
+    "messageType": "protocolMessage",
+    "messageTimestamp": 1790000000
+  }
+}

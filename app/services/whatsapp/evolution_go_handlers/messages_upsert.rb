@@ -4,12 +4,11 @@ require 'tempfile'
 module Whatsapp::EvolutionGoHandlers::MessagesUpsert
   include Whatsapp::EvolutionGoHandlers::Helpers
   include Whatsapp::EvolutionGoHandlers::ProfilePictureHandler
+  include Whatsapp::EvolutionGoHandlers::ContentHandlers
 
   private
 
   def handle_message
-    unwrap_ephemeral_message!
-
     if protocol_message?
       handle_revoke_protocol
       return
@@ -36,13 +35,25 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     @evolution_go_message.is_a?(Hash) && @evolution_go_message[:protocolMessage].present?
   end
 
-  # A revoke arrives as a protocolMessage; never create a message for it (that
-  # produced an empty bubble) and mark the original as revoked-by-contact.
+  # A protocolMessage never creates a message (that produced an empty bubble).
   def handle_revoke_protocol
     protocol = @evolution_go_message[:protocolMessage]
     source_id = revoked_message_source_id(protocol)
-    Rails.logger.info "Evolution Go API: Protocol message (type: #{protocol[:type].inspect}, revoked id: #{source_id.inspect}) — not creating a message; marking original revoked"
+    unless revoke_protocol?(protocol)
+      Rails.logger.info "Evolution Go API: Ignoring protocol message (type: #{protocol[:type].inspect}, target id: #{source_id.inspect})"
+      return
+    end
+
+    Rails.logger.info "Evolution Go API: Revoke (revoked id: #{source_id.inspect}) — not creating a message; marking original revoked"
     mark_message_revoked_by_source_id(source_id)
+  end
+
+  # Reaction is skipped too (CRM-22): an emoji-only bubble is not a message.
+  def ignore_message?
+    return true if message_type.in?(%w[protocol unsupported reaction])
+    return true if message_content.blank? && !media_attachment?
+
+    false
   end
 
   def set_contact
@@ -246,6 +257,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
 
     # Build message attributes (like Evolution v2)
     build_message_attributes(@conversation, reply_to_id)
+    handle_location if message_type == 'location'
+    handle_contacts if message_type == 'contacts'
 
     # Handle media attachment if needed
     handle_attach_media if attach_media
@@ -335,12 +348,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     caption = extract_media_caption
     return caption if caption.present?
 
-    # EVO-1908: parity with EvolutionHandlers::Helpers#message_content — reaction/
-    # location/contacts carry a non-nil renderable string. `reaction` is still
-    # skipped upstream by `ignore_message?` but we return its text for parity.
+    # Before the media_message? fallback: location/vcard arrive with Info.MediaType set.
     case message_type
-    when 'reaction'
-      return message.dig(:reactionMessage, :text)
     when 'location'
       location_msg = message[:locationMessage]
       return nil unless location_msg
