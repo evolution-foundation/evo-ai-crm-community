@@ -48,7 +48,8 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     mark_message_revoked_by_source_id(source_id)
   end
 
-  # Reaction is skipped too (CRM-22): an emoji-only bubble is not a message.
+  # The blank guard already drops reactions (no content is extracted for them); the type
+  # skip keeps it that way if message_content ever learns to read reactionMessage.text.
   def ignore_message?
     return true if message_type.in?(%w[protocol unsupported reaction])
     return true if message_content.blank? && !media_attachment?

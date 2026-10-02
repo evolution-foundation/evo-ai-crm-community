@@ -1,0 +1,28 @@
+{
+  "_source": "derived:evolution-go@706c9a4 whatsmeow.go (events.Message; base64 injected at the Message root, ~1441-1475)",
+  "event": "Message",
+  "instanceId": "inst-test",
+  "instanceToken": "token-test",
+  "data": {
+    "Info": {
+      "ID": "3EB0GOIMG0001",
+      "Chat": "5511900000001@s.whatsapp.net",
+      "Sender": "5511900000001@s.whatsapp.net",
+      "IsFromMe": false,
+      "IsGroup": false,
+      "PushName": "Contato Teste",
+      "Type": "media",
+      "MediaType": "image",
+      "Timestamp": "2026-10-01T12:00:00Z"
+    },
+    "Message": {
+      "imageMessage": {
+        "mimetype": "image/png"
+      },
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    },
+    "IsEphemeral": false,
+    "IsViewOnce": false,
+    "IsEdit": false
+  }
+}

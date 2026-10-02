@@ -22,8 +22,9 @@ RSpec.describe 'WhatsApp evolution inbound control messages (CRM-22)' do # ruboc
   end
 
   %w[reaction reaction_remove context_only poll_creation].each do |name|
-    it "creates no message for #{name}" do
+    it "creates no message and no conversation for #{name}" do
       expect { run_fixture(name) }.not_to change(Message, :count)
+      expect(inbox.conversations.count).to eq(0)
     end
   end
 
@@ -35,6 +36,16 @@ RSpec.describe 'WhatsApp evolution inbound control messages (CRM-22)' do # ruboc
   it 'keeps the text of a disappearing-chat message wrapped in ephemeralMessage' do
     expect { run_fixture('ephemeral_text') }.to change(Message, :count).by(1)
     expect(inbox.messages.last.content).to eq('mensagem temporária')
+  end
+
+  it 'keeps media without caption as a message with its attachment' do
+    expect { run_fixture('image_no_caption') }.to change(Message, :count).by(1)
+    expect(inbox.messages.last.attachments.count).to eq(1)
+  end
+
+  it 'keeps the attachment of a disappearing-chat image' do
+    expect { run_fixture('ephemeral_image') }.to change(Message, :count).by(1)
+    expect(inbox.messages.last.attachments.count).to eq(1)
   end
 
   it 'keeps the media source sitting next to ephemeralMessage when unwrapping' do

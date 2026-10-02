@@ -133,7 +133,6 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     Rails.logger.info "Evolution Go API: Is incoming: #{incoming?}"
 
     return false if raw_message_id.blank?
-    return false unless message_content.present? || @evolution_go_message.present?
 
     # Dedup: skip if message already exists in the database (prevents duplicates
     # when Sidekiq retries or webhooks arrive twice)

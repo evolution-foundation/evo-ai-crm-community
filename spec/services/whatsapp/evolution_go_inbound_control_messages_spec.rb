@@ -71,6 +71,11 @@ RSpec.describe 'WhatsApp evolution_go inbound control messages (CRM-22)' do # ru
     expect(inbox.messages.last.content).to eq('Olá, tudo bem?')
   end
 
+  it 'keeps media without caption as a message with its attachment' do
+    expect { run_fixture('image_no_caption') }.to change(Message, :count).by(1)
+    expect(inbox.messages.last.attachments.count).to eq(1)
+  end
+
   # The Evolution Go server unwraps ephemeralMessage (UnwrapRaw); the CRM relies on that.
   it 'keeps a text flagged IsEphemeral' do
     run_fixture('ephemeral_text')
