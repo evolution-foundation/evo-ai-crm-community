@@ -2,9 +2,8 @@
 
 require 'rails_helper'
 
-# Member ids are UUID strings, and so is the queue read back from Redis. Casting
-# the queue to integers never matches them, so the queue reset on every call and
-# the same agent got every conversation.
+# Member ids and the Redis queue are both UUID strings: validate_queue? must
+# compare them uncast, or every call resets the queue and nothing rotates.
 RSpec.describe AutoAssignment::InboxRoundRobinService do
   let(:inbox) { Inbox.create!(name: 'Round Robin Inbox', channel: Channel::Api.create!) }
   let(:agents) do
