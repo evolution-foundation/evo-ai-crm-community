@@ -23,6 +23,7 @@ module MacroSerializer
       name: macro.name,
       visibility: macro.visibility,
       actions: macro.actions,
+      files: macro.file_base_data,
       created_by_id: macro.created_by_id,
       updated_by_id: macro.updated_by_id,
       created_at: macro.created_at&.iso8601,

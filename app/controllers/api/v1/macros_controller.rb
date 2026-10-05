@@ -21,7 +21,7 @@ class Api::V1::MacrosController < Api::V1::BaseController
   before_action :check_destroy_permission!, only: [:destroy]
 
   def index
-    @macros = Macro.with_visibility(current_user, params)
+    @macros = Macro.with_visibility(current_user, params).with_attached_files
     
     apply_pagination
     
@@ -53,10 +53,13 @@ class Api::V1::MacrosController < Api::V1::BaseController
         status: :unprocessable_entity
       )
     end
+    return attachment_not_found unless attachments_usable?(@macro.actions)
 
-    @macro.save!
-    process_attachments
-    
+    ActiveRecord::Base.transaction do
+      @macro.save!
+      process_attachments
+    end
+
     success_response(
       data: MacroSerializer.serialize(@macro),
       message: 'Macro created successfully',
@@ -65,11 +68,14 @@ class Api::V1::MacrosController < Api::V1::BaseController
   end
 
   def update
+    actions_sent = permitted_params.key?(:actions)
+    return attachment_not_found if actions_sent && !attachments_usable?(permitted_params[:actions])
+
     ActiveRecord::Base.transaction do
       update_params = macros_with_user.except(:visibility)
       @macro.update!(update_params)
       @macro.set_visibility(current_user, permitted_params)
-      process_attachments
+      process_attachments if actions_sent
       @macro.save!
       
       success_response(
@@ -84,6 +90,8 @@ class Api::V1::MacrosController < Api::V1::BaseController
         details: @macro.errors.full_messages,
         status: :unprocessable_entity
       )
+      # Rescued inside the block, so without this the half-applied update commits.
+      raise ActiveRecord::Rollback
     end
   end
 
@@ -128,15 +136,39 @@ class Api::V1::MacrosController < Api::V1::BaseController
 
   private
 
+  # Keeps macro.files in step with the send_attachment actions: a replaced or
+  # removed file is detached, so execution never sends a stale one.
   def process_attachments
-    actions = @macro.actions.filter_map { |k, _v| k if k['action_name'] == 'send_attachment' }
-    return if actions.blank?
+    blob_ids = attachment_blob_ids(@macro.actions).compact_blank
+    @macro.files_attachments.where.not(blob_id: blob_ids).destroy_all
 
-    actions.each do |action|
-      blob_id = action['action_params']
-      blob = ActiveStorage::Blob.find_by(id: blob_id)
-      @macro.files.attach(blob)
+    attached_ids = @macro.files_attachments.pluck(:blob_id)
+    ActiveStorage::Blob.where(id: blob_ids - attached_ids).find_each { |blob| @macro.files.attach(blob) }
+  end
+
+  # Same two shapes Macros::ExecutionService#send_attachment reads. An action with
+  # no id yields a blank one, so it is refused instead of saved empty.
+  def attachment_blob_ids(actions)
+    Array(actions).flat_map do |action|
+      next [] unless action['action_name'] == 'send_attachment'
+
+      action_params = action['action_params']
+      ids = action_params.respond_to?(:key?) ? action_params['attachment_ids'] : action_params
+      ids = Array(ids).map { |id| id.to_s.downcase }
+      ids.presence || ['']
     end
+  end
+
+  # Usable means just uploaded (attached nowhere) or already this macro's: a bare
+  # uuid must not pull in a file attached to someone else's record.
+  def attachments_usable?(actions)
+    blob_ids = attachment_blob_ids(actions).uniq
+    return true if blob_ids.empty?
+    return false if blob_ids.any?(&:blank?)
+
+    usable = ActiveStorage::Blob.where(id: blob_ids).where.missing(:attachments).pluck(:id)
+    usable += @macro.files_attachments.where(blob_id: blob_ids).pluck(:blob_id) if @macro.persisted?
+    (blob_ids - usable).empty?
   end
 
   def permitted_params
@@ -199,6 +231,14 @@ class Api::V1::MacrosController < Api::V1::BaseController
       ApiErrorCodes::MACRO_NOT_FOUND,
       "Macro with id #{params[:id]} not found",
       status: :not_found
+    )
+  end
+
+  def attachment_not_found
+    error_response(
+      ApiErrorCodes::VALIDATION_ERROR,
+      'send_attachment: the attached file was not found, upload it again',
+      status: :unprocessable_entity
     )
   end
 
