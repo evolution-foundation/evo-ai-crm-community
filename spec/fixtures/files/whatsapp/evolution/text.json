@@ -1,0 +1,25 @@
+{
+  "_source": "derived:evolution-api@e273b904 whatsapp.baileys.service.ts:5156-5214 (messages.upsert)",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVTEXT0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "conversation": "Olá, tudo bem?",
+      "messageContextInfo": {
+        "deviceListMetadata": {
+          "senderTimestamp": "1790000000"
+        },
+        "deviceListMetadataVersion": 2,
+        "messageSecret": "c2VjcmV0"
+      }
+    },
+    "messageType": "conversation",
+    "messageTimestamp": 1790000000
+  }
+}

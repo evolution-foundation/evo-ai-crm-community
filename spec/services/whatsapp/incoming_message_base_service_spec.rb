@@ -198,4 +198,27 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
       service.send(:update_bsuid_fields, contact_inbox, 'abc123', nil)
     end
   end
+
+  # An edit also carries the original key, so only a revoke may mark it.
+  describe '#revoke_protocol?' do
+    [0, '0', 'REVOKE'].each do |type|
+      it "is true for type #{type.inspect}" do
+        expect(service.send(:revoke_protocol?, { type: type, key: { ID: 'ORIG' } })).to be(true)
+      end
+    end
+
+    it 'is true when the zero-valued type is omitted and a key is present' do
+      expect(service.send(:revoke_protocol?, { key: { id: 'ORIG' } })).to be(true)
+    end
+
+    it 'is false when neither type nor key is present' do
+      expect(service.send(:revoke_protocol?, {})).to be(false)
+    end
+
+    [14, 'MESSAGE_EDIT', 3].each do |type|
+      it "is false for type #{type.inspect}" do
+        expect(service.send(:revoke_protocol?, { type: type, key: { ID: 'ORIG' } })).to be(false)
+      end
+    end
+  end
 end

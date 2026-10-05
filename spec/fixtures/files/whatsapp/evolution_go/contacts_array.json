@@ -1,0 +1,37 @@
+{
+  "_source": "derived:evolution-go@706c9a4 whatsmeow.go (events.Message, Info PascalCase, Message camelCase, enums as int, UnwrapRaw applied)",
+  "event": "Message",
+  "instanceId": "inst-test",
+  "instanceToken": "token-test",
+  "data": {
+    "Info": {
+      "ID": "3EB0GOCONT0002",
+      "Chat": "5511900000001@s.whatsapp.net",
+      "Sender": "5511900000001@s.whatsapp.net",
+      "IsFromMe": false,
+      "IsGroup": false,
+      "PushName": "Contato Teste",
+      "Type": "media",
+      "MediaType": "contact_array",
+      "Timestamp": "2026-10-01T12:00:00Z"
+    },
+    "Message": {
+      "contactsArrayMessage": {
+        "displayName": "2 contatos",
+        "contacts": [
+          {
+            "displayName": "Carol Souza",
+            "vcard": "BEGIN:VCARD\nVERSION:3.0\nN:Souza;Carol;;;\nFN:Carol Souza\nTEL;type=CELL;waid=5511900000002:+55 11 90000-0002\nEND:VCARD"
+          },
+          {
+            "displayName": "Dave Lima",
+            "vcard": "BEGIN:VCARD\nVERSION:3.0\nFN:Dave Lima\nTEL;type=CELL;waid=5511900000003:+55 11 90000-0003\nEND:VCARD"
+          }
+        ]
+      }
+    },
+    "IsEphemeral": false,
+    "IsViewOnce": false,
+    "IsEdit": false
+  }
+}

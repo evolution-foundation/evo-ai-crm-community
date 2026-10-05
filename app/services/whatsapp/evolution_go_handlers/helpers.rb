@@ -127,33 +127,12 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     end
   end
 
-  def message_content
-    # Evolution Go: Extract content from Message object
-    message = @evolution_go_message
-    return nil unless message
-
-    # Text message
-    return message[:conversation] if message[:conversation].present?
-
-    # Extended text message
-    return message.dig(:extendedTextMessage, :text) if message[:extendedTextMessage].present?
-
-    # Other message types (media, etc.) - return nil for now
-    nil
-  end
-
-  def message_type
-    # Evolution Go: Use Type from Info
-    @evolution_go_info&.dig(:Type)&.downcase
-  end
-
   def message_processable?
     Rails.logger.info 'Evolution Go API: Checking if message is processable'
     Rails.logger.info "Evolution Go API: Message ID: #{raw_message_id}"
     Rails.logger.info "Evolution Go API: Is incoming: #{incoming?}"
 
     return false if raw_message_id.blank?
-    return false unless message_content.present? || @evolution_go_message.present?
 
     # Dedup: skip if message already exists in the database (prevents duplicates
     # when Sidekiq retries or webhooks arrive twice)

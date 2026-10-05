@@ -19,7 +19,7 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
     @message = nil
     @contact_inbox = nil
     @contact = nil
-    @raw_message = message_data
+    @raw_message = unwrap_ephemeral(message_data)
 
     Rails.logger.info "Evolution API: Processing message #{raw_message_id} (fromMe: #{!incoming?})"
 
@@ -29,6 +29,15 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
       # Handle outgoing messages with lock to avoid race conditions
       with_evolution_channel_lock_on_outgoing_message(inbox.channel.id) { handle_message }
     end
+  end
+
+  # Baileys wraps disappearing-chat messages in ephemeralMessage; classify the inner message.
+  def unwrap_ephemeral(data)
+    inner = data.dig(:message, :ephemeralMessage, :message)
+    return data unless inner.is_a?(Hash) && inner.present?
+
+    # base64/mediaUrl sit next to ephemeralMessage, not inside it.
+    data.merge(message: data[:message].except(:ephemeralMessage).merge(inner))
   end
 
   def handle_message
@@ -56,11 +65,15 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
     end
   end
 
-  # A revoke arrives as a protocolMessage; mark the original as revoked-by-contact
-  # (the upsert path otherwise just ignores protocol via ignore_message?).
+  # A protocolMessage never creates a message; only a revoke marks the original revoked-by-contact.
   def handle_revoke_protocol
     protocol = @raw_message.dig(:message, :protocolMessage)
     source_id = revoked_message_source_id(protocol)
+    unless revoke_protocol?(protocol)
+      Rails.logger.info "Evolution API: Ignoring protocol message (type: #{protocol[:type].inspect}, target id: #{source_id.inspect})"
+      return
+    end
+
     Rails.logger.info "Evolution API: Protocol message (revoked id: #{source_id.inspect}) — marking original revoked"
     mark_message_revoked_by_source_id(source_id)
   end

@@ -1,0 +1,27 @@
+{
+  "_source": "derived:evolution-api@e273b904 whatsapp.baileys.service.ts:5156-5214 (messages.upsert)",
+  "event": "messages.upsert",
+  "instance": "inst-test",
+  "data": {
+    "key": {
+      "remoteJid": "5511900000001@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVEPHM0001"
+    },
+    "pushName": "Contato Teste",
+    "message": {
+      "ephemeralMessage": {
+        "message": {
+          "extendedTextMessage": {
+            "text": "mensagem temporária",
+            "contextInfo": {
+              "expiration": 86400
+            }
+          }
+        }
+      }
+    },
+    "messageType": "ephemeralMessage",
+    "messageTimestamp": 1790000000
+  }
+}

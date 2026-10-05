@@ -125,6 +125,108 @@ RSpec.describe Whatsapp::EvolutionGoHandlers::MessagesUpsert do
     end
   end
 
+  # Control / content-less messages must not produce empty bubbles.
+  describe '#ignore_message?' do
+    {
+      'poll' => { pollCreationMessageV3: { name: 'Choose' } },
+      'context only' => { messageContextInfo: {} },
+      'reaction' => { reactionMessage: { text: '👍', key: { ID: 'abc' } } },
+      'reaction removal' => { reactionMessage: { text: '', key: { ID: 'abc' } } }
+    }.each do |label, msg|
+      it "skips #{label}" do
+        service.instance_variable_set(:@evolution_go_message, msg)
+        expect(service.send(:ignore_message?)).to be(true)
+      end
+    end
+
+    {
+      'location' => { locationMessage: { degreesLatitude: -23.5, degreesLongitude: -46.6 } },
+      'contacts' => { contactMessage: { displayName: 'Alice' } },
+      'text' => { conversation: 'hi' },
+      'media without caption' => { imageMessage: { mimetype: 'image/jpeg' } }
+    }.each do |label, msg|
+      it "does not skip #{label}" do
+        service.instance_variable_set(:@evolution_go_message, msg)
+        expect(service.send(:ignore_message?)).to be(false)
+      end
+    end
+
+    it 'does not skip location announced with Info.MediaType' do
+      service.instance_variable_set(:@evolution_go_info, { MediaType: 'location' })
+      service.instance_variable_set(:@evolution_go_message,
+                                    { locationMessage: { degreesLatitude: 1.0, degreesLongitude: 2.0 } })
+      expect(service.send(:ignore_message?)).to be(false)
+    end
+  end
+
+  describe '#message_content' do
+    it 'renders location as "Location: <lat>, <long>"' do
+      service.instance_variable_set(:@evolution_go_message,
+                                    { locationMessage: { degreesLatitude: -23.55, degreesLongitude: -46.63 } })
+      expect(service.send(:message_content)).to eq('Location: -23.55, -46.63')
+    end
+
+    it 'renders contactMessage displayName' do
+      service.instance_variable_set(:@evolution_go_message, { contactMessage: { displayName: 'Bob' } })
+      expect(service.send(:message_content)).to eq('Bob')
+    end
+
+    it 'falls back to vcard FN when displayName is missing' do
+      vcard = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Carol Souza\r\nEND:VCARD"
+      service.instance_variable_set(:@evolution_go_message, { contactMessage: { vcard: vcard } })
+      expect(service.send(:message_content)).to eq('Carol Souza')
+    end
+
+    it 'uses first entry of contactsArrayMessage.contacts' do
+      service.instance_variable_set(:@evolution_go_message,
+                                    { contactsArrayMessage: { contacts: [{ displayName: 'Dave' }, { displayName: 'Eve' }] } })
+      expect(service.send(:message_content)).to eq('Dave')
+    end
+
+    it 'falls back to "Contact" when no name is extractable' do
+      service.instance_variable_set(:@evolution_go_message, { contactMessage: { vcard: 'BEGIN:VCARD\nEND:VCARD' } })
+      expect(service.send(:message_content)).to eq('Contact')
+    end
+  end
+
+  describe '#handle_message' do
+    let(:info) { { ID: 'msg-1', IsFromMe: false, Chat: '5511@s.whatsapp.net' } }
+
+    before do
+      allow(service).to receive(:message_processable?).and_return(true)
+      allow(service).to receive(:set_contact)
+      service.define_singleton_method(:set_conversation) { nil } # lives on IncomingMessageBaseService
+      allow(service).to receive(:update_conversation_status_if_needed)
+      service.instance_variable_set(:@contact_inbox, double('contact_inbox'))
+    end
+
+    {
+      'reaction' => { reactionMessage: { text: '👍', key: { ID: 'x' } } },
+      'poll' => { pollCreationMessage: { name: 'p' } },
+      'context only' => { messageContextInfo: {} },
+      'button reply' => { buttonsResponseMessage: { selectedButtonID: 'b1' } }
+    }.each do |label, msg|
+      it "does not call create_message for #{label}" do
+        service.instance_variable_set(:@evolution_go_message, msg)
+        expect(service).not_to receive(:create_message)
+        service.send(:handle_message)
+      end
+    end
+
+    it 'reaches create_message for location' do
+      service.instance_variable_set(:@evolution_go_message,
+                                    { locationMessage: { degreesLatitude: 1.0, degreesLongitude: 2.0 } })
+      expect(service).to receive(:create_message).with(attach_media: false)
+      service.send(:handle_message)
+    end
+
+    it 'reaches create_message for contacts' do
+      service.instance_variable_set(:@evolution_go_message, { contactMessage: { displayName: 'Alice' } })
+      expect(service).to receive(:create_message).with(attach_media: false)
+      service.send(:handle_message)
+    end
+  end
+
   describe '#audio_voice_note?' do
     it 'returns false without raising when @evolution_go_info is nil' do
       service.instance_variable_set(:@evolution_go_info, nil)
