@@ -33,7 +33,7 @@ class Team < ApplicationRecord
   end
 
   # Adds multiple members to the team
-  # @param user_ids [Array<Integer>] Array of user IDs to add as members
+  # @param user_ids [Array<String>] Array of user UUIDs to add as members
   # @return [Array<User>] Array of newly added members
   def add_members(user_ids)
     team_members_to_create = user_ids.map { |user_id| { user_id: user_id } }
@@ -44,7 +44,7 @@ class Team < ApplicationRecord
   end
 
   # Removes multiple members from the team
-  # @param user_ids [Array<Integer>] Array of user IDs to remove
+  # @param user_ids [Array<String>] Array of user UUIDs to remove
   # @return [void]
   def remove_members(user_ids)
     team_members.where(user_id: user_ids).destroy_all

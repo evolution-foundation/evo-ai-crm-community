@@ -75,14 +75,14 @@ class Inbox < ApplicationRecord
   scope :order_by_name, -> { order('lower(name) ASC') }
 
   # Adds multiple members to the inbox
-  # @param user_ids [Array<Integer>] Array of user IDs to add as members
+  # @param user_ids [Array<String>] Array of user UUIDs to add as members
   # @return [void]
   def add_members(user_ids)
     inbox_members.create!(user_ids.map { |user_id| { user_id: user_id } })
   end
 
   # Removes multiple members from the inbox
-  # @param user_ids [Array<Integer>] Array of user IDs to remove
+  # @param user_ids [Array<String>] Array of user UUIDs to remove
   # @return [void]
   def remove_members(user_ids)
     inbox_members.where(user_id: user_ids).destroy_all
