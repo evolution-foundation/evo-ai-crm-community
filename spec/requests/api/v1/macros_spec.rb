@@ -400,6 +400,49 @@ RSpec.describe 'Api::V1::MacrosController', type: :request do
       expect(macro.reload.files).not_to be_attached
     end
 
+    # Postgres hands uuids back lowercase; a client echoing one uppercased must
+    # still match the file the macro already holds.
+    it 'matches an uppercased blob id on create and on re-save' do
+      blob = upload_blob
+
+      post '/api/v1/macros', params: attachment_macro_params(blob.id.upcase), headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+      expect(macro.files.map(&:blob_id)).to eq([blob.id])
+
+      put "/api/v1/macros/#{macro.id}", params: attachment_macro_params(blob.id.upcase), headers: headers, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'reads the blob ids from the hash shape of action_params' do
+      blob = upload_blob
+
+      post '/api/v1/macros',
+           params: {
+             name: 'Send price list',
+             visibility: 'global',
+             actions: [{ action_name: 'send_attachment', action_params: { attachment_ids: [blob.id] } }]
+           },
+           headers: headers,
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(Macro.find(response.parsed_body.dig('data', 'id')).files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'rolls the whole update back when a later step fails' do
+      macro = Macro.create!(name: 'Original', visibility: :global, actions: [])
+      allow_any_instance_of(Macro).to receive(:set_visibility).and_raise(StandardError, 'boom')
+
+      put "/api/v1/macros/#{macro.id}", params: { name: 'Renamed' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(macro.reload.name).to eq('Original')
+    end
+
     it 're-saving the same file does not attach it twice' do
       blob = upload_blob
       post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
