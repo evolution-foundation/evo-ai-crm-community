@@ -199,7 +199,7 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
     end
   end
 
-  # CRM-22: an edit also carries the original key, so only a revoke may mark it.
+  # An edit also carries the original key, so only a revoke may mark it.
   describe '#revoke_protocol?' do
     [0, '0', 'REVOKE'].each do |type|
       it "is true for type #{type.inspect}" do

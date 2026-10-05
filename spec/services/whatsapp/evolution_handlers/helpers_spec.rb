@@ -12,7 +12,6 @@ end
 
 return unless defined?(Rails)
 
-# CRM-22: a reaction carries the emoji as content, so only the type skip keeps it from becoming a bubble.
 RSpec.describe Whatsapp::EvolutionHandlers::Helpers do
   let(:host_class) do
     Class.new do
@@ -38,6 +37,16 @@ RSpec.describe Whatsapp::EvolutionHandlers::Helpers do
       it 'returns true (skip) so no bubble is materialised' do
         expect(helper.send(:message_type)).to eq('reaction')
         expect(helper.send(:ignore_message?)).to be(true)
+      end
+
+      it 'skips by type even when the emoji is extracted as content' do
+        emoji_host = Class.new(host_class) do
+          def message_content
+            '👍'
+          end
+        end
+
+        expect(emoji_host.new(raw_message).send(:ignore_message?)).to be(true)
       end
     end
 

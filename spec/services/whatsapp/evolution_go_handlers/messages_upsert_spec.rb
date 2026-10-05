@@ -125,7 +125,7 @@ RSpec.describe Whatsapp::EvolutionGoHandlers::MessagesUpsert do
     end
   end
 
-  # CRM-22: control / content-less messages must not produce empty bubbles.
+  # Control / content-less messages must not produce empty bubbles.
   describe '#ignore_message?' do
     {
       'poll' => { pollCreationMessageV3: { name: 'Choose' } },

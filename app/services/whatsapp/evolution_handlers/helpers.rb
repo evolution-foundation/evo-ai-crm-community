@@ -140,7 +140,8 @@ module Whatsapp::EvolutionHandlers::Helpers
   end
 
   def ignore_message?
-    # Reaction carries a non-blank emoji, so only the type skip keeps it from becoming a bubble (CRM-22).
+    # The blank guard already drops reactions (no content is extracted for them); the type
+    # skip keeps it that way if message_content ever learns to read reactionMessage.text.
     return true if message_type.in?(%w[protocol unsupported reaction])
 
     # Skip if no content available

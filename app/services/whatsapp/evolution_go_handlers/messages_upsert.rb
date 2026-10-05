@@ -35,7 +35,7 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     @evolution_go_message.is_a?(Hash) && @evolution_go_message[:protocolMessage].present?
   end
 
-  # A protocolMessage never creates a message (that produced an empty bubble).
+  # A protocolMessage never creates a message; only a revoke marks the original revoked-by-contact.
   def handle_revoke_protocol
     protocol = @evolution_go_message[:protocolMessage]
     source_id = revoked_message_source_id(protocol)

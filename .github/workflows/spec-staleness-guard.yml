@@ -282,9 +282,8 @@ on:
       - 'spec/listeners/reporting_event_listener_device_echo_spec.rb'
       - 'spec/services/dashboard/customer_dashboard_service_ai_vs_human_spec.rb'
       - 'spec/services/facebook/moderation/action_executor_service_reply_author_spec.rb'
-      # CRM-22: a WhatsApp control message (reaction, poll, edit, context-only) that slips
-      # past the type skip becomes an empty bubble, and an edit mistaken for a revoke marks
-      # the original as deleted by the contact. Both fail silently. No other lane runs them.
+      # A control message that slips past the skip becomes an empty bubble, and an edit read
+      # as a revoke marks the original deleted; both fail silently.
       - 'app/services/whatsapp/evolution_handlers/helpers.rb'
       - 'app/services/whatsapp/evolution_go_handlers/helpers.rb'
       - 'app/services/whatsapp/evolution_go_handlers/content_handlers.rb'

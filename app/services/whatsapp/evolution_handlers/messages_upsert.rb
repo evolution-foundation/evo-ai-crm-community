@@ -31,7 +31,7 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
     end
   end
 
-  # Baileys delivers disappearing-chat messages wrapped; unwrapped, the text was dropped as unsupported.
+  # Baileys wraps disappearing-chat messages in ephemeralMessage; classify the inner message.
   def unwrap_ephemeral(data)
     inner = data.dig(:message, :ephemeralMessage, :message)
     return data unless inner.is_a?(Hash) && inner.present?
@@ -65,8 +65,7 @@ module Whatsapp::EvolutionHandlers::MessagesUpsert
     end
   end
 
-  # A revoke arrives as a protocolMessage; mark the original as revoked-by-contact
-  # (the upsert path otherwise just ignores protocol via ignore_message?).
+  # A protocolMessage never creates a message; only a revoke marks the original revoked-by-contact.
   def handle_revoke_protocol
     protocol = @raw_message.dig(:message, :protocolMessage)
     source_id = revoked_message_source_id(protocol)

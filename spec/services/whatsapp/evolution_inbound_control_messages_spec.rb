@@ -2,9 +2,9 @@
 
 require 'rails_helper'
 
-# CRM-22: control / content-less inbound messages must never become an empty bubble.
+# Control / content-less inbound messages must never become an empty bubble.
 # Runs the real service against the DB, one fixture per payload shape.
-RSpec.describe 'WhatsApp evolution inbound control messages (CRM-22)' do # rubocop:disable RSpec/DescribeClass
+RSpec.describe 'WhatsApp evolution inbound control messages' do # rubocop:disable RSpec/DescribeClass
   let(:channel) do
     ch = Channel::Whatsapp.new(phone_number: "+55119#{rand(10_000_000..99_999_999)}", provider: 'evolution')
     ch.save!(validate: false)
