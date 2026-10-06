@@ -45,6 +45,8 @@
 #
 
 class ScheduledAction < ApplicationRecord
+  include Wisper::Publisher
+
   # Associations
   belongs_to :contact, optional: true
   belongs_to :conversation, optional: true
@@ -91,6 +93,10 @@ class ScheduledAction < ApplicationRecord
 
   validate :scheduled_for_cannot_be_in_past, on: :create
   validate :at_least_one_target_present
+
+  # On the model, not in the executor: the enterprise expiry marks overdue
+  # actions failed without going through ExecutorService.
+  after_update_commit :publish_outcome, if: :outcome_reached?
 
   # Scopes
   scope :for_deal, ->(deal_id) { where(deal_id: deal_id) }
@@ -217,6 +223,14 @@ class ScheduledAction < ApplicationRecord
   end
 
   private
+
+  def outcome_reached?
+    saved_change_to_status? && (completed? || failed?)
+  end
+
+  def publish_outcome
+    publish(:scheduled_action_outcome, data: { scheduled_action: self })
+  end
 
   def scheduled_for_cannot_be_in_past
     return unless scheduled_for.present? && scheduled_for < Time.current

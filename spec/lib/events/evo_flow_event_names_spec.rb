@@ -7,8 +7,9 @@ require 'rails_helper'
 # instead of only at deploy time.
 RSpec.describe 'EvoFlow::EVENT_NAMES' do
   # 22 (AC6 + EVO-1245 backfill + custom sentinel) + pipeline.stage_changed
-  # + purchase.approved (CRM-316). Mirrors evo-flow's event-names.enum.ts.
-  it 'is a frozen Array<String> of exactly the 24 canonical events' do
+  # + purchase.approved (CRM-316) + the two scheduled_action outcomes.
+  # Mirrors evo-flow's event-names.enum.ts.
+  it 'is a frozen Array<String> of exactly the 26 canonical events' do
     expect(EvoFlow::EVENT_NAMES).to be_frozen
     expect(EvoFlow::EVENT_NAMES).to all(be_a(String))
     expect(EvoFlow::EVENT_NAMES).to contain_exactly(
@@ -21,6 +22,7 @@ RSpec.describe 'EvoFlow::EVENT_NAMES' do
       'campaign.triggered', 'campaign.message.sent',
       'campaign.message.opened', 'campaign.message.clicked',
       'pipeline.stage_changed', 'purchase.approved',
+      'scheduled_action.executed', 'scheduled_action.failed',
       'custom'
     )
   end

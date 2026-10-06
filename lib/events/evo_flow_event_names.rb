@@ -11,6 +11,7 @@ module EvoFlow
     campaign.triggered campaign.message.sent campaign.message.opened campaign.message.clicked
     pipeline.stage_changed
     purchase.approved
+    scheduled_action.executed scheduled_action.failed
     custom
   ].freeze
 
