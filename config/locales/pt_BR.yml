@@ -89,6 +89,7 @@ pt_BR:
       even: deve ser par
       required: é obrigatório
       taken: já está em uso
+      invalid_hex_color: deve ser uma cor hexadecimal válida
     api:
       validation_failed: Falha na validação
     validations:

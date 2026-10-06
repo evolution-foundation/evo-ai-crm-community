@@ -195,7 +195,9 @@ class Api::BaseController < ApplicationController
       {
         field: field,
         messages: messages,
-        full_messages: errors.full_messages_for(field)
+        full_messages: errors.full_messages_for(field),
+        # Messages follow the installation locale; clients translate by code instead.
+        codes: errors.details[field].map { |detail| detail[:error].to_s }
       }
     end
   end

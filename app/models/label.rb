@@ -22,6 +22,13 @@ class Label < ApplicationRecord
             presence: { message: I18n.t('errors.validations.presence') },
             format: { with: UNICODE_CHARACTER_NUMBER_SPACE_HYPHEN_UNDERSCORE, allow_blank: true },
             uniqueness: true
+  # Checked only when the value changes, so a row saved before these rules
+  # stays editable in its other fields.
+  validates :title, length: { minimum: 2, allow_blank: true }, if: :will_save_change_to_title?
+  validates :color,
+            presence: true,
+            format: { with: HEX_COLOR_FORMAT, message: :invalid_hex_color, allow_blank: true },
+            if: -> { new_record? || will_save_change_to_color? }
 
   after_create_commit :dispatch_create_event
   after_update_commit :update_associated_models, :dispatch_update_event

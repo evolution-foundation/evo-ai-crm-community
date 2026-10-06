@@ -52,6 +52,9 @@ en:
     inbox_deletetion_response: Your inbox deletion request will be processed in some time.
 
   errors:
+    # Resolved by `message: :invalid_hex_color`; the other locales fall back to :en.
+    messages:
+      invalid_hex_color: must be a valid hex color
     api:
       validation_failed: Validation failed
     validations:

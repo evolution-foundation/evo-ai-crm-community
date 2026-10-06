@@ -34,7 +34,7 @@ class PipelineStage < ApplicationRecord
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :pipeline_id }
-  validates :color, format: { with: /\A#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\z/, message: :invalid_hex_color }
+  validates :color, format: { with: RegexHelper::HEX_COLOR_FORMAT, message: :invalid_hex_color }
 
   scope :ordered, -> { order(:position) }
 

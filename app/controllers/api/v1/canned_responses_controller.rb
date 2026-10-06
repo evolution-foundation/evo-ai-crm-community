@@ -49,7 +49,7 @@ class Api::V1::CannedResponsesController < Api::V1::BaseController # rubocop:dis
       error_response(
         ApiErrorCodes::VALIDATION_ERROR,
         'Validation failed',
-        details: @canned_response.errors.full_messages,
+        details: format_validation_errors(@canned_response.errors),
         status: :unprocessable_entity
       )
     end
@@ -70,7 +70,7 @@ class Api::V1::CannedResponsesController < Api::V1::BaseController # rubocop:dis
       error_response(
         ApiErrorCodes::VALIDATION_ERROR,
         'Validation failed',
-        details: @canned_response.errors.full_messages,
+        details: format_validation_errors(@canned_response.errors),
         status: :unprocessable_entity
       )
     end

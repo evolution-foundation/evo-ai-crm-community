@@ -479,6 +479,20 @@ on:
       - 'app/models/inbox_member.rb'
       - 'lib/redis/alfred.rb'
       - 'spec/services/auto_assignment/**'
+      # The settings modals rely on these rules being enforced by the API and on each
+      # 422 detail naming its field with a code; no other lane loads these models.
+      - 'app/models/label.rb'
+      - 'app/models/custom_attribute_definition.rb'
+      - 'app/models/canned_response.rb'
+      - 'lib/regex_helper.rb'
+      - 'app/controllers/api/v1/labels_controller.rb'
+      - 'app/controllers/api/v1/canned_responses_controller.rb'
+      - 'app/controllers/api/v1/custom_attribute_definitions_controller.rb'
+      - 'spec/models/label_validation_spec.rb'
+      - 'spec/models/custom_attribute_definition_validation_spec.rb'
+      - 'spec/requests/api/v1/labels_spec.rb'
+      - 'spec/requests/api/v1/canned_responses_validation_spec.rb'
+      - 'spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb'
 
 permissions:
   contents: read
@@ -689,4 +703,9 @@ jobs:
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
             spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
+            spec/models/label_validation_spec.rb \
+            spec/models/custom_attribute_definition_validation_spec.rb \
+            spec/requests/api/v1/labels_spec.rb \
+            spec/requests/api/v1/canned_responses_validation_spec.rb \
+            spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb \
             --format progress
