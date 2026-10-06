@@ -13,7 +13,7 @@ module ScheduledActions
       Rails.logger.info "  - scheduled? #{scheduled_action.scheduled?}"
       Rails.logger.info "  - scheduled_for: #{scheduled_action.scheduled_for}, Time.current: #{Time.current}"
 
-      return false unless scheduled_action.scheduled?
+      return false unless scheduled_action.scheduled? || scheduled_action.can_retry?
       return false if scheduled_action.scheduled_for > Time.current
 
       Rails.logger.info "ExecutorService.execute: Starting execution for action #{scheduled_action.id}"
@@ -356,29 +356,16 @@ module ScheduledActions
     def notify_success
       return unless scheduled_action.notify_user_id
 
-      ScheduledActions::NotificationService.notify_on_success(
-        scheduled_action,
-        scheduled_action.notify_user_id
-      )
+      ScheduledActions::NotificationService.notify_on_success(scheduled_action)
     end
 
     def notify_failure
       return unless scheduled_action.notify_user_id
 
-      retry_attempt = scheduled_action.retry_count > 0
-      notification_type = retry_attempt ? :retry : :failure
-
-      if retry_attempt
-        ScheduledActions::NotificationService.notify_on_retry(
-          scheduled_action,
-          scheduled_action.notify_user_id
-        )
-      else
-        ScheduledActions::NotificationService.notify_on_failure(
-          scheduled_action,
-          scheduled_action.notify_user_id
-        )
-      end
+      ScheduledActions::NotificationService.notify_on_failure(
+        scheduled_action,
+        scheduled_action.error_message
+      )
     end
 
     def log_execution(result, execution_time_ms, status)
