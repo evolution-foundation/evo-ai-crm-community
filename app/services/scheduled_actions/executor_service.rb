@@ -295,35 +295,46 @@ module ScheduledActions
     def execute_create_task
       return { success: false, error: 'Contact not found' } unless scheduled_action.contact
 
-      title = scheduled_action.payload['title']
+      payload = scheduled_action.payload
+      title = payload['task_title'].presence || payload['title']
       return { success: false, error: 'Task title not provided' } if title.blank?
 
-      description = scheduled_action.payload['description']
-      due_date = scheduled_action.payload['due_date']
-      assigned_to = scheduled_action.payload['assigned_to'] || scheduled_action.created_by_id
+      pipeline_item = task_pipeline_item
+      return { success: false, error: 'Contact has no open pipeline item to attach the task to' } unless pipeline_item
 
-      # Create task
-      task_data = {
-        contact_id: scheduled_action.contact_id,
+      task = pipeline_item.tasks.create!(
         title: title,
-        description: description,
-        due_date: due_date,
-        assigned_to: assigned_to,
-        created_by: scheduled_action.created_by_id,
-        source: 'scheduled_action',
-        scheduled_action_id: scheduled_action.id
-      }
+        description: payload['task_description'].presence || payload['description'],
+        due_date: payload['due_date'],
+        assigned_to_id: task_assignee_id(payload['assigned_to']),
+        created_by: scheduled_action.creator
+      )
 
-      Rails.logger.info "Task scheduled for creation: #{task_data.inspect}"
-
-      # TODO: When task system is implemented, uncomment below:
-      # task = Task.create!(task_data)
-      # return { success: true, data: { task_id: task.id, title: task.title } }
-
-      # For now, return success with task parameters that will be processed later
-      { success: true, data: task_data }
+      { success: true, data: { task_id: task.id, pipeline_item_id: pipeline_item.id, title: task.title } }
     rescue StandardError => e
       { success: false, error: e.message }
+    end
+
+    # The action targets a contact but a task lives on a pipeline card: prefer the
+    # card of the action's conversation, then the contact's most recently touched one.
+    def task_pipeline_item
+      open_items = PipelineItem.active.joins(:pipeline).where(pipelines: { is_active: true }).order(updated_at: :desc)
+
+      if scheduled_action.conversation_id.present?
+        item = open_items.find_by(conversation_id: scheduled_action.conversation_id)
+        return item if item
+      end
+
+      contact = scheduled_action.contact
+      open_items.where(contact_id: contact.id)
+                .or(open_items.where(conversation_id: contact.conversations.select(:id)))
+                .first
+    end
+
+    def task_assignee_id(assigned_to)
+      return nil if assigned_to.blank?
+
+      User.exists?(id: assigned_to) ? assigned_to : nil
     end
 
     def handle_failure(error)
