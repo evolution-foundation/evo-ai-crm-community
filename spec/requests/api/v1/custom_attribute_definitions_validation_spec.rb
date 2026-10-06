@@ -47,6 +47,13 @@ RSpec.describe 'Custom attribute definition validation errors', type: :request d
     expect(detail_for('regex_pattern')).to include('codes' => ['invalid'])
   end
 
+  it 'answers a reserved key with a code, not with the sentence' do
+    create_definition(attribute_key: 'email')
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(detail_for('attribute_key')).to include('codes' => ['key_conflict'], 'full_messages' => be_present)
+  end
+
   it 'names the attribute_key field when the key is already taken' do
     create_definition
     expect(response).to have_http_status(:created)

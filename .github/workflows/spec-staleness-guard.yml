@@ -493,6 +493,7 @@ on:
       - 'spec/requests/api/v1/labels_spec.rb'
       - 'spec/requests/api/v1/canned_responses_validation_spec.rb'
       - 'spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb'
+      - 'spec/controllers/api/base_controller_validation_codes_spec.rb'
 
 permissions:
   contents: read
@@ -708,4 +709,5 @@ jobs:
             spec/requests/api/v1/labels_spec.rb \
             spec/requests/api/v1/canned_responses_validation_spec.rb \
             spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb \
+            spec/controllers/api/base_controller_validation_codes_spec.rb \
             --format progress

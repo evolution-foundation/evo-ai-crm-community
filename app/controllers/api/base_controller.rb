@@ -197,7 +197,8 @@ class Api::BaseController < ApplicationController
         messages: messages,
         full_messages: errors.full_messages_for(field),
         # Messages follow the installation locale; clients translate by code instead.
-        codes: errors.details[field].map { |detail| detail[:error].to_s }
+        # Only symbol types are codes: an error added as a string is prose in that locale.
+        codes: errors.details[field].filter_map { |detail| detail[:error].to_s if detail[:error].is_a?(Symbol) }
       }
     end
   end

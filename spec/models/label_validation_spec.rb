@@ -14,7 +14,7 @@ RSpec.describe Label, type: :model do
     end
 
     it 'rejects a color that is not hex' do
-      ['red', '#12345', '#ggg', '1f93ff', ''].each do |color|
+      ['red', '#12345', '#ffff', '#ggg', '1f93ff', ''].each do |color|
         label = described_class.new(title: 'vip', color: color)
 
         expect(label).not_to be_valid, "expected #{color.inspect} to be rejected"
@@ -34,6 +34,16 @@ RSpec.describe Label, type: :model do
       label.valid?
 
       expect(label.errors[:color].join).not_to include('Translation missing')
+    end
+
+    # The :en fallback would hide a missing pt_BR entry behind an English sentence.
+    it 'has its own pt_BR message' do
+      I18n.with_locale(:pt_BR) do
+        label = described_class.new(title: 'vip', color: 'red')
+        label.valid?
+
+        expect(label.errors[:color]).to eq(['deve ser uma cor hexadecimal válida'])
+      end
     end
   end
 

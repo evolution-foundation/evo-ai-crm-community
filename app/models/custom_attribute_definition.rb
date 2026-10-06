@@ -99,7 +99,7 @@ class CustomAttributeDefinition < ApplicationRecord
                  end
     return unless model_keys && attribute_key.in?(STANDARD_ATTRIBUTES[model_keys])
 
-    errors.add(:attribute_key, I18n.t('errors.custom_attribute_definition.key_conflict'))
+    errors.add(:attribute_key, :key_conflict, message: I18n.t('errors.custom_attribute_definition.key_conflict'))
   end
 
   def list_must_have_values
