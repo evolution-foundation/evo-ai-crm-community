@@ -300,7 +300,7 @@ module ScheduledActions
       return { success: false, error: 'Task title not provided' } if title.blank?
 
       pipeline_item = task_pipeline_item
-      return { success: false, error: 'Contact has no open pipeline item to attach the task to' } unless pipeline_item
+      return { success: false, error: missing_task_card_error } unless pipeline_item
 
       task = pipeline_item.tasks.create!(
         title: title,
@@ -315,20 +315,40 @@ module ScheduledActions
       { success: false, error: e.message }
     end
 
-    # The action targets a contact but a task lives on a pipeline card: prefer the
-    # card of the action's conversation, then the contact's most recently touched one.
+    # The action targets a contact but a task lives on a pipeline card: the card the
+    # action names, else the action conversation's, else the most recently touched.
     def task_pipeline_item
-      open_items = PipelineItem.active.joins(:pipeline).where(pipelines: { is_active: true }).order(updated_at: :desc)
+      open_items = PipelineItem.active.where(pipeline_id: task_pipelines.select(:id)).order(updated_at: :desc)
+      contact = scheduled_action.contact
+      contact_items = open_items.where(contact_id: contact.id)
+                                .or(open_items.where(conversation_id: contact.conversations.select(:id)))
+
+      requested_id = scheduled_action.payload['pipeline_item_id']
+      return contact_items.find_by(id: requested_id) if requested_id.present?
 
       if scheduled_action.conversation_id.present?
         item = open_items.find_by(conversation_id: scheduled_action.conversation_id)
         return item if item
       end
 
-      contact = scheduled_action.contact
-      open_items.where(contact_id: contact.id)
-                .or(open_items.where(conversation_id: contact.conversations.select(:id)))
-                .first
+      contact_items.first
+    end
+
+    def missing_task_card_error
+      if scheduled_action.payload['pipeline_item_id'].present?
+        'Pipeline item of the action is closed or not accessible to its creator'
+      else
+        'Contact has no open pipeline item to attach the task to'
+      end
+    end
+
+    # Same reach as PipelinePolicy::Scope: a person gets the pipelines they can open,
+    # a service-created action (journeys) gets all of them.
+    def task_pipelines
+      creator = scheduled_action.creator
+      return Pipeline.active if creator.email == ScheduledAction::SERVICE_CREATOR_EMAIL
+
+      Pipeline.active.accessible_by(creator)
     end
 
     def task_assignee_id(assigned_to)

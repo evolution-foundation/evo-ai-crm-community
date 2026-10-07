@@ -53,6 +53,9 @@ class ScheduledAction < ApplicationRecord
   has_many :execution_logs, class_name: 'ScheduledActionExecutionLog', dependent: :destroy_async
   has_many :notifications, class_name: 'ScheduledActionNotification', dependent: :destroy_async
 
+  # Creator of the actions that arrive with the service token (journeys).
+  SERVICE_CREATOR_EMAIL = 'system@evoai.app'
+
   # Enums
   ACTION_TYPES = %w[
     send_message

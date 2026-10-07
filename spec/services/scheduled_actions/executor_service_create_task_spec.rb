@@ -107,6 +107,48 @@ RSpec.describe ScheduledActions::ExecutorService, '#create_task' do
     expect(PipelineTask.count).to eq(0)
   end
 
+  it 'skips a private pipeline the action creator cannot open' do
+    owner = User.create!(email: "owner-#{SecureRandom.hex(4)}@example.com", name: 'Owner')
+    contact_card(Pipeline.create!(name: 'Private', pipeline_type: 'sales', created_by: owner))
+
+    expect(run_task_action).to eq(success: false, error: 'Contact has no open pipeline item to attach the task to')
+    expect(PipelineTask.count).to eq(0)
+  end
+
+  it 'reaches any pipeline when the action came in with the service token' do
+    owner = User.create!(email: "owner-#{SecureRandom.hex(4)}@example.com", name: 'Owner')
+    card = contact_card(Pipeline.create!(name: 'Private', pipeline_type: 'sales', created_by: owner))
+    service_user = User.create!(email: ScheduledAction::SERVICE_CREATOR_EMAIL, name: 'System')
+    scheduled_action.update!(created_by: service_user.id)
+
+    run_task_action
+
+    expect(card.tasks.count).to eq(1)
+  end
+
+  it 'uses the card the action names over a more recent one' do
+    named = contact_card
+    named.update_column(:updated_at, 2.days.ago)
+    contact_card(Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user))
+    payload['pipeline_item_id'] = named.id
+
+    run_task_action
+
+    expect(named.tasks.count).to eq(1)
+  end
+
+  it 'fails instead of falling back when the named card is closed' do
+    named = contact_card
+    contact_card(Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user))
+    named.update!(completed_at: Time.current)
+    payload['pipeline_item_id'] = named.id
+
+    expect(run_task_action).to eq(
+      success: false, error: 'Pipeline item of the action is closed or not accessible to its creator'
+    )
+    expect(PipelineTask.count).to eq(0)
+  end
+
   it 'fails without creating anything when the contact has no card' do
     result = run_task_action
 
