@@ -94,8 +94,8 @@ class ScheduledAction < ApplicationRecord
   validate :scheduled_for_cannot_be_in_past, on: :create
   validate :at_least_one_target_present
 
-  # On the model, not in the executor: the enterprise expiry marks overdue
-  # actions failed without going through ExecutorService.
+  # On the status transition, not in mark_as_failed!: an expiry can set
+  # `failed` with a direct update.
   after_update_commit :publish_outcome, if: :outcome_reached?
 
   # Scopes

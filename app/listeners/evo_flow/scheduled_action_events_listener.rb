@@ -4,9 +4,7 @@ module EvoFlow
   # Subscribes to Wisper :scheduled_action_outcome (ScheduledAction, when its
   # status becomes completed or failed) and forwards it to evo-flow, so the
   # outcome shows on the contact's events timeline.
-  #
-  # `evo_flow_enabled?` is duplicated across the EvoFlow listeners by design
-  # (tech-spec §Technical Decisions #2: no shared base class).
+  # `evo_flow_enabled?` is duplicated across the EvoFlow listeners on purpose.
   class ScheduledActionEventsListener
     TRACK_PATH = '/events/track'
     EXECUTED_EVENT_NAME = 'scheduled_action.executed'

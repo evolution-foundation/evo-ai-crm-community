@@ -57,6 +57,12 @@ RSpec.describe EvoFlow::ScheduledActionEventsListener do
     expect(sent_payload['properties']).not_to have_key('executed_at')
   end
 
+  it 'reports a final failure as not retrying' do
+    listener.scheduled_action_outcome(data: { scheduled_action: failed_action(retry_count: 3, can_retry?: false) })
+
+    expect(sent_payload['properties']).to include('retry_count' => 3, 'will_retry' => false)
+  end
+
   it 'truncates a long failure reason' do
     listener.scheduled_action_outcome(data: { scheduled_action: failed_action(error_message: 'x' * 2000) })
 

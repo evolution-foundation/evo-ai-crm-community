@@ -45,10 +45,16 @@ RSpec.describe ScheduledAction, type: :model do
       expect(listener.events.size).to eq(1)
     end
 
-    # The enterprise expiry fails an overdue action with a plain update!,
-    # without going through the executor.
     it 'broadcasts on a status change made outside the state machine methods' do
       action.update!(status: 'failed', error_message: 'Expired', retry_count: action.max_retries)
+
+      expect(listener.events.size).to eq(1)
+    end
+
+    it 'does not broadcast again when an action that already failed is edited' do
+      action.mark_as_executing!
+      action.mark_as_failed!('Webhook failed with status 500')
+      action.update!(max_retries: 5)
 
       expect(listener.events.size).to eq(1)
     end

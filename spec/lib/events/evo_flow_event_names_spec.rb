@@ -6,8 +6,6 @@ require 'rails_helper'
 # future refactor breaks that wiring (or production eager_load), it fails here
 # instead of only at deploy time.
 RSpec.describe 'EvoFlow::EVENT_NAMES' do
-  # 22 (AC6 + EVO-1245 backfill + custom sentinel) + pipeline.stage_changed
-  # + purchase.approved (CRM-316) + the two scheduled_action outcomes.
   # Mirrors evo-flow's event-names.enum.ts.
   it 'is a frozen Array<String> of exactly the 26 canonical events' do
     expect(EvoFlow::EVENT_NAMES).to be_frozen
