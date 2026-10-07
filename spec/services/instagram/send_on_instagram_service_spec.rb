@@ -92,18 +92,29 @@ RSpec.describe Instagram::SendOnInstagramService do
       end
     end
 
-    # A 502 from the ingress in front of the Hub comes with no body at all, and an
-    # empty HTTParty::Response answers true to nil?.
+    # Bodies Meta never writes: none at all (an empty HTTParty::Response answers true
+    # to nil?) or the ingress's HTML error page.
     [502, 401, 200].each do |status|
       it "fails the message when the proxy answers #{status} with an empty body" do
         stub_request(:post, "#{hub_url}/meta/17841400000000001/messages").to_return(status: status, body: '')
 
         reply!
 
-        expect(Messages::StatusUpdateService).to have_received(:new).with(message, 'failed', "#{status} - empty response")
+        expect(Messages::StatusUpdateService).to have_received(:new).with(message, 'failed', "#{status} - unexpected response")
         expect(message).not_to have_received(:update!)
         expect(EvolutionExceptionTracker).not_to have_received(:new)
       end
+    end
+
+    it 'fails the message when the ingress answers with its HTML error page' do
+      stub_request(:post, "#{hub_url}/meta/17841400000000001/messages")
+        .to_return(status: 502, body: '<html><head><title>502 Bad Gateway</title></head></html>',
+                   headers: { 'Content-Type' => 'text/html' })
+
+      reply!
+
+      expect(Messages::StatusUpdateService).to have_received(:new).with(message, 'failed', '502 - unexpected response')
+      expect(EvolutionExceptionTracker).not_to have_received(:new)
     end
 
     context 'with an attachment' do
