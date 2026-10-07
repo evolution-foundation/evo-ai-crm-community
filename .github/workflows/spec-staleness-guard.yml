@@ -480,7 +480,7 @@ on:
       - 'lib/redis/alfred.rb'
       - 'spec/services/auto_assignment/**'
       # With the Hub on, the Instagram reply only authenticates through the Bearer
-      # header; a token left in the query or the wrong token answers 401 in silence.
+      # header; a token left in the query or the wrong token keeps it from the customer.
       - 'app/services/instagram/send_on_instagram_service.rb'
       - 'app/services/instagram/base_send_service.rb'
       - 'spec/services/instagram/send_on_instagram_service_spec.rb'
