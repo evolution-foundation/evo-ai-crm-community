@@ -479,6 +479,11 @@ on:
       - 'app/models/inbox_member.rb'
       - 'lib/redis/alfred.rb'
       - 'spec/services/auto_assignment/**'
+      # A scheduled task lands on a card the executor picks, gated by what the
+      # action's creator can open; no other lane runs the executor's specs.
+      - 'app/models/scheduled_action.rb'
+      - 'spec/services/scheduled_actions/executor_service_create_task_spec.rb'
+      - 'spec/services/scheduled_actions/executor_service_spec.rb'
 
 permissions:
   contents: read
@@ -689,4 +694,6 @@ jobs:
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
             spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
+            spec/services/scheduled_actions/executor_service_create_task_spec.rb \
+            spec/services/scheduled_actions/executor_service_spec.rb \
             --format progress
