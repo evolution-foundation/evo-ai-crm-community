@@ -54,6 +54,13 @@ class Instagram::BaseSendService < Base::SendOnChannelService
   end
 
   def process_response(response, message_content)
+    # Meta always answers with a body; an empty one is a proxy or ingress failure.
+    if response.body.blank?
+      Rails.logger.error("Instagram response: #{response.code} with an empty body : #{message_content}")
+      Messages::StatusUpdateService.new(message, 'failed', "#{response.code} - empty response").perform
+      return
+    end
+
     parsed_response = response.parsed_response
     if response.success? && parsed_response['error'].blank?
       message.update!(source_id: parsed_response['message_id'])

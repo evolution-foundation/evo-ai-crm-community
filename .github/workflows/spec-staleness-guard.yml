@@ -479,6 +479,11 @@ on:
       - 'app/models/inbox_member.rb'
       - 'lib/redis/alfred.rb'
       - 'spec/services/auto_assignment/**'
+      # With the Hub on, the Instagram reply only authenticates through the Bearer
+      # header; a token left in the query or the wrong token answers 401 in silence.
+      - 'app/services/instagram/send_on_instagram_service.rb'
+      - 'app/services/instagram/base_send_service.rb'
+      - 'spec/services/instagram/send_on_instagram_service_spec.rb'
 
 permissions:
   contents: read
@@ -689,4 +694,5 @@ jobs:
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
             spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
+            spec/services/instagram/send_on_instagram_service_spec.rb \
             --format progress
