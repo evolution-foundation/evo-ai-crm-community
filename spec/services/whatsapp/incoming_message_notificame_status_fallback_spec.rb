@@ -29,4 +29,15 @@ RSpec.describe Whatsapp::IncomingMessageNotificameService, '#process_status_upda
 
     described_class.new(inbox: inbox, params: params).perform
   end
+
+  # Outgoing messages can share a created_at (provider timestamps have second precision), so the
+  # fallback must pick deterministically: the one with the higher id.
+  it 'breaks a created_at tie deterministically' do
+    tied_at = 1.minute.ago
+    winner = [add_outgoing(tied_at), add_outgoing(tied_at)].max_by(&:id)
+
+    expect(Messages::StatusUpdateService).to receive(:new).with(winner, 'delivered', nil).and_return(double(perform: true))
+
+    described_class.new(inbox: inbox, params: params).perform
+  end
 end

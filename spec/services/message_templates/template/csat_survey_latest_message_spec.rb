@@ -24,6 +24,19 @@ RSpec.describe MessageTemplates::Template::CsatSurvey, '#evaluate_regex_trigger'
     expect(described_class.new(conversation: conversation).send(:evaluate_regex_trigger, trigger)).to be false
   end
 
+  # Messages can share a created_at (provider timestamps have second precision), so the pick must
+  # be deterministic: the one with the higher id wins, whatever the database returns first.
+  it 'breaks a created_at tie deterministically' do
+    tied_at = 1.minute.ago
+    first = add_message('Hello world', tied_at)
+    second = add_message('Goodbye world', tied_at)
+    winner = [first, second].max_by(&:id)
+
+    result = described_class.new(conversation: conversation).send(:evaluate_regex_trigger, trigger)
+
+    expect(result).to eq(winner.content.start_with?('Hello'))
+  end
+
   it 'matches when the latest message matches' do
     add_message('Goodbye world', 1.day.ago)
     add_message('Hello world', 1.minute.ago)

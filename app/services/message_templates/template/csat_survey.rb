@@ -135,7 +135,7 @@ class MessageTemplates::Template::CsatSurvey
 
     case field
     when 'message_content'
-      last_message = conversation.messages.reorder(created_at: :desc).first
+      last_message = conversation.messages.reorder(created_at: :desc, id: :desc).first
       return false unless last_message
 
       content = last_message.content.to_s

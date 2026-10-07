@@ -65,7 +65,7 @@ class Whatsapp::IncomingMessageNotificameService
     end
     unless message
       Rails.logger.info("Notificame status webhook message not found: #{params[:messageId]}")
-      message = inbox.messages.outgoing.reorder(created_at: :desc).first
+      message = inbox.messages.outgoing.reorder(created_at: :desc, id: :desc).first
       unless message
         Rails.logger.info('No outgoing messages available for status update fallback')
         return
