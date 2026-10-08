@@ -9,6 +9,7 @@ RSpec.describe ScheduledActions::ExecutorService do
   let(:webhook_url) { 'https://hooks.example.com/scheduled' }
   let(:creator) { User.create!(email: "creator-#{SecureRandom.hex(4)}@example.com", name: 'Creator') }
   let(:contact) { Contact.create!(name: 'Jane Doe', email: "jane-#{SecureRandom.hex(4)}@example.com") }
+  let(:recurrence_type) { nil }
   let!(:action) do
     ScheduledAction.create!(
       contact: contact,
@@ -16,6 +17,7 @@ RSpec.describe ScheduledActions::ExecutorService do
       notifier: creator,
       action_type: 'execute_webhook',
       scheduled_for: 1.minute.from_now,
+      recurrence_type: recurrence_type,
       payload: { 'webhook_url' => webhook_url, 'data' => { 'ok' => true } }
     )
   end
@@ -85,6 +87,24 @@ RSpec.describe ScheduledActions::ExecutorService do
     before { stub_request(:post, webhook_url).to_return(status: 200) }
 
     it 'completes once and notifies the success' do
+      expect { run_due_actions }.not_to have_enqueued_job(ScheduledActionsProcessorJob)
+
+      expect(action).to have_attributes(status: 'completed', retry_count: 0)
+      expect(a_request(:post, webhook_url)).to have_been_made.once
+      expect(notification_types).to eq(['success'])
+    end
+  end
+
+  context 'when a step after completion raises' do
+    let(:recurrence_type) { 'daily' }
+
+    before do
+      stub_request(:post, webhook_url).to_return(status: 200)
+      # A daily action two days late books its next run in the past, which create! rejects.
+      travel 2.days
+    end
+
+    it 'keeps the action completed and does not run it again' do
       expect { run_due_actions }.not_to have_enqueued_job(ScheduledActionsProcessorJob)
 
       expect(action).to have_attributes(status: 'completed', retry_count: 0)

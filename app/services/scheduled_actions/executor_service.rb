@@ -27,8 +27,8 @@ module ScheduledActions
         if result[:success]
           log_execution(result, execution_time_ms, 'completed')
           scheduled_action.mark_as_completed!
-          create_next_occurrence_if_recurring
-          notify_success
+          after_completion { create_next_occurrence_if_recurring }
+          after_completion { notify_success }
           true
         else
           log_execution(result, execution_time_ms, 'failed')
@@ -378,6 +378,14 @@ module ScheduledActions
       else
         30.minutes
       end
+    end
+
+    # The action already ran: an error here is logged, never handed to handle_failure,
+    # whose retry would run the action again.
+    def after_completion
+      yield
+    rescue StandardError => e
+      Rails.logger.error "ExecutorService: post-completion step failed for action #{scheduled_action.id}: #{e.message}"
     end
 
     def create_next_occurrence_if_recurring
