@@ -40,7 +40,7 @@ class Api::V1::CustomAttributeDefinitionsController < Api::V1::BaseController
       error_response(
         ApiErrorCodes::VALIDATION_ERROR,
         'Validation failed',
-        details: @custom_attribute_definition.errors.full_messages,
+        details: format_validation_errors(@custom_attribute_definition.errors),
         status: :unprocessable_entity
       )
     end
@@ -56,7 +56,7 @@ class Api::V1::CustomAttributeDefinitionsController < Api::V1::BaseController
       error_response(
         ApiErrorCodes::VALIDATION_ERROR,
         'Validation failed',
-        details: @custom_attribute_definition.errors.full_messages,
+        details: format_validation_errors(@custom_attribute_definition.errors),
         status: :unprocessable_entity
       )
     end

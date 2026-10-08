@@ -139,9 +139,43 @@ RSpec.describe 'POST /api/v1/labels', type: :request do
       expect(json_response['error']['details'].first).to include(
         'field' => 'title',
         'messages' => be_an(Array),
-        'full_messages' => be_an(Array)
+        'full_messages' => be_an(Array),
+        'codes' => ['taken']
       )
       expect(json_response['meta']).to include('timestamp', 'path', 'method')
+    end
+
+    def detail_codes(field)
+      json_response.dig('error', 'details').find { |detail| detail['field'] == field }&.fetch('codes')
+    end
+
+    it 'rejects a one-character title, counted after the spaces are stripped' do
+      post '/api/v1/labels', params: { label: { title: ' a ', color: '#1f93ff' } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(detail_codes('title')).to eq(['too_short'])
+      expect(Label.exists?(title: 'a')).to be(false)
+    end
+
+    it 'rejects a color that is not hex' do
+      post '/api/v1/labels', params: { label: { title: 'vip', color: 'red' } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(detail_codes('color')).to eq(['invalid'])
+    end
+
+    it 'rejects a null color with a validation error instead of a database error' do
+      post '/api/v1/labels', params: { label: { title: 'vip', color: nil } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(detail_codes('color')).to eq(['blank'])
+    end
+
+    it 'accepts a three-digit hex color' do
+      post '/api/v1/labels', params: { label: { title: 'vip', color: '#abc' } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(Label.find_by(title: 'vip').color).to eq('#abc')
     end
 
     it 'rejects empty title' do

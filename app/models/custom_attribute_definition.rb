@@ -42,6 +42,11 @@ class CustomAttributeDefinition < ApplicationRecord
   validates :attribute_display_type, presence: true
   validates :attribute_model, presence: true
   validate :attribute_must_not_conflict, on: :create
+  # Checked only when the inputs change, so a row saved before these rules stays
+  # editable in its other fields.
+  validate :list_must_have_values,
+           if: -> { list? && (new_record? || will_save_change_to_attribute_display_type? || will_save_change_to_attribute_values?) }
+  validate :regex_pattern_must_compile, if: -> { regex_pattern.present? && will_save_change_to_regex_pattern? }
 
   enum :attribute_model, {
     conversation_attribute: 0,
@@ -94,7 +99,22 @@ class CustomAttributeDefinition < ApplicationRecord
                  end
     return unless model_keys && attribute_key.in?(STANDARD_ATTRIBUTES[model_keys])
 
-    errors.add(:attribute_key, I18n.t('errors.custom_attribute_definition.key_conflict'))
+    errors.add(:attribute_key, :key_conflict, message: I18n.t('errors.custom_attribute_definition.key_conflict'))
+  end
+
+  def list_must_have_values
+    values = attribute_values.is_a?(Array) ? attribute_values : []
+    return if values.any? { |value| value.to_s.strip.present? }
+
+    errors.add(:attribute_values, :blank)
+  end
+
+  # The pre-chat form compiles this with Regexp.new and only logs a failure, so a
+  # pattern that does not compile would leave the field unvalidated in silence.
+  def regex_pattern_must_compile
+    Regexp.new(regex_pattern)
+  rescue RegexpError
+    errors.add(:regex_pattern, :invalid)
   end
 
   def dispatch_create_event
