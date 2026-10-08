@@ -123,7 +123,7 @@ on:
       # from this trigger, so a controller-only change ran without it.
       - 'app/controllers/api/v1/macros_controller.rb'
       # The edit form names a macro's file from `files` (Macro#file_base_data); dropping it from the
-      # serializer brings back the bare id with every spec in the other lanes green.
+      # serializer shows every saved file as missing, with every spec in the other lanes green.
       - 'app/serializers/macro_serializer.rb'
       - 'app/models/macro.rb'
       # The webhook body and the realtime payload are the same hash, told apart only
