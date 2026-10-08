@@ -398,6 +398,12 @@ on:
       - 'lib/events/evo_flow_event_names.rb'
       - 'spec/listeners/evo_flow/purchase_events_listener_spec.rb'
       - 'spec/lib/events/evo_flow_event_names_spec.rb'
+      # The scheduled-action outcome reaches evo-flow through a model callback and
+      # a listener that no other lane runs; a drift drops the event or repeats it.
+      - 'app/models/scheduled_action.rb'
+      - 'app/listeners/evo_flow/scheduled_action_events_listener.rb'
+      - 'spec/models/scheduled_action_spec.rb'
+      - 'spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb'
       # The advisory lock in ensure_display_id is what keeps two simultaneous
       # creations off the same display_id, and only a real-concurrency spec sees it.
       - 'spec/models/conversation_display_id_concurrency_spec.rb'
@@ -465,6 +471,9 @@ on:
       - 'spec/services/public/leads/creation_service_spec.rb'
       - 'spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb'
       - 'spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb'
+      # A recurring action books its next run from its own columns; a stale
+      # attribute there fails the action after it already ran.
+      - 'spec/models/scheduled_action_next_occurrence_spec.rb'
       # The contact's conversation list renders through the shared serializer and
       # the shared list lookups, so its own spec is the only lane that pins the
       # route's envelope, its permission gate and its flat query count.
@@ -494,6 +503,18 @@ on:
       - 'spec/requests/api/v1/canned_responses_validation_spec.rb'
       - 'spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb'
       - 'spec/controllers/api/base_controller_validation_codes_spec.rb'
+      # With the Hub on, the Instagram reply only authenticates through the Bearer
+      # header; a token left in the query or the wrong token keeps it from the customer.
+      - 'app/services/instagram/send_on_instagram_service.rb'
+      - 'app/services/instagram/messenger/send_on_instagram_service.rb'
+      - 'app/services/instagram/base_send_service.rb'
+      - 'spec/services/instagram/send_on_instagram_service_spec.rb'
+      - 'spec/services/instagram/messenger/send_on_instagram_service_spec.rb'
+      # A scheduled task lands on a card the executor picks, gated by what the
+      # action's creator can open; no other lane runs the executor's specs.
+      - 'app/models/scheduled_action.rb'
+      - 'spec/services/scheduled_actions/executor_service_create_task_spec.rb'
+      - 'spec/services/scheduled_actions/executor_service_spec.rb'
 
 permissions:
   contents: read
@@ -569,12 +590,15 @@ jobs:
             spec/services/data_import/contact_manager_phone_lookup_spec.rb \
             spec/services/data_import/conversation_manager_phone_lookup_spec.rb \
             spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb \
+            spec/models/scheduled_action_next_occurrence_spec.rb \
             spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb \
             spec/services/public/leads/creation_service_spec.rb \
             spec/requests/api/v1/webhooks/purchase_platforms_spec.rb \
             spec/requests/api/v1/purchase_webhooks_spec.rb \
             spec/listeners/evo_flow/purchase_events_listener_spec.rb \
             spec/lib/events/evo_flow_event_names_spec.rb \
+            spec/models/scheduled_action_spec.rb \
+            spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb \
             spec/listeners/automation_rule_listener_contact_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_contact_card_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb \
@@ -710,4 +734,8 @@ jobs:
             spec/requests/api/v1/canned_responses_validation_spec.rb \
             spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb \
             spec/controllers/api/base_controller_validation_codes_spec.rb \
+            spec/services/instagram/send_on_instagram_service_spec.rb \
+            spec/services/instagram/messenger/send_on_instagram_service_spec.rb \
+            spec/services/scheduled_actions/executor_service_create_task_spec.rb \
+            spec/services/scheduled_actions/executor_service_spec.rb \
             --format progress

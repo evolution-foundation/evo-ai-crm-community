@@ -8,18 +8,15 @@ class Instagram::Messenger::SendOnInstagramService < Instagram::BaseSendService
   # Deliver a message with the given payload.
   # @see https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message
   def send_message(message_content)
+    post_to_meta("#{MetaBaseUrl.for(:instagram_messenger)}/me/messages", message_content) { direct_query }
+  end
+
+  def direct_query
     access_token = channel.page_access_token
     app_secret_proof = calculate_app_secret_proof(GlobalConfigService.load('FB_APP_SECRET', ''), access_token)
     query = { access_token: access_token }
     query[:appsecret_proof] = app_secret_proof if app_secret_proof
-
-    response = HTTParty.post(
-      "#{MetaBaseUrl.for(:instagram_messenger)}/me/messages",
-      body: message_content,
-      query: query
-    )
-
-    process_response(response, message_content)
+    query
   end
 
   def calculate_app_secret_proof(app_secret, access_token)
