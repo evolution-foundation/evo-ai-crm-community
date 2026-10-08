@@ -489,8 +489,7 @@ on:
       - 'lib/redis/alfred.rb'
       - 'spec/services/auto_assignment/**'
       # The settings modals rely on these rules being enforced by the API and on each
-      # 422 detail naming its field with a code; no other lane loads these models.
-      - 'app/models/label.rb'
+      # 422 detail naming its field with a code.
       - 'app/models/custom_attribute_definition.rb'
       - 'app/models/canned_response.rb'
       - 'lib/regex_helper.rb'
