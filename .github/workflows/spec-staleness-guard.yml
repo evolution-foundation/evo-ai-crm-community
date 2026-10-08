@@ -310,6 +310,11 @@ on:
       - 'spec/controllers/api/v1/integrations/evolution_hub_controller_spec.rb'
       - 'spec/lib/evolution_hub/client_public_connect_spec.rb'
       - 'app/services/evolution_hub/**'
+      # The Hub creates IG/FB channels with a placeholder platform id that channel_connected
+      # must replace, or every inbound event misses the channel. The builder mints it and the
+      # repair task acts on it; both are pinned by spec/services/evolution_hub/.
+      - 'lib/evolution_hub/inbox_builder.rb'
+      - 'lib/tasks/evolution_hub.rake'
       - 'app/listeners/concerns/hub_channel_connection_events.rb'
       - 'lib/meta_base_url.rb'
       - 'spec/services/evolution_hub/**'
