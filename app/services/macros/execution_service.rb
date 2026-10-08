@@ -162,11 +162,9 @@ class Macros::ExecutionService < ActionService
       inbox_id = nil
     end
 
-    return unless @macro.files.attached?
-
-    blobs = ActiveStorage::Blob.where(id: blob_ids)
-
-    return if blobs.blank?
+    # Only the macro's own files: an id in action_params alone must not reach any blob.
+    blobs = @macro.files_blobs.where(id: Array(blob_ids).compact_blank)
+    raise_invalid_param('send_attachment', blob_ids, 'is not a file attached to this macro') if blobs.empty?
 
     # Build the message params
     params = { content: nil, private: false, attachments: blobs }

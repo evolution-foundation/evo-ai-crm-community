@@ -284,4 +284,190 @@ RSpec.describe 'Api::V1::MacrosController', type: :request do
       expect(response.parsed_body.dig('error', 'code')).to eq('CONVERSATION_NOT_FOUND')
     end
   end
+
+  describe 'send_attachment files' do
+    def upload_blob(filename = 'price-list.pdf')
+      ActiveStorage::Blob.create_and_upload!(io: StringIO.new('%PDF-1.4'), filename: filename, content_type: 'application/pdf')
+    end
+
+    def attachment_macro_params(blob_id)
+      {
+        name: 'Send price list',
+        visibility: 'global',
+        actions: [{ action_name: 'send_attachment', action_params: [blob_id] }]
+      }
+    end
+
+    it 'attaches the uploaded blob and returns it by name' do
+      blob = upload_blob
+
+      post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+      expect(macro.files.map(&:blob_id)).to eq([blob.id])
+
+      get "/api/v1/macros/#{macro.id}", headers: headers, as: :json
+
+      file = response.parsed_body.dig('data', 'files').sole
+      expect(file).to include('blob_id' => blob.id, 'filename' => 'price-list.pdf')
+    end
+
+    it 'answers 422 and saves nothing when the blob does not exist' do
+      expect do
+        post '/api/v1/macros', params: attachment_macro_params(SecureRandom.uuid), headers: headers, as: :json
+      end.not_to change(Macro, :count)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body.dig('error', 'message')).to include('send_attachment')
+    end
+
+    # The id the old form saved for every file.
+    it 'answers 422 for a non-uuid id' do
+      expect do
+        post '/api/v1/macros', params: attachment_macro_params("blob_#{Time.now.to_i}"), headers: headers, as: :json
+      end.not_to change(Macro, :count)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it 'answers 422 for a blob already attached to another record' do
+      other = Macro.create!(name: 'Other', visibility: :global, actions: [])
+      foreign_blob = upload_blob('someone-else.pdf')
+      other.files.attach(foreign_blob)
+
+      post '/api/v1/macros', params: attachment_macro_params(foreign_blob.id), headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(other.reload.files.map(&:blob_id)).to eq([foreign_blob.id])
+    end
+
+    it 'answers 422 for a send_attachment action without a file' do
+      post '/api/v1/macros',
+           params: { name: 'Empty', visibility: 'global', actions: [{ action_name: 'send_attachment', action_params: [] }] },
+           headers: headers,
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it 'answers 422 on update without touching the macro when the blob does not exist' do
+      blob = upload_blob
+      post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}", params: attachment_macro_params(SecureRandom.uuid), headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(macro.reload.actions.first['action_params']).to eq([blob.id])
+      expect(macro.files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'swaps the attached file when the action points to a new blob' do
+      old_blob = upload_blob('old.pdf')
+      new_blob = upload_blob('new.pdf')
+      post '/api/v1/macros', params: attachment_macro_params(old_blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}", params: attachment_macro_params(new_blob.id), headers: headers, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files.map(&:blob_id)).to eq([new_blob.id])
+    end
+
+    it 'keeps the file when the update does not send actions' do
+      blob = upload_blob
+      post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}", params: { name: 'Renamed' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'detaches the file when the action is removed' do
+      blob = upload_blob
+      post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}",
+          params: { actions: [{ action_name: 'resolve_conversation', action_params: [] }] },
+          headers: headers,
+          as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files).not_to be_attached
+    end
+
+    # Postgres hands uuids back lowercase; a client echoing one uppercased must
+    # still match the file the macro already holds.
+    it 'matches an uppercased blob id on create and on re-save' do
+      blob = upload_blob
+
+      post '/api/v1/macros', params: attachment_macro_params(blob.id.upcase), headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+      expect(macro.files.map(&:blob_id)).to eq([blob.id])
+
+      put "/api/v1/macros/#{macro.id}", params: attachment_macro_params(blob.id.upcase), headers: headers, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'reads the blob ids from the hash shape of action_params' do
+      blob = upload_blob
+
+      post '/api/v1/macros',
+           params: {
+             name: 'Send price list',
+             visibility: 'global',
+             actions: [{ action_name: 'send_attachment', action_params: { attachment_ids: [blob.id] } }]
+           },
+           headers: headers,
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(Macro.find(response.parsed_body.dig('data', 'id')).files.map(&:blob_id)).to eq([blob.id])
+    end
+
+    it 'reads the blob ids from the hash shape of action_params on update' do
+      old_blob = upload_blob('old.pdf')
+      new_blob = upload_blob('new.pdf')
+      post '/api/v1/macros', params: attachment_macro_params(old_blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}",
+          params: { actions: [{ action_name: 'send_attachment', action_params: { attachment_ids: [new_blob.id] } }] },
+          headers: headers,
+          as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.actions.first['action_params']).to eq('attachment_ids' => [new_blob.id])
+      expect(macro.files.map(&:blob_id)).to eq([new_blob.id])
+    end
+
+    it 'rolls the whole update back when a later step fails' do
+      macro = Macro.create!(name: 'Original', visibility: :global, actions: [])
+      allow_any_instance_of(Macro).to receive(:set_visibility).and_raise(StandardError, 'boom')
+
+      put "/api/v1/macros/#{macro.id}", params: { name: 'Renamed' }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(macro.reload.name).to eq('Original')
+    end
+
+    it 're-saving the same file does not attach it twice' do
+      blob = upload_blob
+      post '/api/v1/macros', params: attachment_macro_params(blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}", params: attachment_macro_params(blob.id), headers: headers, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.files.count).to eq(1)
+    end
+  end
 end

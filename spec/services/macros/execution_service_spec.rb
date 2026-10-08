@@ -314,4 +314,45 @@ RSpec.describe Macros::ExecutionService do
       expect(message.content).to eq('just text')
     end
   end
+
+  describe '#send_attachment' do
+    before { allow(Rails.configuration.dispatcher).to receive(:dispatch) }
+
+    let(:blob) do
+      ActiveStorage::Blob.create_and_upload!(io: StringIO.new('%PDF-1.4'), filename: 'price-list.pdf', content_type: 'application/pdf')
+    end
+
+    def attachment_macro(blob_id)
+      Macro.create!(
+        name: "macro-#{SecureRandom.hex(4)}",
+        created_by: user,
+        updated_by: user,
+        actions: [{ 'action_name' => 'send_attachment', 'action_params' => [blob_id] }]
+      )
+    end
+
+    it 'delivers the attached file as an outgoing message' do
+      macro = attachment_macro(blob.id)
+      macro.files.attach(blob)
+
+      execution = described_class.new(macro, conversation, user).perform
+
+      expect(execution.status).to eq('success')
+      message = conversation.messages.order(:created_at).last
+      expect(message.message_type).to eq('outgoing')
+      expect(message.attachments.map { |a| a.file.blob_id }).to eq([blob.id])
+    end
+
+    it 'fails the action when the file is not attached to the macro' do
+      macro = attachment_macro(blob.id)
+
+      execution = described_class.new(macro, conversation, user).perform
+
+      expect(execution.status).to eq('failed')
+      result = execution.actions_result.first
+      expect(result).to include('action' => 'send_attachment', 'status' => 'failed')
+      expect(result['error']).to include('not a file attached to this macro')
+      expect(conversation.messages.where(message_type: :outgoing)).to be_empty
+    end
+  end
 end
