@@ -68,11 +68,13 @@ class Api::V1::MacrosController < Api::V1::BaseController
   end
 
   def update
-    actions_sent = permitted_params.key?(:actions)
-    return attachment_not_found if actions_sent && !attachments_usable?(permitted_params[:actions])
+    actions_sent = params.key?(:actions)
+    return attachment_not_found if actions_sent && !attachments_usable?(params[:actions])
 
     ActiveRecord::Base.transaction do
-      update_params = macros_with_user.except(:visibility)
+      # Actions come from params as in create: the array-only permit drops hash-shaped action_params.
+      @macro.actions = params[:actions] if actions_sent
+      update_params = macros_with_user.except(:visibility, :actions)
       @macro.update!(update_params)
       @macro.set_visibility(current_user, permitted_params)
       process_attachments if actions_sent

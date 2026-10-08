@@ -433,6 +433,22 @@ RSpec.describe 'Api::V1::MacrosController', type: :request do
       expect(Macro.find(response.parsed_body.dig('data', 'id')).files.map(&:blob_id)).to eq([blob.id])
     end
 
+    it 'reads the blob ids from the hash shape of action_params on update' do
+      old_blob = upload_blob('old.pdf')
+      new_blob = upload_blob('new.pdf')
+      post '/api/v1/macros', params: attachment_macro_params(old_blob.id), headers: headers, as: :json
+      macro = Macro.find(response.parsed_body.dig('data', 'id'))
+
+      put "/api/v1/macros/#{macro.id}",
+          params: { actions: [{ action_name: 'send_attachment', action_params: { attachment_ids: [new_blob.id] } }] },
+          headers: headers,
+          as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(macro.reload.actions.first['action_params']).to eq('attachment_ids' => [new_blob.id])
+      expect(macro.files.map(&:blob_id)).to eq([new_blob.id])
+    end
+
     it 'rolls the whole update back when a later step fails' do
       macro = Macro.create!(name: 'Original', visibility: :global, actions: [])
       allow_any_instance_of(Macro).to receive(:set_visibility).and_raise(StandardError, 'boom')
