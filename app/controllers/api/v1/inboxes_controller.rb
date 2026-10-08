@@ -24,6 +24,7 @@ module Api
           assignable_agents: 'inboxes.read',
           agent_bot: 'inboxes.read',
           set_agent_bot: 'inboxes.update',
+          update_agent_bot_inbox: 'inboxes.update',
           setup_channel_provider: 'inboxes.update',
           disconnect_channel_provider: 'inboxes.update',
           sync_whatsapp_subscription: 'inboxes.update',
@@ -40,12 +41,13 @@ module Api
         before_action :fetch_agent_bot, only: [:set_agent_bot]
 
         def index
-          @inboxes = current_user.assigned_inboxes.order_by_name.includes(:channel, { avatar_attachment: [:blob] })
+          @inboxes = current_user.assigned_inboxes.order_by_name
+                                 .includes(:channel, { agent_bot_inbox: :agent_bot }, { avatar_attachment: [:blob] })
 
           apply_pagination
 
           paginated_response(
-            data: InboxSerializer.serialize_collection(@inboxes),
+            data: InboxSerializer.serialize_collection(@inboxes, include_agent_bot: true),
             collection: @inboxes,
             message: 'Inboxes retrieved successfully'
           );
@@ -53,7 +55,7 @@ module Api
 
         def show
           success_response(
-            data: InboxSerializer.serialize(@inbox),
+            data: InboxSerializer.serialize(@inbox, include_agent_bot: true),
             message: 'Inbox retrieved successfully'
           )
         end
@@ -164,84 +166,12 @@ module Api
             agent_bot_inbox = @inbox.agent_bot_inbox || AgentBotInbox.new(inbox: @inbox)
             agent_bot_inbox.agent_bot = @agent_bot
 
-            # Update configuration fields if provided
-            if params[:agent_bot_config].present?
-              config_params = params[:agent_bot_config]
+            config_params = params[:agent_bot_config].presence
+            agent_bot_inbox.allowed_conversation_statuses = ['pending'] unless config_params&.key?(:allowed_conversation_statuses)
 
-              # Handle conversation statuses - default to ['pending'] if empty
-              if config_params.key?(:allowed_conversation_statuses)
-                statuses = config_params[:allowed_conversation_statuses] || []
-                agent_bot_inbox.allowed_conversation_statuses = statuses.empty? ? ['pending'] : statuses
-              else
-                # Default to pending if not provided
-                agent_bot_inbox.allowed_conversation_statuses = ['pending']
-              end
-
-              # Handle label IDs
-              if config_params.key?(:allowed_label_ids)
-                agent_bot_inbox.allowed_label_ids = config_params[:allowed_label_ids] || []
-              end
-
-              # Handle ignored label IDs
-              if config_params.key?(:ignored_label_ids)
-                agent_bot_inbox.ignored_label_ids = config_params[:ignored_label_ids] || []
-              end
-
-              # Handle Facebook comment configuration
-              if config_params.key?(:facebook_comment_replies_enabled)
-                agent_bot_inbox.facebook_comment_replies_enabled = config_params[:facebook_comment_replies_enabled]
-                Rails.logger.info "[InboxesController] Set facebook_comment_replies_enabled: #{agent_bot_inbox.facebook_comment_replies_enabled}"
-              end
-
-              if config_params.key?(:facebook_comment_agent_bot_id)
-                old_value = agent_bot_inbox.facebook_comment_agent_bot_id
-                new_value = config_params[:facebook_comment_agent_bot_id]
-                # Handle null, empty string, or "same" value as nil
-                agent_bot_inbox.facebook_comment_agent_bot_id = (new_value.present? && new_value != 'same') ? new_value : nil
-                Rails.logger.info "[InboxesController] Set facebook_comment_agent_bot_id: #{old_value} -> #{agent_bot_inbox.facebook_comment_agent_bot_id} (raw: #{new_value.inspect})"
-              end
-
-              # Handle Facebook interaction type
-              if config_params.key?(:facebook_interaction_type)
-                agent_bot_inbox.facebook_interaction_type = config_params[:facebook_interaction_type] || 'both'
-                Rails.logger.info "[InboxesController] Set facebook_interaction_type: #{agent_bot_inbox.facebook_interaction_type}"
-              end
-
-              # Handle Facebook allowed post IDs
-              if config_params.key?(:facebook_allowed_post_ids)
-                agent_bot_inbox.facebook_allowed_post_ids = config_params[:facebook_allowed_post_ids] || []
-                Rails.logger.info "[InboxesController] Set facebook_allowed_post_ids: #{agent_bot_inbox.facebook_allowed_post_ids.inspect}"
-              end
-
-              # Handle moderation configuration
-              if config_params.key?(:moderation_enabled)
-                agent_bot_inbox.moderation_enabled = config_params[:moderation_enabled] || false
-              end
-
-              if config_params.key?(:explicit_words_filter)
-                agent_bot_inbox.explicit_words_filter = config_params[:explicit_words_filter] || []
-              end
-
-              if config_params.key?(:sentiment_analysis_enabled)
-                agent_bot_inbox.sentiment_analysis_enabled = config_params[:sentiment_analysis_enabled] || false
-              end
-
-              if config_params.key?(:auto_approve_responses)
-                agent_bot_inbox.auto_approve_responses = config_params[:auto_approve_responses] || false
-              end
-
-              if config_params.key?(:auto_reject_explicit_words)
-                agent_bot_inbox.auto_reject_explicit_words = config_params[:auto_reject_explicit_words] || false
-                Rails.logger.info "[InboxesController] Set auto_reject_explicit_words: #{agent_bot_inbox.auto_reject_explicit_words} (raw: #{config_params[:auto_reject_explicit_words].inspect})"
-              end
-
-              if config_params.key?(:auto_reject_offensive_sentiment)
-                agent_bot_inbox.auto_reject_offensive_sentiment = config_params[:auto_reject_offensive_sentiment] || false
-                Rails.logger.info "[InboxesController] Set auto_reject_offensive_sentiment: #{agent_bot_inbox.auto_reject_offensive_sentiment} (raw: #{config_params[:auto_reject_offensive_sentiment].inspect})"
-              end
+            if config_params
+              assign_agent_bot_config(agent_bot_inbox, config_params)
             else
-              # Default to pending if no config provided
-              agent_bot_inbox.allowed_conversation_statuses = ['pending']
               agent_bot_inbox.allowed_label_ids = []
               agent_bot_inbox.ignored_label_ids = []
             end
@@ -256,6 +186,36 @@ module Api
             data: nil,
             message: 'Agent bot configured successfully'
           )
+        end
+
+        # CRM-41: edits the existing binding in place. Unlinking from the agent's
+        # Channels tab is `status: inactive`, which keeps the row and its
+        # configuration so Reactivate restores it as it was.
+        def update_agent_bot_inbox
+          agent_bot_inbox = @inbox.agent_bot_inbox
+          unless agent_bot_inbox
+            return error_response(ApiErrorCodes::RESOURCE_NOT_FOUND, 'Inbox has no agent bot', status: :not_found)
+          end
+
+          if params.key?(:status)
+            unless AgentBotInbox.statuses.key?(params[:status].to_s)
+              return error_response(ApiErrorCodes::INVALID_PARAMETER, 'status must be active or inactive', status: :unprocessable_entity)
+            end
+
+            agent_bot_inbox.status = params[:status].to_s
+          end
+
+          config_params = params[:agent_bot_config].presence
+          assign_agent_bot_config(agent_bot_inbox, config_params) if config_params
+
+          if agent_bot_inbox.save
+            success_response(
+              data: AgentBotInboxSerializer.serialize(agent_bot_inbox),
+              message: 'Agent bot binding updated successfully'
+            )
+          else
+            error_response(ApiErrorCodes::VALIDATION_ERROR, agent_bot_inbox.errors.full_messages.join(', '))
+          end
         end
 
         def facebook_posts
@@ -460,6 +420,77 @@ module Api
         end
 
         private
+
+        def assign_agent_bot_config(agent_bot_inbox, config_params)
+          # An empty list falls back to pending, the same default the model applies.
+          if config_params.key?(:allowed_conversation_statuses)
+            statuses = config_params[:allowed_conversation_statuses] || []
+            agent_bot_inbox.allowed_conversation_statuses = statuses.empty? ? ['pending'] : statuses
+          end
+
+          # Handle label IDs
+          if config_params.key?(:allowed_label_ids)
+            agent_bot_inbox.allowed_label_ids = config_params[:allowed_label_ids] || []
+          end
+
+          # Handle ignored label IDs
+          if config_params.key?(:ignored_label_ids)
+            agent_bot_inbox.ignored_label_ids = config_params[:ignored_label_ids] || []
+          end
+
+          # Handle Facebook comment configuration
+          if config_params.key?(:facebook_comment_replies_enabled)
+            agent_bot_inbox.facebook_comment_replies_enabled = config_params[:facebook_comment_replies_enabled]
+            Rails.logger.info "[InboxesController] Set facebook_comment_replies_enabled: #{agent_bot_inbox.facebook_comment_replies_enabled}"
+          end
+
+          if config_params.key?(:facebook_comment_agent_bot_id)
+            old_value = agent_bot_inbox.facebook_comment_agent_bot_id
+            new_value = config_params[:facebook_comment_agent_bot_id]
+            # Handle null, empty string, or "same" value as nil
+            agent_bot_inbox.facebook_comment_agent_bot_id = (new_value.present? && new_value != 'same') ? new_value : nil
+            Rails.logger.info "[InboxesController] Set facebook_comment_agent_bot_id: #{old_value} -> #{agent_bot_inbox.facebook_comment_agent_bot_id} (raw: #{new_value.inspect})"
+          end
+
+          # Handle Facebook interaction type
+          if config_params.key?(:facebook_interaction_type)
+            agent_bot_inbox.facebook_interaction_type = config_params[:facebook_interaction_type] || 'both'
+            Rails.logger.info "[InboxesController] Set facebook_interaction_type: #{agent_bot_inbox.facebook_interaction_type}"
+          end
+
+          # Handle Facebook allowed post IDs
+          if config_params.key?(:facebook_allowed_post_ids)
+            agent_bot_inbox.facebook_allowed_post_ids = config_params[:facebook_allowed_post_ids] || []
+            Rails.logger.info "[InboxesController] Set facebook_allowed_post_ids: #{agent_bot_inbox.facebook_allowed_post_ids.inspect}"
+          end
+
+          # Handle moderation configuration
+          if config_params.key?(:moderation_enabled)
+            agent_bot_inbox.moderation_enabled = config_params[:moderation_enabled] || false
+          end
+
+          if config_params.key?(:explicit_words_filter)
+            agent_bot_inbox.explicit_words_filter = config_params[:explicit_words_filter] || []
+          end
+
+          if config_params.key?(:sentiment_analysis_enabled)
+            agent_bot_inbox.sentiment_analysis_enabled = config_params[:sentiment_analysis_enabled] || false
+          end
+
+          if config_params.key?(:auto_approve_responses)
+            agent_bot_inbox.auto_approve_responses = config_params[:auto_approve_responses] || false
+          end
+
+          if config_params.key?(:auto_reject_explicit_words)
+            agent_bot_inbox.auto_reject_explicit_words = config_params[:auto_reject_explicit_words] || false
+            Rails.logger.info "[InboxesController] Set auto_reject_explicit_words: #{agent_bot_inbox.auto_reject_explicit_words} (raw: #{config_params[:auto_reject_explicit_words].inspect})"
+          end
+
+          if config_params.key?(:auto_reject_offensive_sentiment)
+            agent_bot_inbox.auto_reject_offensive_sentiment = config_params[:auto_reject_offensive_sentiment] || false
+            Rails.logger.info "[InboxesController] Set auto_reject_offensive_sentiment: #{agent_bot_inbox.auto_reject_offensive_sentiment} (raw: #{config_params[:auto_reject_offensive_sentiment].inspect})"
+          end
+        end
 
         def hub_managed_channel?(channel)
           channel.respond_to?(:evolution_hub_channel_id) && channel.evolution_hub_channel_id.present?

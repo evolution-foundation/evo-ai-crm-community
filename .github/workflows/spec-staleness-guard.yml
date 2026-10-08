@@ -235,6 +235,13 @@ on:
       # inboxes.update gate. Both are invisible to every other lane.
       - 'app/controllers/api/v1/inboxes_controller.rb'
       - 'spec/requests/api/v1/inboxes_set_agent_bot_spec.rb'
+      # CRM-41: unlinking from the agent's Channels tab is a deactivation that has to
+      # keep the row and its configuration, and the bindings list has to stay within
+      # the caller's inboxes. Nothing else in CI exercises either.
+      - 'app/controllers/api/v1/agent_bots_controller.rb'
+      - 'app/serializers/agent_bot_inbox_serializer.rb'
+      - 'app/serializers/agent_bot_serializer.rb'
+      - 'spec/requests/api/v1/agent_bot_inboxes_spec.rb'
       # CRM-286: the Meta handshake is the one request a channel cannot be registered
       # without, and every part of it is invisible to the other lanes — the plain-text
       # render, the log line whose missing locals turned the per-number route into a
@@ -688,6 +695,7 @@ jobs:
             spec/models/product_variant_spec.rb \
             spec/requests/api/v1/products_validation_spec.rb \
             spec/requests/api/v1/inboxes_set_agent_bot_spec.rb \
+            spec/requests/api/v1/agent_bot_inboxes_spec.rb \
             spec/requests/webhooks/meta_token_verify_spec.rb \
             spec/services/whatsapp/incoming_message_base_service_spec.rb \
             spec/services/whatsapp/evolution_handlers/messages_upsert_guard_spec.rb \

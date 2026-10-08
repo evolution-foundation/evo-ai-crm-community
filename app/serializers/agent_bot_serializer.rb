@@ -45,12 +45,11 @@ module AgentBotSerializer
     agent_bots.map { |bot| serialize(bot) }
   end
 
-  private
-
   def serialize_agent_bot_inbox_configuration(agent_bot_inbox)
     return nil unless agent_bot_inbox
 
     {
+      status: agent_bot_inbox.status,
       allowed_conversation_statuses: agent_bot_inbox.allowed_conversation_statuses || [],
       allowed_label_ids: agent_bot_inbox.allowed_label_ids || [],
       ignored_label_ids: agent_bot_inbox.ignored_label_ids || [],

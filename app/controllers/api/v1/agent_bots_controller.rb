@@ -6,7 +6,9 @@ class Api::V1::AgentBotsController < Api::V1::BaseController
     update: 'agent_bots.update',
     destroy: 'agent_bots.delete',
     avatar: 'agent_bots.update',
-    reset_access_token: 'agent_bots.update'
+    reset_access_token: 'agent_bots.update',
+    # Lists inboxes, so it carries the gate of GET /inboxes/:id/agent_bot.
+    inboxes: 'inboxes.read'
   })
 
   include Api::V1::ResourceLimitsHelper
@@ -29,6 +31,20 @@ class Api::V1::AgentBotsController < Api::V1::BaseController
     success_response(
       data: AgentBotSerializer.serialize(@agent_bot),
       message: 'Agent bot retrieved successfully'
+    )
+  end
+
+  # CRM-41: the agent's Channels tab — active and inactive bindings alike,
+  # limited to the inboxes the caller can see.
+  def inboxes
+    agent_bot_inboxes = @agent_bot.agent_bot_inboxes
+                                  .where(inbox_id: current_user.assigned_inboxes.select(:id))
+                                  .includes(inbox: [:channel, { avatar_attachment: [:blob] }])
+                                  .order(:created_at)
+
+    success_response(
+      data: AgentBotInboxSerializer.serialize_collection(agent_bot_inboxes, include_inbox: true),
+      message: 'Agent bot inboxes retrieved successfully'
     )
   end
 
