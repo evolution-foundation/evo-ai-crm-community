@@ -8,7 +8,7 @@ require 'rails_helper'
 # policies existed but were never invoked on create, leaving the write open.
 # The specs prove create now consults the policy: a denied policy blocks the
 # write and never persists, an allowed policy yields 201. A Pundit denial is
-# reported as 401 by the app-wide RequestExceptionHandler (the same status the
+# reported as 403 by the app-wide RequestExceptionHandler (the same status the
 # sibling update/destroy actions in these controllers return on denial).
 RSpec.describe 'Pundit-gated create actions RBAC', type: :request do
   let(:user) { User.create!(name: 'Perm Probe', email: "probe-#{SecureRandom.hex(4)}@example.com") }
@@ -44,7 +44,7 @@ RSpec.describe 'Pundit-gated create actions RBAC', type: :request do
         post '/api/v1/scheduled_actions', params: create_params, as: :json
       end.not_to change(ScheduledAction, :count)
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
 
     it 'creates when the policy allows it' do
@@ -91,7 +91,7 @@ RSpec.describe 'Pundit-gated create actions RBAC', type: :request do
         post task_url, params: create_params, as: :json
       end.not_to change(PipelineTask, :count)
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
 
     it 'creates when the policy allows it' do

@@ -73,7 +73,7 @@ RSpec.describe 'Api::V1::TeamMembers', type: :request do
            as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response).not_to have_http_status(:unauthorized)
+      expect(response.status).not_to be_in([401, 403])
       expect(json_response.dig('error', 'code')).to eq('VALIDATION_ERROR')
       expect(team.reload.members).to be_empty
     end
@@ -121,7 +121,7 @@ RSpec.describe 'Api::V1::TeamMembers', type: :request do
             as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response).not_to have_http_status(:unauthorized)
+      expect(response.status).not_to be_in([401, 403])
       expect(json_response.dig('error', 'code')).to eq('VALIDATION_ERROR')
       expect(team.reload.members).to be_empty
     end

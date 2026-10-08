@@ -135,18 +135,28 @@ class Api::BaseController < ApplicationController
     )
   end
 
-  # Handle Pundit::NotAuthorizedError (authorization failures)
+  # Handle Pundit::NotAuthorizedError (authorization failures). A denial is an expected
+  # outcome, so it stays at info level: an error with a backtrace on every RBAC check would
+  # flood the log. error_response still logs at error when the response was already sent.
   def handle_not_authorized(exception)
-    log_rescued_exception(exception)
+    log_handled_error(exception)
     error_response(
       ApiErrorCodes::FORBIDDEN,
       'You are not authorized to perform this action',
       details: {
         action: exception.query,
-        record: exception.record.class.name
-      },
+        record: authorized_record_name(exception.record)
+      }.compact.presence,
       status: :forbidden
     )
+  end
+
+  # `authorize SomeModel` hands Pundit the class itself, and a bare
+  # `raise Pundit::NotAuthorizedError` carries no record at all.
+  def authorized_record_name(record)
+    return if record.nil?
+
+    record.is_a?(Class) ? record.name : record.class.name
   end
 
   # Handle ActionController::ParameterMissing

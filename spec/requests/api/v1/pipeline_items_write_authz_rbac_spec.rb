@@ -37,6 +37,6 @@ RSpec.describe 'Pipeline item write-level authorization', type: :request do
            params: { pipeline_item: { entity_type: 'lead' } }, as: :json
     end.not_to change(PipelineItem, :count)
 
-    expect(response).to have_http_status(:unauthorized)
+    expect(response).to have_http_status(:forbidden)
   end
 end

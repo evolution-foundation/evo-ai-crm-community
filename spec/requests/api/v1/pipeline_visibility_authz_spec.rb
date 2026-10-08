@@ -13,10 +13,7 @@ require 'rails_helper'
 # Scope#resolve that filters the list, so detail and list can never disagree.
 # Permissions are stubbed true throughout to isolate the visibility dimension.
 RSpec.describe 'Pipeline visibility authorization', type: :request do
-  # Not the intended contract: a Pundit denial renders 401 app-wide, which the frontend
-  # reads as session death and logs the user out. Should be 403 — EVO-2230 owns that.
-  # Named so the flip is one edit.
-  let(:denied) { :unauthorized }
+  let(:denied) { :forbidden }
 
   let(:owner) { User.create!(name: 'Owner', email: "owner-#{SecureRandom.hex(4)}@example.com") }
   let(:other) { User.create!(name: 'Other', email: "other-#{SecureRandom.hex(4)}@example.com") }

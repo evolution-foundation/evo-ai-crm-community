@@ -95,8 +95,8 @@ RSpec.describe 'Template export macro visibility scope (CRM-205)', type: :reques
       post '/api/v1/templates/export',
            params: { template_name: 'T', selection: { macros: { all: true } } }, as: :json
 
-      # TemplatesController gates via require_permissions, which answers 403 (not the
-      # Pundit 401 that pipeline/macros member actions return).
+      # TemplatesController gates via require_permissions, which answers 403 before any
+      # Pundit check runs.
       expect(response).to have_http_status(:forbidden)
     end
 

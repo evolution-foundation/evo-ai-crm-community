@@ -13,8 +13,7 @@ module RequestExceptionHandler
     log_handled_error(e)
     render_not_found_error('Resource could not be found')
   rescue Pundit::NotAuthorizedError => e
-    log_handled_error(e)
-    render_unauthorized('You are not authorized to do this action')
+    render_not_authorized(e)
   rescue ActionController::ParameterMissing => e
     log_handled_error(e)
     render_could_not_create_error(e.message)
@@ -28,6 +27,23 @@ module RequestExceptionHandler
       error_response(ApiErrorCodes::UNAUTHORIZED, message, status: :unauthorized)
     else
     render json: { error: message }, status: :unauthorized
+    end
+  end
+
+  # A policy denial is 403, never 401: clients treat 401 as a dead session and log the
+  # user out. Api::BaseController already renders the 403 envelope; reuse it there.
+  def render_not_authorized(exception)
+    return handle_not_authorized(exception) if respond_to?(:handle_not_authorized, true)
+
+    log_handled_error(exception)
+    render_forbidden('You are not authorized to perform this action')
+  end
+
+  def render_forbidden(message)
+    if respond_to?(:error_response)
+      error_response(ApiErrorCodes::FORBIDDEN, message, status: :forbidden)
+    else
+      render json: { error: message }, status: :forbidden
     end
   end
 

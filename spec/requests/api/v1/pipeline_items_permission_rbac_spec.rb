@@ -53,7 +53,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
     grant_permissions('pipelines.read')
 
     expect { create_card }.not_to change(PipelineItem, :count)
-    expect(response).to have_http_status(:unauthorized)
+    expect(response).to have_http_status(:forbidden)
   end
 
   it 'DENIES a card write to a holder of pipelines.update but NOT pipeline_items.update (the split is real)' do
@@ -62,7 +62,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
     grant_permissions('pipelines.read', 'pipelines.update')
 
     expect { create_card }.not_to change(PipelineItem, :count)
-    expect(response).to have_http_status(:unauthorized)
+    expect(response).to have_http_status(:forbidden)
   end
 
   it 'AUTHORIZES the create for a holder of pipeline_items.update — the card is created (2xx)' do
@@ -80,10 +80,10 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
       patch "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card.id}/move_to_stage",
             params: { pipeline_stage_id: target.id }, as: :json
 
-      # The authorization gate opened (Pundit would 401 without the key); the
+      # The authorization gate opened (Pundit would 403 without the key); the
       # move itself resolves the card via the conversation-first lookup, out of
       # scope for this authz spec.
-      expect(response).not_to have_http_status(:unauthorized)
+      expect(response.status).not_to be_in([401, 403])
     end
 
     it 'DENIES move_to_stage without pipeline_items.update' do
@@ -92,7 +92,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
       patch "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card.id}/move_to_stage",
             params: { pipeline_stage_id: stage.id }, as: :json
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
   end
 
@@ -107,7 +107,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
 
       delete "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card.id}", as: :json
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
       expect(PipelineItem.exists?(card.id)).to be(true)
     end
 
@@ -117,7 +117,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
 
       delete "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card.id}", as: :json
 
-      expect(response).not_to have_http_status(:unauthorized)
+      expect(response.status).not_to be_in([401, 403])
     end
   end
 
@@ -135,7 +135,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
       patch "/api/v1/pipelines/#{pipeline.id}/pipeline_items/#{card.id}/update_conversation",
             params: { stage_id: target_stage.id }, as: :json
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
       expect(card.reload.pipeline_stage_id).to eq(stage.id)
     end
 
@@ -190,7 +190,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
 
       move_into_target
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
       expect(private_card.reload.pipeline_id).to eq(private_pipeline.id)
     end
 
@@ -200,7 +200,7 @@ RSpec.describe 'Pipeline card-write permission (pipeline_items.update)', type: :
 
       move_into_target
 
-      expect(response).not_to have_http_status(:unauthorized)
+      expect(response.status).not_to be_in([401, 403])
       expect(private_card.reload.pipeline_id).to eq(pipeline.id)
     end
   end
