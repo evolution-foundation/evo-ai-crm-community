@@ -143,14 +143,7 @@ RSpec.describe 'Api::V1::Inboxes inbox scoping', type: :request do
         get "/api/v1/inboxes/#{inbox_b.id}", headers: headers, as: :json
         # T4.3 makes InboxPolicy#show? deny non-assigned inboxes (previously dead
         # code because the inboxes.read bypass always passed via the stub).
-        # NOTE: the denial surfaces as 401, not 403, because RequestExceptionHandler's
-        # `around_action :handle_with_exception` (ApplicationController) catches
-        # Pundit::NotAuthorizedError and renders 401 BEFORE Api::BaseController's
-        # rescue_from (which would render 403) can run. Pre-existing status-semantics
-        # bug, never exercised for inboxes until show? actually denied. Follow-up:
-        # reconcile the two Pundit handlers to return 403. The assertion here is
-        # that access IS denied for a non-assigned inbox.
-        expect(response).to have_http_status(:unauthorized)
+        expect(response).to have_http_status(:forbidden)
         expect(response).not_to have_http_status(:ok)
       end
     end

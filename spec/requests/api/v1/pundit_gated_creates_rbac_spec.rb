@@ -44,7 +44,7 @@ RSpec.describe 'Pundit-gated create actions RBAC', type: :request do
         post '/api/v1/scheduled_actions', params: create_params, as: :json
       end.not_to change(ScheduledAction, :count)
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
 
     it 'creates when the policy allows it' do
@@ -91,7 +91,7 @@ RSpec.describe 'Pundit-gated create actions RBAC', type: :request do
         post task_url, params: create_params, as: :json
       end.not_to change(PipelineTask, :count)
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
 
     it 'creates when the policy allows it' do

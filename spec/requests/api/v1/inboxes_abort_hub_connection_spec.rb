@@ -131,11 +131,7 @@ RSpec.describe 'Api::V1::Inboxes abort hub connection', type: :request do
       it 'denies the request and keeps the inbox' do
         delete "/api/v1/inboxes/#{inbox.id}/hub_connection", headers: headers, as: :json
 
-        # 401 and not 403 because fetch_inbox's Pundit denial is caught by
-        # ApplicationController's around_action before Api::BaseController's
-        # rescue_from can render 403 — the same pre-existing status-semantics
-        # quirk asserted in inboxes_spec.rb. What matters here is the denial.
-        expect(response).to have_http_status(:unauthorized)
+        expect(response).to have_http_status(:forbidden)
         expect(response).not_to have_http_status(:ok)
         expect(Inbox.exists?(inbox.id)).to be(true)
       end

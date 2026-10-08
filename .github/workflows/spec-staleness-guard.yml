@@ -486,6 +486,16 @@ on:
       - 'app/services/instagram/base_send_service.rb'
       - 'spec/services/instagram/send_on_instagram_service_spec.rb'
       - 'spec/services/instagram/messenger/send_on_instagram_service_spec.rb'
+      # A policy denial answers 403 and an authentication failure 401; a client reads
+      # 401 as a dead session. These specs pin both sides of that split.
+      - 'app/controllers/concerns/request_exception_handler.rb'
+      - 'spec/controllers/concerns/request_exception_handler_spec.rb'
+      - 'spec/requests/api/v1/pipeline_items_permission_rbac_spec.rb'
+      - 'spec/requests/api/v1/pipeline_items_write_authz_rbac_spec.rb'
+      - 'spec/requests/api/v1/pundit_gated_creates_rbac_spec.rb'
+      - 'spec/requests/api/v1/pipeline_visibility_authz_spec.rb'
+      - 'spec/requests/api/v1/inboxes_spec.rb'
+      - 'spec/requests/api/v1/team_members_spec.rb'
 
 permissions:
   contents: read
@@ -698,4 +708,11 @@ jobs:
             spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
             spec/services/instagram/send_on_instagram_service_spec.rb \
             spec/services/instagram/messenger/send_on_instagram_service_spec.rb \
+            spec/controllers/concerns/request_exception_handler_spec.rb \
+            spec/requests/api/v1/pipeline_items_permission_rbac_spec.rb \
+            spec/requests/api/v1/pipeline_items_write_authz_rbac_spec.rb \
+            spec/requests/api/v1/pundit_gated_creates_rbac_spec.rb \
+            spec/requests/api/v1/pipeline_visibility_authz_spec.rb \
+            spec/requests/api/v1/inboxes_spec.rb \
+            spec/requests/api/v1/team_members_spec.rb \
             --format progress

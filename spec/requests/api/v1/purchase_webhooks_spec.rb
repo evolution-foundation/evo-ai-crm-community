@@ -189,15 +189,13 @@ RSpec.describe 'Api::V1::PurchaseWebhooks', type: :request do
 
     # EVO-2204: the permission is global, the funnel is not. Without the policy a
     # manager could point purchases at a private funnel they cannot even see.
-    # 401, not 403: RequestExceptionHandler's around_action catches the Pundit
-    # refusal before the rescue_from that would answer 403.
     it 'refuses a private pipeline the caller cannot see, even with pipelines.update' do
       stub_auth(outsider, granted: %w[pipelines.update])
 
       get '/api/v1/purchase_webhooks/url',
           params: { provider: 'cakto', pipeline_id: private_pipeline.id }, headers: bearer
 
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:forbidden)
     end
 
     it 'mints for the owner of that same private pipeline' do
