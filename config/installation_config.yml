@@ -477,6 +477,11 @@
   value: 'gpt-4.1-nano'
   locked: false
   description: 'OpenAI Model'
+- name: OPENROUTER_MODEL
+  display_title: 'OpenRouter Model'
+  value: 'openai/gpt-4.1-nano'
+  locked: false
+  description: 'OpenRouter model ID used by the inbox assist'
 - name: OPENAI_ENABLE_AUDIO_TRANSCRIPTION
   display_title: 'Enable Audio Transcription'
   value: false
@@ -675,4 +680,3 @@
   description: 'Microsoft Clarity project ID for user behavior analytics'
   type: text
 ## ------ End Frontend Runtime Configuration ------ ##
-

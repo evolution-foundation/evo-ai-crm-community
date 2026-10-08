@@ -91,7 +91,11 @@ class Integrations::OpenaiBaseService
 
   # Get OpenAI model from global configuration
   def gpt_model
-    @gpt_model ||= GlobalConfigService.load('OPENAI_MODEL', 'gpt-4.1-nano')
+    @gpt_model ||= Ai::ModelResolver.resolve(
+      GlobalConfigService.load('OPENAI_MODEL', 'gpt-4.1-nano'),
+      provider: credential_endpoint.provider,
+      openrouter_model: GlobalConfigService.load('OPENROUTER_MODEL', 'openai/gpt-4.1-nano')
+    )
   end
 
   # Get API key from global configuration or hook settings (fallback)

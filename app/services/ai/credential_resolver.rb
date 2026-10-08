@@ -14,7 +14,11 @@ class Ai::CredentialResolver
   # Key and endpoint travel together: an OpenAI-compatible provider is the pair,
   # so a key from one credential with a URL from elsewhere hits the wrong server.
   # `base_url` nil means "use the consumer's default".
-  Endpoint = Struct.new(:key, :base_url, keyword_init: true)
+  Endpoint = Struct.new(:key, :base_url, :provider, keyword_init: true)
+
+  PROVIDER_DEFAULT_BASE_URLS = {
+    'openrouter' => 'https://openrouter.ai/api/v1'
+  }.freeze
 
   # Returns the credential record in effect, or nil when no link in the chain
   # offers a usable one. Never raises for "nothing configured" — that is an
@@ -58,11 +62,17 @@ class Ai::CredentialResolver
   def resolve_endpoint
     credential = resolve
     key = credential && Ai::CredentialDecryptor.decrypt(credential.key)
-    return Endpoint.new(key: key, base_url: credential.base_url.presence) if key.present?
+    if key.present?
+      return Endpoint.new(
+        key: key,
+        base_url: credential.base_url.presence || PROVIDER_DEFAULT_BASE_URLS[credential.provider],
+        provider: credential.provider
+      )
+    end
 
     # The legacy sources hold a key and nothing else: the endpoint there has
     # always been the consumer's own OPENAI_API_URL, and nil keeps it that way.
-    Endpoint.new(key: legacy_key, base_url: nil)
+    Endpoint.new(key: legacy_key, base_url: nil, provider: nil)
   end
 
   private

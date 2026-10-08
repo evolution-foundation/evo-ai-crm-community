@@ -60,6 +60,22 @@ RSpec.describe Ai::CredentialResolver, '.resolve_endpoint' do
     expect(described_class.resolve_endpoint(for_consumer: :inbox_assist).base_url).to be_nil
   end
 
+  it 'uses OpenRouter default endpoint for an OpenRouter inbox-assist credential' do
+    register(scope: 'account', provider: 'openrouter')
+
+    endpoint = described_class.resolve_endpoint(for_consumer: :inbox_assist)
+
+    expect(endpoint.provider).to eq('openrouter')
+    expect(endpoint.base_url).to eq('https://openrouter.ai/api/v1')
+  end
+
+  it 'prefers an explicit OpenRouter endpoint over its default' do
+    register(scope: 'account', provider: 'openrouter', base_url: 'https://router.internal/v1')
+
+    expect(described_class.resolve_endpoint(for_consumer: :inbox_assist).base_url)
+      .to eq('https://router.internal/v1')
+  end
+
   # The half that was broken: the winning credential decides BOTH halves. An
   # account credential outranks the installation one, so its endpoint must come
   # with it instead of the installation one's.
