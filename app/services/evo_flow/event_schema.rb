@@ -4,7 +4,8 @@ module EvoFlow
   # The three mirrors are kept in sync by convention; an automated CI sync
   # gate is tracked as a follow-up (no enforcement at the moment).
   #
-  # Categories: contact | conversation | message | campaign | custom.
+  # Categories: contact | conversation | message | campaign | purchase |
+  # scheduled_action | custom.
   # FieldType (TS): string | number | boolean | date | uuid | object
   # In Ruby, the validator (EvoFlow::SchemaValidator) maps each type to a
   # concrete predicate — see schema_validator.rb.
@@ -198,6 +199,16 @@ module EvoFlow
         outcome: :string, new_contact: :boolean, contact_id: :uuid,
         pipeline_name: :string, pipeline_stage_id: :uuid, pipeline_stage_name: :string
       }
+    },
+    'scheduled_action.executed' => {
+      category: :scheduled_action,
+      required: { scheduled_action_id: :uuid, action_type: :string, scheduled_for: :date, source: :string },
+      optional: { conversation_id: :uuid, executed_at: :date }
+    },
+    'scheduled_action.failed' => {
+      category: :scheduled_action,
+      required: { scheduled_action_id: :uuid, action_type: :string, scheduled_for: :date, source: :string },
+      optional: { conversation_id: :uuid, error_message: :string, retry_count: :number, will_retry: :boolean }
     },
     'custom' => {
       category: :custom,
