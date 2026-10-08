@@ -135,10 +135,9 @@ class Api::BaseController < ApplicationController
     )
   end
 
-  # Handle Pundit::NotAuthorizedError (authorization failures)
-  # A denial is an expected outcome, so it stays at info level: logging it as an error with
-  # a backtrace would flood the log on every RBAC check. error_response still logs at error
-  # when the response was already sent.
+  # Handle Pundit::NotAuthorizedError (authorization failures). A denial is an expected
+  # outcome, so it stays at info level: an error with a backtrace on every RBAC check would
+  # flood the log. error_response still logs at error when the response was already sent.
   def handle_not_authorized(exception)
     log_handled_error(exception)
     error_response(
