@@ -30,7 +30,7 @@ class Api::V1::ScheduledActionsController < Api::V1::BaseController
       @scheduled_action.created_by = current_user.id
     elsif service_authenticated?
       # For service-to-service calls, find a system user or first global admin
-      system_user = User.find_by(email: 'system@evoai.app')
+      system_user = User.find_by(email: ScheduledAction::SERVICE_CREATOR_EMAIL)
       if system_user
         @scheduled_action.created_by = system_user.id
         Rails.logger.info "ScheduledAction: Using system user #{system_user.id} (#{system_user.class.name}) for service token auth"
