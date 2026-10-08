@@ -109,6 +109,9 @@ class AgentBotInbox < ApplicationRecord
   # ignored label. Callers log this instead of a generic phrase.
   # Returns a short, log-safe string (no message content, no PII).
   def processing_block_reason(conversation)
+    # CRM-41: unlinking deactivates the binding; replies already in flight stop here.
+    return 'binding inactive' if inactive?
+
     if has_ignored_labels?(conversation)
       return "ignored_label present (ignored_label_ids=#{ignored_label_ids.inspect})"
     end
@@ -159,6 +162,33 @@ class AgentBotInbox < ApplicationRecord
   def post_allowed?(post_id)
     return true if facebook_allowed_post_ids.blank?
     facebook_allowed_post_ids.map(&:to_s).include?(post_id.to_s)
+  end
+
+  # Everything the binding configures, as opposed to which agent and channel it joins.
+  CONFIGURATION_ATTRIBUTES = %w[
+    allowed_conversation_statuses allowed_label_ids ignored_label_ids
+    facebook_comment_replies_enabled facebook_comment_agent_bot_id facebook_interaction_type
+    facebook_allowed_post_ids moderation_enabled explicit_words_filter sentiment_analysis_enabled
+    auto_approve_responses auto_reject_explicit_words auto_reject_offensive_sentiment
+  ].freeze
+
+  # CRM-41: a channel holds one binding, so linking it to another agent reuses the
+  # row. The previous agent's configuration must not carry over to the new one.
+  def reset_configuration
+    defaults = self.class.column_defaults
+    CONFIGURATION_ATTRIBUTES.each { |attribute| self[attribute] = defaults[attribute].deep_dup }
+  end
+
+  # A deleted Label leaves its id behind in these lists, and the label validations
+  # would then reject every later save — unlinking included. An id that no longer
+  # exists can never match a conversation, so dropping it changes nothing.
+  def prune_missing_label_ids
+    stored = (allowed_label_ids || []) + (ignored_label_ids || [])
+    return if stored.empty?
+
+    existing = Label.where(id: stored.map(&:to_s).uniq).pluck(:id).map(&:to_s)
+    self.allowed_label_ids = (allowed_label_ids || []).select { |id| existing.include?(id.to_s) }
+    self.ignored_label_ids = (ignored_label_ids || []).select { |id| existing.include?(id.to_s) }
   end
 
   # Moderation helper methods

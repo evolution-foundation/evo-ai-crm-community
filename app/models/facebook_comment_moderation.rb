@@ -228,7 +228,8 @@ class FacebookCommentModeration < ApplicationRecord
 
     # Find the agent bot for this conversation
     agent_bot_inbox = conversation.inbox.agent_bot_inbox
-    return false unless agent_bot_inbox.present?
+    # An unlinked (inactive) binding keeps its row; the agent must stay silent.
+    return false unless agent_bot_inbox&.active?
 
     agent_bot = agent_bot_inbox.agent_bot_for_conversation(conversation)
     return false unless agent_bot.present?

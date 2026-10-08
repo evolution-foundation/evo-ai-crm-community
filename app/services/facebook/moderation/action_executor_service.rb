@@ -303,7 +303,8 @@ class Facebook::Moderation::ActionExecutorService
 
     # Find AgentBotInbox configuration
     agent_bot_inbox = inbox.agent_bot_inbox
-    return nil unless agent_bot_inbox.present?
+    # An unlinked (inactive) binding keeps its row; the agent must stay silent.
+    return nil unless agent_bot_inbox&.active?
 
     # Use agent_bot_for_conversation to get the correct bot (handles comment-specific bots)
     agent_bot = agent_bot_inbox.agent_bot_for_conversation(conversation)

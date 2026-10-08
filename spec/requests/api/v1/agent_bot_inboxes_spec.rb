@@ -142,7 +142,7 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(bot_binding.allowed_label_ids).to eq([label.id])
     end
 
-    it 'saves the configuration without reactivating an inactive bot_binding' do
+    it 'saves the configuration without reactivating an inactive binding' do
       patch "/api/v1/inboxes/#{paused_inbox.id}/agent_bot_inbox",
             params: { agent_bot_config: { allowed_conversation_statuses: %w[open], ignored_label_ids: [label.id] } },
             headers: headers, as: :json
@@ -171,14 +171,36 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(bot_binding.reload.allowed_conversation_statuses).to eq(%w[pending])
     end
 
-    it 'rejects an unknown status without touching the bot_binding' do
+    it 'rejects an unknown status without touching the binding' do
       patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox", params: { status: 'paused' }, headers: headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(bot_binding.reload).to be_active
     end
 
-    it 'answers 404 when the inbox has no bot_binding' do
+    it 'refuses with 409 when the channel moved to another agent' do
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { status: 'inactive', agent_bot_id: other_bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:conflict)
+      expect(bot_binding.reload).to be_active
+    end
+
+    it 'still unlinks when a label it referenced was deleted' do
+      gone = SecureRandom.uuid
+      bot_binding.update_columns(allowed_label_ids: [label.id, gone], ignored_label_ids: [gone])
+
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { status: 'inactive', agent_bot_id: bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      bot_binding.reload
+      expect(bot_binding).to be_inactive
+      expect(bot_binding.allowed_label_ids).to eq([label.id])
+      expect(bot_binding.ignored_label_ids).to eq([])
+    end
+
+    it 'answers 404 when the inbox has no binding' do
       unbound = Inbox.create!(channel: Channel::Api.create!, name: 'Canal Livre')
 
       patch "/api/v1/inboxes/#{unbound.id}/agent_bot_inbox", params: { status: 'inactive' }, headers: headers, as: :json
@@ -187,13 +209,43 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(AgentBotInbox.where(inbox_id: unbound.id)).to be_empty
     end
 
+    # A member of the inbox passes the inbox policy, so only the inboxes.update
+    # gate stands between a read-only user and deactivating the agent.
     it 'answers 403 when the caller lacks inboxes.update' do
-      stub_auth(role_key: 'agent_restricted', granted: [])
+      InboxMember.create!(inbox: inbox, user: user)
+      stub_auth(role_key: 'agent_restricted', granted: %w[inboxes.read])
 
       patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox", params: { status: 'inactive' }, headers: headers, as: :json
 
       expect(response).to have_http_status(:forbidden)
       expect(bot_binding.reload).to be_active
+    end
+  end
+
+  describe 'POST /api/v1/inboxes/:id/set_agent_bot (transfer)' do
+    it "starts the new agent on defaults instead of the previous agent's configuration" do
+      other_binding.update!(moderation_enabled: true, explicit_words_filter: %w[palavra],
+                            facebook_interaction_type: 'comments_only', allowed_label_ids: [label.id])
+
+      post "/api/v1/inboxes/#{other_inbox.id}/set_agent_bot", params: { agent_bot: bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      other_binding.reload
+      expect(other_binding.agent_bot).to eq(bot)
+      expect(other_binding.moderation_enabled).to be(false)
+      expect(other_binding.explicit_words_filter).to eq([])
+      expect(other_binding.facebook_interaction_type).to eq('both')
+      expect(other_binding.allowed_label_ids).to eq([])
+      expect(other_binding.allowed_conversation_statuses).to eq(%w[pending])
+    end
+
+    it 'keeps the configuration when the same agent is set again' do
+      bot_binding.update!(moderation_enabled: true)
+
+      post "/api/v1/inboxes/#{inbox.id}/set_agent_bot", params: { agent_bot: bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(bot_binding.reload.moderation_enabled).to be(true)
     end
   end
 
@@ -217,7 +269,7 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(response.parsed_body.dig('data', 'agent_bot', 'id')).to eq(other_bot.id)
     end
 
-    it 'reports the bot_binding status on GET /inboxes/:id/agent_bot' do
+    it 'reports the binding status on GET /inboxes/:id/agent_bot' do
       get "/api/v1/inboxes/#{paused_inbox.id}/agent_bot", headers: headers
 
       expect(response).to have_http_status(:ok)

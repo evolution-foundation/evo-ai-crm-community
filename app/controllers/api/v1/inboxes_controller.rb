@@ -164,6 +164,7 @@ module Api
         def set_agent_bot
           if @agent_bot
             agent_bot_inbox = @inbox.agent_bot_inbox || AgentBotInbox.new(inbox: @inbox)
+            agent_bot_inbox.reset_configuration if agent_bot_inbox.persisted? && agent_bot_inbox.agent_bot_id != @agent_bot.id
             agent_bot_inbox.agent_bot = @agent_bot
 
             config_params = params[:agent_bot_config].presence
@@ -197,6 +198,12 @@ module Api
             return error_response(ApiErrorCodes::RESOURCE_NOT_FOUND, 'Inbox has no agent bot', status: :not_found)
           end
 
+          # The binding is addressed by its channel, and the channel may have moved to
+          # another agent since the caller loaded it: never edit that agent's binding.
+          if params[:agent_bot_id].present? && params[:agent_bot_id].to_s != agent_bot_inbox.agent_bot_id.to_s
+            return error_response(ApiErrorCodes::CONFLICT, 'Inbox is bound to another agent bot', status: :conflict)
+          end
+
           if params.key?(:status)
             unless AgentBotInbox.statuses.key?(params[:status].to_s)
               return error_response(ApiErrorCodes::INVALID_PARAMETER, 'status must be active or inactive', status: :unprocessable_entity)
@@ -207,6 +214,7 @@ module Api
 
           config_params = params[:agent_bot_config].presence
           assign_agent_bot_config(agent_bot_inbox, config_params) if config_params
+          agent_bot_inbox.prune_missing_label_ids
 
           if agent_bot_inbox.save
             success_response(
