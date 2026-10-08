@@ -3,6 +3,8 @@
 require 'rails_helper'
 
 RSpec.describe Api::V1::CallbacksController, type: :controller do
+  render_views
+
   let(:user) { User.create!(email: 'fb-pages-spec@example.com', name: 'Fb Pages Spec') }
   let(:oauth) { double('Koala OAuth', exchange_access_token_info: { 'access_token' => 'long-lived' }) }
   let(:graph) { double('Koala API') }
@@ -30,6 +32,10 @@ RSpec.describe Api::V1::CallbacksController, type: :controller do
 
       expect(response).to have_http_status(:ok)
       expect(Koala::Facebook::API).to have_received(:new).with('long-lived')
+
+      body = JSON.parse(response.body)
+      expect(body.dig('data', 'page_details')).to match([a_hash_including('id' => '111', 'name' => 'Page One', 'exists' => false)])
+      expect(body.dig('data', 'user_access_token')).to eq('long-lived')
     end
 
     # long_lived_token used to log the error and return the logger's return value (true) as the
