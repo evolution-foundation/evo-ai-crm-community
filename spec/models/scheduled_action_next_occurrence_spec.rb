@@ -12,6 +12,7 @@ RSpec.describe ScheduledAction, '#create_next_occurrence' do
       scheduled_for: 1.minute.from_now,
       payload: { 'task_title' => 'Call back' },
       created_by: user.id,
+      notify_user_id: user.id,
       recurrence_type: 'daily'
     )
   end
@@ -26,6 +27,7 @@ RSpec.describe ScheduledAction, '#create_next_occurrence' do
       action_type: 'create_task',
       payload: { 'task_title' => 'Call back' },
       recurrence_type: 'daily',
+      notify_user_id: user.id,
       status: 'scheduled',
       scheduled_for: action.scheduled_for + 1.day
     )
