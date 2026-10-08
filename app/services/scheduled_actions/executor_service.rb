@@ -13,7 +13,7 @@ module ScheduledActions
       Rails.logger.info "  - scheduled? #{scheduled_action.scheduled?}"
       Rails.logger.info "  - scheduled_for: #{scheduled_action.scheduled_for}, Time.current: #{Time.current}"
 
-      return false unless scheduled_action.scheduled?
+      return false unless scheduled_action.scheduled? || scheduled_action.can_retry?
       return false if scheduled_action.scheduled_for > Time.current
 
       Rails.logger.info "ExecutorService.execute: Starting execution for action #{scheduled_action.id}"
@@ -27,8 +27,8 @@ module ScheduledActions
         if result[:success]
           log_execution(result, execution_time_ms, 'completed')
           scheduled_action.mark_as_completed!
-          create_next_occurrence_if_recurring
-          notify_success
+          after_completion { create_next_occurrence_if_recurring }
+          after_completion { notify_success }
           true
         else
           log_execution(result, execution_time_ms, 'failed')
@@ -380,6 +380,14 @@ module ScheduledActions
       end
     end
 
+    # The action already ran: an error here is logged, never handed to handle_failure,
+    # whose retry would run the action again.
+    def after_completion
+      yield
+    rescue StandardError => e
+      Rails.logger.error "ExecutorService: post-completion step failed for action #{scheduled_action.id}: #{e.message}"
+    end
+
     def create_next_occurrence_if_recurring
       scheduled_action.create_next_occurrence if scheduled_action.recurring?
     end
@@ -387,29 +395,16 @@ module ScheduledActions
     def notify_success
       return unless scheduled_action.notify_user_id
 
-      ScheduledActions::NotificationService.notify_on_success(
-        scheduled_action,
-        scheduled_action.notify_user_id
-      )
+      ScheduledActions::NotificationService.notify_on_success(scheduled_action)
     end
 
     def notify_failure
       return unless scheduled_action.notify_user_id
 
-      retry_attempt = scheduled_action.retry_count > 0
-      notification_type = retry_attempt ? :retry : :failure
-
-      if retry_attempt
-        ScheduledActions::NotificationService.notify_on_retry(
-          scheduled_action,
-          scheduled_action.notify_user_id
-        )
-      else
-        ScheduledActions::NotificationService.notify_on_failure(
-          scheduled_action,
-          scheduled_action.notify_user_id
-        )
-      end
+      ScheduledActions::NotificationService.notify_on_failure(
+        scheduled_action,
+        scheduled_action.error_message
+      )
     end
 
     def log_execution(result, execution_time_ms, status)

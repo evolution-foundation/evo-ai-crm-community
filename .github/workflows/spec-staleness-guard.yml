@@ -510,6 +510,11 @@ on:
       - 'app/models/scheduled_action.rb'
       - 'spec/services/scheduled_actions/executor_service_create_task_spec.rb'
       - 'spec/services/scheduled_actions/executor_service_spec.rb'
+      # A failed action retries through the processor job and is notified once its
+      # attempts run out.
+      - 'app/jobs/scheduled_actions_processor_job.rb'
+      - 'app/services/scheduled_actions/notification_service.rb'
+      - 'spec/services/scheduled_actions/executor_service_retry_spec.rb'
 
 permissions:
   contents: read
@@ -734,4 +739,5 @@ jobs:
             spec/requests/api/v1/team_members_spec.rb \
             spec/services/scheduled_actions/executor_service_create_task_spec.rb \
             spec/services/scheduled_actions/executor_service_spec.rb \
+            spec/services/scheduled_actions/executor_service_retry_spec.rb \
             --format progress

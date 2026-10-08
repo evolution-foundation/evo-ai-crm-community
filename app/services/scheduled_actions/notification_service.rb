@@ -10,10 +10,6 @@ module ScheduledActions
       new(scheduled_action).notify_on_failure(error)
     end
 
-    def self.notify_on_retry(scheduled_action)
-      new(scheduled_action).notify_on_retry
-    end
-
     def initialize(scheduled_action)
       @scheduled_action = scheduled_action
       @notifier = scheduled_action.notifier || scheduled_action.creator
@@ -34,15 +30,6 @@ module ScheduledActions
       create_notification(
         notification_type: 'failure',
         message: build_failure_message(error)
-      )
-    end
-
-    def notify_on_retry
-      return if @notifier.blank?
-
-      create_notification(
-        notification_type: 'retry',
-        message: build_retry_message
       )
     end
 
@@ -78,13 +65,6 @@ module ScheduledActions
       error_info = error.present? ? " - #{error}" : ''
 
       "Ação agendada '#{action_label}' falhou#{target}#{error_info}"
-    end
-
-    def build_retry_message
-      action_label = action_type_label(@scheduled_action.action_type)
-      target = target_label
-
-      "Ação agendada '#{action_label}' será repetida (tentativa #{@scheduled_action.retry_count + 1})#{target}"
     end
 
     def target_label
