@@ -8,17 +8,9 @@ class Instagram::SendOnInstagramService < Instagram::BaseSendService
   # Deliver a message with the given payload.
   # https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api
   def send_message(message_content)
-    access_token = channel.access_token
-    query = { access_token: access_token }
-    instagram_id = channel.instagram_id.presence || 'me'
+    url = "#{MetaBaseUrl.for(:instagram)}/#{channel.instagram_id.presence || 'me'}/messages"
 
-    response = HTTParty.post(
-      "#{MetaBaseUrl.for(:instagram)}/#{instagram_id}/messages",
-      body: message_content,
-      query: query
-    )
-
-    process_response(response, message_content)
+    post_to_meta(url, message_content) { { access_token: channel.access_token } }
   end
 
   def merge_human_agent_tag(params)
