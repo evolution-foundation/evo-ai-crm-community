@@ -188,7 +188,6 @@ class ScheduledAction < ApplicationRecord
       template_id: template_id,
       created_by: created_by,
       max_retries: max_retries,
-      journey_session_id: journey_session_id,
       recurrence_type: recurrence_type,
       recurrence_config: recurrence_config
     )

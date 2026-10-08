@@ -465,6 +465,9 @@ on:
       - 'spec/services/public/leads/creation_service_spec.rb'
       - 'spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb'
       - 'spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb'
+      # A recurring action books its next run from its own columns; a stale
+      # attribute there fails the action after it already ran.
+      - 'spec/models/scheduled_action_next_occurrence_spec.rb'
       # The contact's conversation list renders through the shared serializer and
       # the shared list lookups, so its own spec is the only lane that pins the
       # route's envelope, its permission gate and its flat query count.
@@ -561,6 +564,7 @@ jobs:
             spec/services/data_import/contact_manager_phone_lookup_spec.rb \
             spec/services/data_import/conversation_manager_phone_lookup_spec.rb \
             spec/services/scheduled_actions/executor_service_whatsapp_source_id_spec.rb \
+            spec/models/scheduled_action_next_occurrence_spec.rb \
             spec/services/whatsapp/evolution_go_handlers/messages_upsert_spec.rb \
             spec/services/public/leads/creation_service_spec.rb \
             spec/requests/api/v1/webhooks/purchase_platforms_spec.rb \
