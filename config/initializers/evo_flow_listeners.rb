@@ -12,6 +12,7 @@ Rails.application.config.after_initialize do
   Wisper.subscribe(EvoFlow::MessageEventsListener.new)
   Wisper.subscribe(EvoFlow::PipelineEventsListener.new)
   Wisper.subscribe(EvoFlow::PurchaseEventsListener.new)
+  Wisper.subscribe(EvoFlow::ScheduledActionEventsListener.new)
 
   # Eager-reference EventSchema so its boot-time sanity check (verifies every
   # EVENT_NAME has a DEFINITIONS entry) runs at startup, not lazily on the
@@ -20,5 +21,5 @@ Rails.application.config.after_initialize do
   # that broke the EVENT_NAMES <-> DEFINITIONS sync.
   EvoFlow::EventSchema
 
-  Rails.logger.info 'EvoFlow listeners registered (contact, conversation, message, pipeline, purchase)'
+  Rails.logger.info 'EvoFlow listeners registered (contact, conversation, message, pipeline, purchase, scheduled_action)'
 end

@@ -45,6 +45,8 @@
 #
 
 class ScheduledAction < ApplicationRecord
+  include Wisper::Publisher
+
   # Associations
   belongs_to :contact, optional: true
   belongs_to :conversation, optional: true
@@ -52,6 +54,9 @@ class ScheduledAction < ApplicationRecord
   belongs_to :notifier, class_name: 'User', foreign_key: :notify_user_id, optional: true
   has_many :execution_logs, class_name: 'ScheduledActionExecutionLog', dependent: :destroy_async
   has_many :notifications, class_name: 'ScheduledActionNotification', dependent: :destroy_async
+
+  # Creator of the actions that arrive with the service token (journeys).
+  SERVICE_CREATOR_EMAIL = 'system@evoai.app'
 
   # Enums
   ACTION_TYPES = %w[
@@ -91,6 +96,10 @@ class ScheduledAction < ApplicationRecord
 
   validate :scheduled_for_cannot_be_in_past, on: :create
   validate :at_least_one_target_present
+
+  # On the status transition, not in mark_as_failed!: an expiry can set
+  # `failed` with a direct update.
+  after_update_commit :publish_outcome, if: :outcome_reached?
 
   # Scopes
   scope :for_deal, ->(deal_id) { where(deal_id: deal_id) }
@@ -188,7 +197,6 @@ class ScheduledAction < ApplicationRecord
       template_id: template_id,
       created_by: created_by,
       max_retries: max_retries,
-      journey_session_id: journey_session_id,
       recurrence_type: recurrence_type,
       recurrence_config: recurrence_config
     )
@@ -217,6 +225,14 @@ class ScheduledAction < ApplicationRecord
   end
 
   private
+
+  def outcome_reached?
+    saved_change_to_status? && (completed? || failed?)
+  end
+
+  def publish_outcome
+    publish(:scheduled_action_outcome, data: { scheduled_action: self })
+  end
 
   def scheduled_for_cannot_be_in_past
     return unless scheduled_for.present? && scheduled_for < Time.current
