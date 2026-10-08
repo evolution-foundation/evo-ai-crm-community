@@ -162,6 +162,13 @@ module Api
         end
 
         def set_agent_bot
+          # CRM-41: the caller states which agent it saw on the channel (null = none);
+          # if the channel changed hands since, refuse rather than transfer unconfirmed.
+          if params.key?(:expected_agent_bot_id) &&
+             params[:expected_agent_bot_id].to_s != @inbox.agent_bot_inbox&.agent_bot_id.to_s
+            return error_response(ApiErrorCodes::CONFLICT, 'Inbox is bound to another agent bot', status: :conflict)
+          end
+
           if @agent_bot
             agent_bot_inbox = @inbox.agent_bot_inbox || AgentBotInbox.new(inbox: @inbox)
             agent_bot_inbox.reset_configuration if agent_bot_inbox.persisted? && agent_bot_inbox.agent_bot_id != @agent_bot.id

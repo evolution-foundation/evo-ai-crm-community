@@ -247,6 +247,42 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(response).to have_http_status(:ok)
       expect(bot_binding.reload.moderation_enabled).to be(true)
     end
+
+    it 'transfers when the channel is still with the agent the caller saw' do
+      post "/api/v1/inboxes/#{other_inbox.id}/set_agent_bot",
+           params: { agent_bot: bot.id, expected_agent_bot_id: other_bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(other_binding.reload.agent_bot).to eq(bot)
+    end
+
+    it 'refuses with 409 when the channel changed hands since the caller saw it' do
+      third_bot = AgentBot.create!(name: 'Agente Terceiro', outgoing_url: 'https://example.test/third')
+
+      post "/api/v1/inboxes/#{other_inbox.id}/set_agent_bot",
+           params: { agent_bot: third_bot.id, expected_agent_bot_id: bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:conflict)
+      expect(other_binding.reload.agent_bot).to eq(other_bot)
+    end
+
+    it 'refuses with 409 when a channel seen as free got an agent meanwhile' do
+      post "/api/v1/inboxes/#{other_inbox.id}/set_agent_bot",
+           params: { agent_bot: bot.id, expected_agent_bot_id: nil }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:conflict)
+      expect(other_binding.reload.agent_bot).to eq(other_bot)
+    end
+
+    it 'links a channel the caller saw as free' do
+      free_inbox = Inbox.create!(channel: Channel::Api.create!, name: 'Canal Livre')
+
+      post "/api/v1/inboxes/#{free_inbox.id}/set_agent_bot",
+           params: { agent_bot: bot.id, expected_agent_bot_id: nil }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(free_inbox.reload.agent_bot_inbox.agent_bot).to eq(bot)
+    end
   end
 
   describe 'which agent answers a channel' do
