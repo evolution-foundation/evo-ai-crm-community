@@ -14,7 +14,7 @@ class AgentBots::InactivityActionsService
     return if inactivity_actions.empty?
 
     time_inactive_minutes = calculate_inactive_time_minutes
-    last_incoming = @conversation.messages.incoming.order(created_at: :desc).first
+    last_incoming = @conversation.messages.incoming.reorder(created_at: :desc).first
     Rails.logger.info "[InactivityActions] Time inactive: #{time_inactive_minutes} minutes (since last incoming message at #{last_incoming&.created_at})"
 
     action_to_execute = find_action_to_execute(inactivity_actions, time_inactive_minutes)
@@ -94,7 +94,7 @@ class AgentBots::InactivityActionsService
   def calculate_inactive_time_minutes
     # Calcula inatividade baseado na última mensagem INCOMING (do cliente)
     # Ignora mensagens do bot para evitar resetar o timer de inatividade
-    last_incoming_message = @conversation.messages.incoming.order(created_at: :desc).first
+    last_incoming_message = @conversation.messages.incoming.reorder(created_at: :desc).first
     last_activity = last_incoming_message&.created_at || @conversation.created_at
 
     time_diff_seconds = Time.current - last_activity
