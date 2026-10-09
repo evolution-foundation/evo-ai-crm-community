@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
 # Repairs Hub-managed Instagram and Facebook channels still holding the placeholder platform id
-# after the Hub finished connecting them. Inbound events are matched by the real id, so those
-# channels drop every message until the id is replaced. Report-only by default; `apply` writes.
-#
-# Only channels the Hub reports as `active` with a real id are touched: one that never finished
-# the Meta login has no real id to take, and must not be marked active.
+# after the Hub finished connecting them. Report-only by default; `apply` writes. Only channels
+# the Hub reports `active` with a real id are touched: one that never finished the Meta login
+# has no real id to take, and must not be marked active.
 module EvolutionHub
   class PlaceholderIdRepairService
     TARGETS = {
@@ -52,7 +50,7 @@ module EvolutionHub
            .where("evolution_hub_meta ->> 'channel_id' IS NOT NULL")
     end
 
-    # One channel failing must not stop the others: this runs against production during an incident.
+    # One channel failing must not stop the others.
     def handle_one(channel)
       handle(channel)
     rescue StandardError => e

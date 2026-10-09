@@ -15,18 +15,20 @@ RSpec.describe EvolutionHub::ChannelReconciler, 'placeholder platform ids' do
     allow(Rails.configuration.dispatcher).to receive(:dispatch)
   end
 
+  # Through the real builder, so a builder that stops minting the placeholder fails this spec.
+  def pending_channel(channel_type, hub_id)
+    builder = EvolutionHub::InboxBuilder.new(channel_type: channel_type, name: "Hub #{channel_type}")
+    hub = instance_double(EvolutionHub::Client, create_channel: { 'channel' => { 'id' => hub_id }, 'webhook_id' => 'wh' })
+    allow(builder).to receive(:hub_client).and_return(hub)
+    builder.perform[:inbox].channel
+  end
+
   def pending_instagram(hub_id = hub_channel_id)
-    Channel::Instagram.create!(
-      access_token: '', instagram_id: EvolutionHub::ChannelReconciler.pending_id, expires_at: 60.days.from_now,
-      evolution_hub_meta: { 'status' => 'pending', 'channel_id' => hub_id }
-    )
+    pending_channel('instagram', hub_id)
   end
 
   def pending_facebook(hub_id = hub_channel_id)
-    Channel::FacebookPage.create!(
-      user_access_token: '', page_access_token: '', page_id: EvolutionHub::ChannelReconciler.pending_id,
-      evolution_hub_meta: { 'status' => 'pending', 'channel_id' => hub_id }
-    )
+    pending_channel('facebook_page', hub_id)
   end
 
   # What row-level security does to a channel of another account: the holder lookup and the
