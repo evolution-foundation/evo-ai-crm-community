@@ -89,11 +89,21 @@ module Api
             )
           end
 
+          # An unlinked (inactive) binding keeps its row; the agent must stay silent.
+          agent_bot_inbox = @moderation.conversation.inbox.agent_bot_inbox
+          unless agent_bot_inbox&.active?
+            return error_response(
+              ApiErrorCodes::INVALID_PARAMETER,
+              'Inbox has no active agent bot',
+              status: :unprocessable_entity
+            )
+          end
+
           # Queue job to regenerate response
           Facebook::Moderation::GenerateResponseJob.perform_later(
             @moderation.message_id,
             @moderation.conversation_id,
-            @moderation.conversation.inbox.agent_bot_inbox&.agent_bot_for_conversation(@moderation.conversation)&.id
+            agent_bot_inbox.agent_bot_for_conversation(@moderation.conversation)&.id
           )
 
           success_response(

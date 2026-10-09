@@ -98,6 +98,7 @@ Rails.application.routes.draw do
         get :assignable_agents, on: :member
         get :agent_bot, on: :member
         post :set_agent_bot, on: :member
+        patch :agent_bot_inbox, action: :update_agent_bot_inbox, on: :member
         get :facebook_posts, on: :member
         post :setup_channel_provider, on: :member
         post :disconnect_channel_provider, on: :member
@@ -167,6 +168,7 @@ Rails.application.routes.draw do
 
       resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'agent_bots' do
         delete :avatar, on: :member
+        get :inboxes, on: :member
       end
 
       resources :canned_responses, only: [:index, :show, :create, :update, :destroy], controller: 'canned_responses'
@@ -213,6 +215,7 @@ Rails.application.routes.draw do
 
       resources :agent_bots, only: [:index, :create, :show, :update, :destroy], controller: 'agent_bots' do
         delete :avatar, on: :member
+        get :inboxes, on: :member
       end
 
       resources :contacts, only: [:index, :show, :update, :create, :destroy], controller: 'contacts' do

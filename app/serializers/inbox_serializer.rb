@@ -17,10 +17,11 @@ module InboxSerializer
   # @option options [Boolean] :include_channel Include channel details
   # @option options [Boolean] :include_portal Include portal details
   # @option options [Boolean] :include_members Include team members
+  # @option options [Boolean] :include_agent_bot Include the agent bot bound to the inbox
   #
   # @return [Hash] Serialized inbox ready for Oj
   #
-  def serialize(inbox, include_channel: false, include_portal: false, include_members: false)
+  def serialize(inbox, include_channel: false, include_portal: false, include_members: false, include_agent_bot: false)
     # 🔒 SECURITY: hmac_token is excluded from as_json to prevent exposure in public APIs
     # It will be conditionally added later only for administrators
     result = inbox.as_json(
@@ -54,6 +55,12 @@ module InboxSerializer
       result['health_source'] = health[:source]
       result['last_sync'] = health[:last_sync]&.to_i
       result['reauthorization_required'] = health[:reauthorization_required]
+
+      # The channel's own address, shown next to its name. Only the address: the
+      # channel's configuration carries credentials.
+      result['phone_number'] = inbox.channel.phone_number if inbox.whatsapp? || inbox.sms? || inbox.twilio?
+      result['email'] = inbox.channel.email if inbox.email?
+      result['email'] = inbox.channel.from_email if inbox.sendgrid?
 
       # WhatsApp-specific data required by channel settings screens
       if inbox.whatsapp?
@@ -128,6 +135,21 @@ module InboxSerializer
       result['members'] = inbox.members.map do |member|
         UserSerializer.serialize(member)
       end
+    end
+
+    # Which agent answers this channel today, so linking it elsewhere can
+    # warn before transferring. Inactive bindings are reported too: linking would
+    # still replace them and drop their configuration.
+    if include_agent_bot
+      agent_bot_inbox = inbox.agent_bot_inbox
+      result['agent_bot'] =
+        if agent_bot_inbox&.agent_bot
+          {
+            id: agent_bot_inbox.agent_bot.id,
+            name: agent_bot_inbox.agent_bot.name,
+            status: agent_bot_inbox.status
+          }
+        end
     end
 
     result
