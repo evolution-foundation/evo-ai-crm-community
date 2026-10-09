@@ -18,6 +18,62 @@
 module EvolutionHub
   class ChannelReconciler
     PLACEHOLDER_PREFIX = 'hub-managed-'
+    # A Hub channel is created before the end user finishes the Meta login, so its platform id
+    # (instagram_id / page_id) starts as this placeholder until channel_connected brings the
+    # real one. Inbound events are matched by the real id, so a surviving placeholder drops them.
+    PENDING_ID_PREFIX = 'pending_'
+
+    def self.placeholder_id?(value)
+      value.blank? || value.to_s.start_with?(PENDING_ID_PREFIX)
+    end
+
+    def self.pending_id
+      "#{PENDING_ID_PREFIX}#{SecureRandom.hex(6)}"
+    end
+
+    PLATFORM_ID_ATTRIBUTES = { 'Channel::Instagram' => :instagram_id, 'Channel::FacebookPage' => :page_id }.freeze
+
+    # Replaces a placeholder platform id with the real one. A real id is never overwritten, and a
+    # real id another channel already holds is left alone: the unique index would fail the save
+    # and the channel would not even turn active. That clash is logged for an operator.
+    def self.assign_platform_id(channel, attribute, real_id)
+      return if real_id.blank?
+      return unless placeholder_id?(channel.read_attribute(attribute))
+
+      holder = platform_id_holder(channel, attribute, real_id)
+      return log_platform_id_clash(channel, attribute, "#{channel.class.name}##{holder}") if holder
+
+      channel.write_attribute(attribute, real_id)
+    end
+
+    def self.platform_id_holder(channel, attribute, real_id)
+      channel.class.where(attribute => real_id).where.not(id: channel.id).pick(:id)
+    end
+
+    # The holder lookup and the uniqueness validation run under row-level security, so a channel
+    # of another account holding the same real id is invisible to both, while the unique index is
+    # global. When the write refuses the real id, the channel keeps its placeholder and is saved
+    # anyway, so it still turns active. The savepoint keeps the caller's transaction usable.
+    def self.save_keeping_placeholder!(channel)
+      attribute = PLATFORM_ID_ATTRIBUTES[channel.class.name]
+      previous = attribute && channel.attribute_in_database(attribute)
+      channel.transaction(requires_new: true) { channel.save! }
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+      raise if attribute.nil? || channel.read_attribute(attribute) == previous
+      raise if e.is_a?(ActiveRecord::RecordInvalid) && !channel.errors.of_kind?(attribute, :taken)
+
+      log_platform_id_clash(channel, attribute, 'a channel this account cannot see')
+      channel.write_attribute(attribute, previous)
+      channel.save!
+    end
+
+    def self.log_platform_id_clash(channel, attribute, holder)
+      Rails.logger.error(
+        "EvolutionHub: #{channel.class.name}##{channel.id} keeps its placeholder #{attribute}: " \
+        "the real id already belongs to #{holder}"
+      )
+      nil
+    end
 
     # Reconcilia o canal a partir de `attrs` (já normalizado) marcando 'active'. Salva. Retorna o channel.
     def self.apply(channel, attrs)
@@ -85,7 +141,7 @@ module EvolutionHub
       when ::Channel::FacebookPage then apply_facebook
       when ::Channel::Instagram    then apply_instagram
       end
-      @channel.save!
+      self.class.save_keeping_placeholder!(@channel)
       @channel
     end
 
@@ -116,17 +172,17 @@ module EvolutionHub
 
     def apply_facebook
       @channel.page_access_token = @attrs['page_access_token'].presence || @channel.page_access_token
-      @channel.page_id = @attrs['page_id'] if @channel.read_attribute(:page_id).blank? && @attrs['page_id'].present?
+      self.class.assign_platform_id(@channel, :page_id, @attrs['page_id'])
       @channel.evolution_hub_meta = active_hub_meta
     end
 
     def apply_instagram
       @channel.access_token = @attrs['access_token'] if @attrs['access_token'].present?
-      @channel.instagram_id = @attrs['instagram_user_id'] if @channel.instagram_id.blank? && @attrs['instagram_user_id'].present?
+      self.class.assign_platform_id(@channel, :instagram_id, @attrs['instagram_user_id'])
       # presence guards (IG valida access_token/instagram_id unless hub_pending?). read_attribute:
       # o getter access_token é sobrescrito (RefreshOauthTokenService) e clobraria o token novo.
       @channel.access_token = "#{PLACEHOLDER_PREFIX}#{SecureRandom.hex(8)}" if @channel.read_attribute(:access_token).blank?
-      @channel.instagram_id = "pending_#{SecureRandom.hex(6)}" if @channel.instagram_id.blank?
+      @channel.instagram_id = self.class.pending_id if @channel.instagram_id.blank?
       @channel.evolution_hub_meta = active_hub_meta
     end
   end

@@ -122,9 +122,9 @@ module EvolutionHub
       # já existe se o payload omitir (nunca sobrescreve com nil — igual mark_whatsapp_connected).
       fb = payload['facebook_connection'] || {}
       channel.page_access_token = meta['access_token'].presence || fb['page_access_token'].presence || channel.page_access_token
-      channel.page_id = fb['page_id'] if channel.read_attribute(:page_id).blank? && fb['page_id'].present?
+      ChannelReconciler.assign_platform_id(channel, :page_id, fb['page_id'])
       channel.evolution_hub_meta = active_hub_meta(channel)
-      channel.save!
+      ChannelReconciler.save_keeping_placeholder!(channel)
       mark_inbox_active(channel)
     end
 
@@ -134,14 +134,17 @@ module EvolutionHub
       ig = payload['instagram_connection'] || {}
       token = meta['access_token'].presence || ig['access_token'].presence
       channel.access_token = token if token
-      if channel.instagram_id.blank?
-        channel.instagram_id = meta['instagram_user_id'].presence || ig['instagram_user_id'].presence || ig['instagram_id'].presence
-      end
+      ChannelReconciler.assign_platform_id(
+        channel, :instagram_id,
+        meta['instagram_user_id'].presence || ig['instagram_user_id'].presence || ig['instagram_id'].presence
+      )
       # Fallback (Hub antigo, sem a chave no payload): busca o id real via GET /channels/:id.
-      channel.instagram_id = real_instagram_id_from_hub(channel) if channel.instagram_id.blank?
+      if ChannelReconciler.placeholder_id?(channel.instagram_id)
+        ChannelReconciler.assign_platform_id(channel, :instagram_id, real_instagram_id_from_hub(channel))
+      end
       ensure_instagram_presence(channel)
       channel.evolution_hub_meta = active_hub_meta(channel)
-      channel.save!
+      ChannelReconciler.save_keeping_placeholder!(channel)
       mark_inbox_active(channel)
     end
 
@@ -163,7 +166,7 @@ module EvolutionHub
     # retorna nil quando expires_at blank — usar o getter clobraria o token recém-setado.
     def ensure_instagram_presence(channel)
       channel.access_token = "hub-managed-#{SecureRandom.hex(8)}" if channel.read_attribute(:access_token).blank?
-      channel.instagram_id = "pending_#{SecureRandom.hex(6)}" if channel.instagram_id.blank?
+      channel.instagram_id = ChannelReconciler.pending_id if channel.instagram_id.blank?
     end
 
     # Busca o instagram_user_id REAL no Hub (GET /channels/:id → instagram_connection) quando o

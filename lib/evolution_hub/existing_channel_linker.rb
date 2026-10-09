@@ -164,7 +164,7 @@ module EvolutionHub
         # proxy com channel_token. page_id é o que o inbound usa pra rotear.
         user_access_token: '',
         page_access_token: '',
-        page_id: fb['page_id'].presence || "pending_#{SecureRandom.hex(6)}",
+        page_id: fb['page_id'].presence || EvolutionHub::ChannelReconciler.pending_id,
         evolution_hub_meta: hub_block
       )
     end
@@ -173,7 +173,7 @@ module EvolutionHub
       ig = hub_channel['instagram_connection'] || {}
       Channel::Instagram.create!(
         access_token: '',
-        instagram_id: ig['instagram_user_id'].presence || "pending_#{SecureRandom.hex(6)}",
+        instagram_id: ig['instagram_user_id'].presence || EvolutionHub::ChannelReconciler.pending_id,
         expires_at: 60.days.from_now,
         evolution_hub_meta: hub_block
       )

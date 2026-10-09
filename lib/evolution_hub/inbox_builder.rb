@@ -91,7 +91,7 @@ module EvolutionHub
       Channel::FacebookPage.create!(
         user_access_token: '',
         page_access_token: '',
-        page_id: "pending_#{SecureRandom.hex(6)}",
+        page_id: EvolutionHub::ChannelReconciler.pending_id,
         evolution_hub_meta: { 'status' => 'pending' }
       )
     end
@@ -99,7 +99,7 @@ module EvolutionHub
     def build_instagram
       Channel::Instagram.create!(
         access_token: '',
-        instagram_id: "pending_#{SecureRandom.hex(6)}",
+        instagram_id: EvolutionHub::ChannelReconciler.pending_id,
         expires_at: 60.days.from_now,
         evolution_hub_meta: { 'status' => 'pending' }
       )
