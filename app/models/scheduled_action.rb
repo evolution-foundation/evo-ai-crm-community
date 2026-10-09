@@ -247,16 +247,21 @@ class ScheduledAction < ApplicationRecord
     errors.add(:base, 'must have at least one target (deal, contact, or conversation)')
   end
 
+  # A late run skips the slots it missed: create! rejects a time in the past.
   def calculate_next_scheduled_time
+    step = recurrence_step
+    return nil unless step
+
+    periods = 1
+    periods += 1 while scheduled_for + (step * periods) <= Time.current
+    scheduled_for + (step * periods)
+  end
+
+  def recurrence_step
     case recurrence_type
-    when 'daily'
-      scheduled_for + 1.day
-    when 'weekly'
-      scheduled_for + 1.week
-    when 'monthly'
-      scheduled_for + 1.month
-    else
-      nil
+    when 'daily' then 1.day
+    when 'weekly' then 1.week
+    when 'monthly' then 1.month
     end
   end
 end
