@@ -34,7 +34,7 @@ class Api::V1::AgentBotsController < Api::V1::BaseController
     )
   end
 
-  # CRM-41: the agent's Channels tab — active and inactive bindings alike,
+  # The agent's Channels tab — active and inactive bindings alike,
   # limited to the inboxes the caller can see.
   def inboxes
     agent_bot_inboxes = @agent_bot.agent_bot_inboxes

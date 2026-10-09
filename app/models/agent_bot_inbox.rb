@@ -109,7 +109,7 @@ class AgentBotInbox < ApplicationRecord
   # ignored label. Callers log this instead of a generic phrase.
   # Returns a short, log-safe string (no message content, no PII).
   def processing_block_reason(conversation)
-    # CRM-41: unlinking deactivates the binding; replies already in flight stop here.
+    # Unlinking deactivates the binding; replies already in flight stop here.
     return 'binding inactive' if inactive?
 
     if has_ignored_labels?(conversation)
@@ -172,23 +172,25 @@ class AgentBotInbox < ApplicationRecord
     auto_approve_responses auto_reject_explicit_words auto_reject_offensive_sentiment
   ].freeze
 
-  # CRM-41: a channel holds one binding, so linking it to another agent reuses the
+  # A channel holds one binding, so linking it to another agent reuses the
   # row. The previous agent's configuration must not carry over to the new one.
   def reset_configuration
     defaults = self.class.column_defaults
     CONFIGURATION_ATTRIBUTES.each { |attribute| self[attribute] = defaults[attribute].deep_dup }
   end
 
-  # A deleted Label leaves its id behind in these lists, and the label validations
-  # would then reject every later save — unlinking included. An id that no longer
-  # exists can never match a conversation, so dropping it changes nothing.
-  def prune_missing_label_ids
-    stored = (allowed_label_ids || []) + (ignored_label_ids || [])
-    return if stored.empty?
+  # A deleted Label leaves its id behind, and the label validation would then
+  # reject every later save — unlinking included. A stored ignored id whose label
+  # is gone can never match, so dropping it changes nothing; an unknown id the
+  # caller just sent is left for the validation to reject. Allowed ids are not
+  # pruned: a list whose only label is gone blocks every conversation, and
+  # emptying it would answer all.
+  def prune_missing_ignored_label_ids
+    return if ignored_label_ids.blank?
 
-    existing = Label.where(id: stored.map(&:to_s).uniq).pluck(:id).map(&:to_s)
-    self.allowed_label_ids = (allowed_label_ids || []).select { |id| existing.include?(id.to_s) }
-    self.ignored_label_ids = (ignored_label_ids || []).select { |id| existing.include?(id.to_s) }
+    stored = Array(attribute_in_database(:ignored_label_ids)).map(&:to_s)
+    existing = Label.where(id: ignored_label_ids.map(&:to_s).uniq).pluck(:id).map(&:to_s)
+    self.ignored_label_ids = ignored_label_ids.reject { |id| stored.include?(id.to_s) && existing.exclude?(id.to_s) }
   end
 
   # Moderation helper methods
@@ -292,11 +294,14 @@ class AgentBotInbox < ApplicationRecord
     errors.add(:allowed_conversation_statuses, "contains invalid statuses: #{invalid_statuses.join(', ')}")
   end
 
+  # Ids already stored are accepted even after their label is deleted, so a save
+  # never has to drop them (see prune_missing_ignored_label_ids); only new ids must exist.
   def validate_allowed_label_ids
     return if allowed_label_ids.blank?
 
     existing_label_ids = Label.pluck(:id).map(&:to_s)
-    invalid_label_ids = allowed_label_ids.map(&:to_s) - existing_label_ids
+    stored_label_ids = Array(attribute_in_database(:allowed_label_ids)).map(&:to_s)
+    invalid_label_ids = allowed_label_ids.map(&:to_s) - existing_label_ids - stored_label_ids
     return if invalid_label_ids.empty?
 
     errors.add(:allowed_label_ids, "contains invalid label IDs: #{invalid_label_ids.join(', ')}")

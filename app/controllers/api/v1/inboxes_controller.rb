@@ -162,7 +162,7 @@ module Api
         end
 
         def set_agent_bot
-          # CRM-41: the caller states which agent it saw on the channel (null = none);
+          # The caller states which agent it saw on the channel (null = none);
           # if the channel changed hands since, refuse rather than transfer unconfirmed.
           if params.key?(:expected_agent_bot_id) &&
              params[:expected_agent_bot_id].to_s != @inbox.agent_bot_inbox&.agent_bot_id.to_s
@@ -184,6 +184,7 @@ module Api
               agent_bot_inbox.ignored_label_ids = []
             end
 
+            agent_bot_inbox.prune_missing_ignored_label_ids
             agent_bot_inbox.status = :active
             agent_bot_inbox.save!
           elsif @inbox.agent_bot_inbox.present?
@@ -196,7 +197,7 @@ module Api
           )
         end
 
-        # CRM-41: edits the existing binding in place. Unlinking from the agent's
+        # Edits the existing binding in place. Unlinking from the agent's
         # Channels tab is `status: inactive`, which keeps the row and its
         # configuration so Reactivate restores it as it was.
         def update_agent_bot_inbox
@@ -221,7 +222,7 @@ module Api
 
           config_params = params[:agent_bot_config].presence
           assign_agent_bot_config(agent_bot_inbox, config_params) if config_params
-          agent_bot_inbox.prune_missing_label_ids
+          agent_bot_inbox.prune_missing_ignored_label_ids
 
           if agent_bot_inbox.save
             success_response(

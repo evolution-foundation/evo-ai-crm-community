@@ -476,15 +476,35 @@ RSpec.describe 'Api::V1::FacebookCommentModerationsController', type: :request d
       )
     end
 
+    let(:agent_bot) { AgentBot.create!(name: 'Moderation Bot', outgoing_url: 'https://example.test/bot') }
+
     context 'when moderation is for response approval' do
+      before { AgentBotInbox.create!(inbox: inbox, agent_bot: agent_bot, status: :active) }
+
       it 'queues response regeneration job' do
-        post "/api/v1/facebook_comment_moderations/#{moderation.id}/regenerate_response", headers: headers
+        expect do
+          post "/api/v1/facebook_comment_moderations/#{moderation.id}/regenerate_response", headers: headers
+        end.to have_enqueued_job(Facebook::Moderation::GenerateResponseJob)
+          .with(message.id, conversation.id, agent_bot.id)
 
         expect(response).to have_http_status(:ok)
         json = json_response
 
         expect(json['success']).to be true
         expect(json['message']).to include('queued successfully')
+      end
+    end
+
+    # Unlinking keeps the binding row, inactive; the agent must not answer through it.
+    context 'when the agent was unlinked from the inbox' do
+      before { AgentBotInbox.create!(inbox: inbox, agent_bot: agent_bot, status: :inactive) }
+
+      it 'refuses without queueing a response' do
+        expect do
+          post "/api/v1/facebook_comment_moderations/#{moderation.id}/regenerate_response", headers: headers
+        end.not_to have_enqueued_job(Facebook::Moderation::GenerateResponseJob)
+
+        expect(response).to have_http_status(:unprocessable_entity)
       end
     end
 

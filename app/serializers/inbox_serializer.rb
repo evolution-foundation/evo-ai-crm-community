@@ -56,6 +56,12 @@ module InboxSerializer
       result['last_sync'] = health[:last_sync]&.to_i
       result['reauthorization_required'] = health[:reauthorization_required]
 
+      # The channel's own address, shown next to its name. Only the address: the
+      # channel's configuration carries credentials.
+      result['phone_number'] = inbox.channel.phone_number if inbox.whatsapp? || inbox.sms? || inbox.twilio?
+      result['email'] = inbox.channel.email if inbox.email?
+      result['email'] = inbox.channel.from_email if inbox.sendgrid?
+
       # WhatsApp-specific data required by channel settings screens
       if inbox.whatsapp?
         result['provider_config'] = inbox.channel.try(:provider_config)
@@ -131,7 +137,7 @@ module InboxSerializer
       end
     end
 
-    # CRM-41: which agent answers this channel today, so linking it elsewhere can
+    # Which agent answers this channel today, so linking it elsewhere can
     # warn before transferring. Inactive bindings are reported too: linking would
     # still replace them and drop their configuration.
     if include_agent_bot

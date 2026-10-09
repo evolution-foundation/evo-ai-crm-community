@@ -3,7 +3,7 @@
 require 'rails_helper'
 require 'webmock/rspec'
 
-# CRM-41: the agent's Channels tab lists its bindings, unlinks them by
+# The agent's Channels tab lists its bindings, unlinks them by
 # deactivating (the row and its configuration survive), and the inbox payload
 # says which agent answers a channel so linking it elsewhere can warn first.
 RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
@@ -80,7 +80,8 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
 
       active = data.find { |row| row['inbox_id'] == inbox.id }
       expect(active['status']).to eq('active')
-      expect(active.dig('inbox', 'name')).to eq('Canal Vendas')
+      # Inbox#name is stored as a slug; the text the user typed is display_name.
+      expect(active.dig('inbox', 'display_name')).to eq('Canal Vendas')
       expect(active.dig('configuration', 'allowed_conversation_statuses')).to eq(%w[pending open])
       expect(active.dig('configuration', 'allowed_label_ids')).to eq([label.id])
 
@@ -186,7 +187,7 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(bot_binding.reload).to be_active
     end
 
-    it 'still unlinks when a label it referenced was deleted' do
+    it 'still unlinks when a label it referenced was deleted, keeping the allowed one' do
       gone = SecureRandom.uuid
       bot_binding.update_columns(allowed_label_ids: [label.id, gone], ignored_label_ids: [gone])
 
@@ -196,8 +197,51 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
       expect(response).to have_http_status(:ok)
       bot_binding.reload
       expect(bot_binding).to be_inactive
-      expect(bot_binding.allowed_label_ids).to eq([label.id])
+      expect(bot_binding.allowed_label_ids).to eq([label.id, gone])
       expect(bot_binding.ignored_label_ids).to eq([])
+    end
+
+    # Emptying the allowed list would turn "answers nobody" into "answers everybody".
+    it 'reactivates still blocked when the only allowed label was deleted' do
+      gone = SecureRandom.uuid
+      bot_binding.update_columns(status: AgentBotInbox.statuses[:inactive], allowed_label_ids: [gone])
+      conversation = instance_double(Conversation, status: 'pending', label_list: [], contact: nil)
+
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { status: 'active', agent_bot_id: bot.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      bot_binding.reload
+      expect(bot_binding).to be_active
+      expect(bot_binding.allowed_label_ids).to eq([gone])
+      expect(bot_binding.processing_block_reason(conversation)).to start_with('no allowed label')
+    end
+
+    it 'drops a deleted allowed label once the caller removes it' do
+      gone = SecureRandom.uuid
+      bot_binding.update_columns(allowed_label_ids: [label.id, gone])
+
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { agent_bot_config: { allowed_label_ids: [label.id] } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(bot_binding.reload.allowed_label_ids).to eq([label.id])
+    end
+
+    it 'rejects an allowed label that does not exist and was not stored' do
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { agent_bot_config: { allowed_label_ids: [label.id, SecureRandom.uuid] } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:bad_request)
+      expect(bot_binding.reload.allowed_label_ids).to eq([label.id])
+    end
+
+    it 'rejects an ignored label that does not exist and was not stored' do
+      patch "/api/v1/inboxes/#{inbox.id}/agent_bot_inbox",
+            params: { agent_bot_config: { ignored_label_ids: [SecureRandom.uuid] } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:bad_request)
+      expect(bot_binding.reload.ignored_label_ids).to eq([])
     end
 
     it 'answers 404 when the inbox has no binding' do
@@ -246,6 +290,18 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(bot_binding.reload.moderation_enabled).to be(true)
+    end
+
+    it 'sets the same agent again when an ignored label it referenced was deleted' do
+      gone = SecureRandom.uuid
+      bot_binding.update_columns(ignored_label_ids: [gone])
+
+      post "/api/v1/inboxes/#{inbox.id}/set_agent_bot",
+           params: { agent_bot: bot.id, agent_bot_config: { allowed_conversation_statuses: %w[open] } },
+           headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(bot_binding.reload.ignored_label_ids).to eq([])
     end
 
     it 'transfers when the channel is still with the agent the caller saw' do

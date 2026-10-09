@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# One agent_bot ↔ inbox binding, as the agent's Channels tab reads it (CRM-41).
+# One agent_bot ↔ inbox binding, as the agent's Channels tab reads it.
 module AgentBotInboxSerializer
   extend self
 

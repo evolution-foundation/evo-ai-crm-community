@@ -37,6 +37,19 @@ RSpec.describe Facebook::Moderation::ActionExecutorService do
     expect(attributes[:sender]).to eq(bot)
   end
 
+  it 'credits the bot linked to the inbox' do
+    AgentBotInbox.create!(inbox: inbox, agent_bot: bot, status: :active)
+
+    expect(attributes[:sender]).to eq(bot)
+  end
+
+  # Unlinking keeps the binding row, inactive: the bot no longer speaks for the inbox.
+  it 'credits the operator once the bot was unlinked from the inbox' do
+    AgentBotInbox.create!(inbox: inbox, agent_bot: bot, status: :inactive)
+
+    expect(attributes[:sender]).to eq(approver)
+  end
+
   it 'never reaches for a user who is not part of the moderation' do
     stranger = User.create!(name: 'Stranger', email: "stranger-#{SecureRandom.hex(4)}@test.com")
 

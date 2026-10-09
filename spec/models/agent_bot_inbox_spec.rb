@@ -34,7 +34,7 @@ RSpec.describe AgentBotInbox do
       instance_double(Conversation, status: status, label_list: labels, contact: nil)
     end
 
-    # CRM-41: unlinking deactivates the binding, and a reply already in flight
+    # Unlinking deactivates the binding, and a reply already in flight
     # when that happened must still be dropped.
     it 'blocks an inactive binding before any configured rule' do
       agent_bot_inbox = described_class.new(status: :inactive, allowed_conversation_statuses: ['open'])

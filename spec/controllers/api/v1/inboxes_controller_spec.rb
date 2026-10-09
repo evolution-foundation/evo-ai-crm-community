@@ -27,7 +27,7 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
   end
 
   describe '#set_agent_bot' do
-    let(:agent_bot) { instance_double(AgentBot) }
+    let(:agent_bot) { instance_double(AgentBot, id: 'bot-1') }
     let(:agent_bot_inbox) { instance_double(AgentBotInbox) }
     let(:existing_agent_bot_inbox) { nil }
     let(:inbox) { instance_double(Inbox, agent_bot_inbox: existing_agent_bot_inbox) }
@@ -44,6 +44,9 @@ RSpec.describe Api::V1::InboxesController, type: :controller do
       allow(agent_bot_inbox).to receive(:ignored_label_ids=)
       allow(agent_bot_inbox).to receive(:status=)
       allow(agent_bot_inbox).to receive(:save!)
+      allow(agent_bot_inbox).to receive(:persisted?).and_return(existing_agent_bot_inbox.present?)
+      allow(agent_bot_inbox).to receive(:agent_bot_id).and_return('bot-1')
+      allow(agent_bot_inbox).to receive(:prune_missing_ignored_label_ids)
     end
 
     context 'when inbox has no existing agent bot inbox' do
