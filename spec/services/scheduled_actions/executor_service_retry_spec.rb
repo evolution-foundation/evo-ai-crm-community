@@ -95,21 +95,58 @@ RSpec.describe ScheduledActions::ExecutorService do
     end
   end
 
-  context 'when a step after completion raises' do
+  context 'when a recurring action succeeds' do
     let(:recurrence_type) { 'daily' }
 
-    before do
-      stub_request(:post, webhook_url).to_return(status: 200)
-      # A daily action two days late books its next run in the past, which create! rejects.
-      travel 2.days
-    end
+    before { stub_request(:post, webhook_url).to_return(status: 200) }
 
-    it 'keeps the action completed and does not run it again' do
-      expect { run_due_actions }.not_to have_enqueued_job(ScheduledActionsProcessorJob)
+    it 'completes and books the next run' do
+      run_due_actions
 
       expect(action).to have_attributes(status: 'completed', retry_count: 0)
+      expect(ScheduledAction.where.not(id: action.id)).to contain_exactly(
+        have_attributes(
+          status: 'scheduled',
+          scheduled_for: action.scheduled_for + 1.day,
+          payload: action.payload,
+          notify_user_id: creator.id
+        )
+      )
       expect(a_request(:post, webhook_url)).to have_been_made.once
       expect(notification_types).to eq(['success'])
+    end
+  end
+
+  context 'when a step after completion raises' do
+    before { stub_request(:post, webhook_url).to_return(status: 200) }
+
+    shared_examples 'a completed action' do
+      it 'keeps the action completed and does not run it again' do
+        expect { run_due_actions }.not_to have_enqueued_job(ScheduledActionsProcessorJob)
+
+        expect(action).to have_attributes(status: 'completed', retry_count: 0)
+        expect(a_request(:post, webhook_url)).to have_been_made.once
+      end
+    end
+
+    context 'when booking the next run' do
+      let(:recurrence_type) { 'daily' }
+
+      before { allow(ScheduledAction).to receive(:create!).and_raise(ActiveRecord::RecordInvalid) }
+
+      it_behaves_like 'a completed action'
+
+      it 'still notifies the success' do
+        run_due_actions
+
+        expect(notification_types).to eq(['success'])
+      end
+    end
+
+    context 'when notifying the success' do
+      before { allow(ScheduledActions::NotificationService).to receive(:notify_on_success).and_raise(StandardError) }
+
+      it_behaves_like 'a completed action'
     end
   end
 end
