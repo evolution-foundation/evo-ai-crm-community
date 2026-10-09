@@ -32,4 +32,11 @@ RSpec.describe ScheduledAction, '#create_next_occurrence' do
       scheduled_for: action.scheduled_for + 1.day
     )
   end
+
+  it 'skips the runs missed by a late execution' do
+    action.mark_as_completed!
+    travel 2.days + 2.minutes
+
+    expect(action.create_next_occurrence.scheduled_for).to eq(action.scheduled_for + 3.days)
+  end
 end
