@@ -17,6 +17,13 @@ RSpec.describe Ai::ConsumerCompatibility do
     expect(described_class.accepts?(:ai_agents, 'gemini')).to be(true)
   end
 
+  it 'allows OpenRouter for inbox assist only among the OpenAI chat consumers' do
+    expect(described_class.accepts?(:inbox_assist, 'openrouter')).to be(true)
+    expect(described_class.accepts?(:audio_transcription, 'openrouter')).to be(false)
+    expect(described_class.accepts?(:label_suggestion, 'openrouter')).to be(false)
+    expect(described_class.accepts?(:moderation, 'openrouter')).to be(false)
+  end
+
   # These four build an OpenAI-shaped request (chat/completions, or Whisper for
   # transcription). A non-OpenAI provider there is a different protocol, not a
   # misconfiguration, so it must never reach the wire.
