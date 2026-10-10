@@ -93,7 +93,10 @@ class ConversationFinder
     query = apply_labels_filter(query)
     query = apply_source_id_filter(query)
 
-    query
+    # Narrow the shared permission-scoped relation by CURRENT assignment so
+    # the list and counts agree; authors/history must not satisfy this filter.
+    ids = Array(@params[:assignee_id]).flat_map { |value| value.to_s.split(',') }.map(&:strip).reject(&:empty?).uniq
+    ids.empty? ? query : query.where(conversations: { assignee_id: ids })
   end
 
   def build_conversations_query
