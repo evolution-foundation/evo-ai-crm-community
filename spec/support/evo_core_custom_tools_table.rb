@@ -7,7 +7,9 @@
 module EvoCoreCustomToolsTable
   module_function
 
-  def create! # rubocop:disable Metrics/MethodLength -- mirrors the Go migration column for column
+  # Mirrors the Go migrations column for column, including 000012, which dropped
+  # is_active: a column the core no longer has must not exist here either.
+  def create!
     connection = ActiveRecord::Base.connection
     connection.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
     return if connection.table_exists?(:evo_core_custom_tools)
@@ -25,7 +27,6 @@ module EvoCoreCustomToolsTable
       t.json :body_params, null: false
       t.json :error_handling, null: false
       t.json :values, null: false
-      t.boolean :is_active, default: true
       t.timestamps
     end
 

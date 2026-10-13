@@ -88,6 +88,48 @@ RSpec.describe Ai::MigrationState do
     end
   end
 
+  describe 'the recorded migration' do
+    before { InstallationConfig.where(name: described_class::MIGRATED_FLAG).delete_all }
+
+    it 'keeps the install migrated after every imported credential is deleted' do
+      register(imported_from: Ai::CredentialMigration::INSTALLATION_SOURCE)
+      described_class.record_migration!
+      Ai::Credential.delete_all
+      with_legacy_global('sk-legacy-9999')
+
+      # Deletes are real now: the last imported row going away is not a vote
+      # to reopen the legacy key the operator thinks is retired.
+      expect(described_class).to be_migrated
+      expect(Ai::CredentialResolver.resolve_key(for_consumer: :inbox_assist)).to be_nil
+    end
+
+    it 'does not change a legacy install that never recorded a migration' do
+      with_legacy_global('sk-legacy-9999')
+
+      expect(described_class).not_to be_migrated
+    end
+
+    it 'is backfilled from the imported rows left, without bringing back a deleted one' do
+      # The hook keeps its key and the credential imported from it is gone: a
+      # rerun of the migration would import it again.
+      hook = instance_double(Integrations::Hook, id: SecureRandom.uuid, settings: { 'api_key' => 'sk-hook-8888' })
+      allow(Integrations::Hook).to receive_messages(where: [hook], find_by: hook)
+      with_legacy_global('sk-legacy-9999')
+      register(imported_from: Ai::CredentialMigration::INSTALLATION_SOURCE)
+
+      expect(described_class.record_existing_migration!).to be(true)
+      expect(described_class).to be_migration_recorded
+      expect(Ai::Credential.pluck(:imported_from)).to eq([Ai::CredentialMigration::INSTALLATION_SOURCE])
+    end
+
+    it 'backfills nothing when no imported row is left' do
+      register(imported_from: nil)
+
+      expect(described_class.record_existing_migration!).to be(false)
+      expect(described_class).not_to be_migration_recorded
+    end
+  end
+
   describe 'the resolver honours the guard (AC3, AC4)' do
     it 'still serves the legacy key while the install has not migrated' do
       with_legacy_global('sk-legacy-9999')

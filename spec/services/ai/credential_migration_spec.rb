@@ -231,4 +231,70 @@ RSpec.describe Ai::CredentialMigration do
       expect(hook.settings['api_key']).to eq('sk-hook-2222')
     end
   end
+
+  describe 'recording the migration' do
+    let(:flag) { Ai::MigrationState::MIGRATED_FLAG }
+
+    before { InstallationConfig.where(name: flag).delete_all }
+
+    def recorded?
+      InstallationConfig.find_by(name: flag)&.value == true
+    end
+
+    it 'records it when the apply imports something' do
+      with_global_key('sk-global-1111')
+      run(apply: true)
+
+      expect(recorded?).to be(true)
+    end
+
+    it 'does not record a dry run' do
+      with_global_key('sk-global-1111')
+      run(apply: false)
+
+      expect(recorded?).to be(false)
+    end
+
+    it 'does not record a run that had nothing to import' do
+      run(apply: true)
+
+      expect(recorded?).to be(false)
+    end
+
+    it 'records it on a rerun over an install that migrated before the record existed' do
+      with_global_key('sk-global-1111')
+      run(apply: true)
+      InstallationConfig.where(name: flag).delete_all
+
+      run(apply: true)
+
+      expect(recorded?).to be(true)
+    end
+
+    it 'does not record a run that rolled back' do
+      with_global_key('sk-global-1111')
+      allow_any_instance_of(described_class).to receive(:import_installation).and_raise(ActiveRecord::StatementInvalid, 'boom') # rubocop:disable RSpec/AnyInstance
+
+      expect { run(apply: true) }.to raise_error(ActiveRecord::StatementInvalid)
+      expect(recorded?).to be(false)
+    end
+
+    it 'rolls the import back when recording it fails' do
+      with_global_key('sk-global-1111')
+      allow(Ai::MigrationState).to receive(:record_migration!).and_raise(ActiveRecord::RecordNotUnique, 'race')
+
+      expect { run(apply: true) }.to raise_error(ActiveRecord::RecordNotUnique)
+      expect(Ai::Credential.where.not(imported_from: nil)).to be_empty
+    end
+
+    it 'keeps the install migrated after every imported credential is deleted (AC1)' do
+      with_global_key('sk-global-1111')
+      run(apply: true)
+
+      Ai::Credential.delete_all
+
+      expect(Ai::MigrationState).to be_migrated
+      expect(Ai::CredentialResolver.resolve_key(for_consumer: :inbox_assist)).to be_nil
+    end
+  end
 end

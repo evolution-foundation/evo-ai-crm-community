@@ -15,4 +15,14 @@ namespace :integration_credentials do
   rescue Ai::IntegrationCredentialMigration::AbortedError => e
     abort("Migração abortada: #{e.message}")
   end
+
+  desc 'Grava a marca de migração numa instalação que migrou antes dela (não importa nada)'
+  task record_migration: :environment do
+    if Ai::IntegrationMigrationState.record_existing_migration!
+      puts 'Marca de migração gravada. Nenhuma credencial foi importada e nenhum consumidor foi religado.'
+    else
+      puts 'Nenhuma credencial importada encontrada: a marca não foi gravada. ' \
+           'Se ainda há segredo inline, rode integration_credentials:migrate_dry_run.'
+    end
+  end
 end
