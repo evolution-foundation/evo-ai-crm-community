@@ -51,11 +51,22 @@ class Integrations::Openai::GlobalProcessorService
   end
 
   def credential_endpoint
-    @credential_endpoint ||= Ai::CredentialResolver.resolve_endpoint(for_consumer: :inbox_assist)
+    @credential_endpoint ||= Ai::CredentialResolver.resolve_endpoint(for_consumer: credential_consumer)
+  end
+
+  # Sentiment analysis is used by Facebook comment moderation. Keep it on the
+  # moderation compatibility path so an Inbox Assist-only provider such as
+  # OpenRouter cannot silently become the credential for this feature.
+  def credential_consumer
+    event_name == 'analyze_sentiment' ? :moderation : :inbox_assist
   end
 
   def gpt_model
-    @gpt_model ||= GlobalConfigService.load('OPENAI_MODEL', 'gpt-4.1-nano')
+    @gpt_model ||= Ai::ModelResolver.resolve(
+      GlobalConfigService.load('OPENAI_MODEL', 'gpt-4.1-nano'),
+      provider: credential_endpoint.provider,
+      openrouter_model: GlobalConfigService.load('OPENROUTER_MODEL', 'openai/gpt-4.1-nano')
+    )
   end
 
   def conversation
