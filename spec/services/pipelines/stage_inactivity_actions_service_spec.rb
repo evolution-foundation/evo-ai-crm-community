@@ -82,6 +82,23 @@ RSpec.describe Pipelines::StageInactivityActionsService do
       end
     end
 
+    # Message has default_scope { order(created_at: :asc) }, which an appended
+    # order(created_at: :desc) does not override: the "latest" incoming message was really the
+    # OLDEST one, so a customer who wrote a minute ago was treated as silent for days.
+    context 'no_customer_reply is measured from the latest customer message, not the oldest' do
+      before do
+        set_rule(minutes: 5, base: 'no_customer_reply')
+        conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'primeira',
+                                      created_at: 3.days.ago)
+        conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'agora',
+                                      created_at: 1.minute.ago)
+      end
+
+      it 'does not fire while the customer has been active inside the window' do
+        expect { service.process }.not_to change(StageInactivityExecution, :count)
+      end
+    end
+
     context 'AC13b — no_customer_reply on a lead with no conversation is a no-op' do
       let!(:lead_item) do
         PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage_a, contact: contact)
