@@ -95,7 +95,10 @@ class Api::V1::CallbacksController < Api::V1::BaseController
     koala = Koala::Facebook::OAuth.new(GlobalConfigService.load('FB_APP_ID', ''), GlobalConfigService.load('FB_APP_SECRET', ''))
     koala.exchange_access_token_info(omniauth_token)['access_token']
   rescue StandardError => e
+    # Re-raised: this used to return the logger's return value (true) as the "token", so a wrong
+    # FB_APP_ID or FB_APP_SECRET surfaced later as an empty page list instead of an error.
     Rails.logger.error "Error in long_lived_token: #{e.message}"
+    raise
   end
 
   def mark_already_existing_facebook_pages(data)
