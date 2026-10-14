@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rails_helper'
+require 'webmock/rspec'
 
 # Pins that QrcodesController#set_instance_params resolves credentials through
 # EvolutionGoConcern#evolution_go_credentials_for, so a refactor that drops the
@@ -90,6 +91,37 @@ RSpec.describe Api::V1::EvolutionGo::QrcodesController, type: :controller do
       )
 
       controller_instance.create
+    end
+  end
+
+  # O Evolution Go 0.7.2 passou a serializar o QR em minúsculo ("qrcode"/"code");
+  # até a 0.7.1 os campos vinham como "Qrcode"/"Code". Só a grafia antiga era
+  # lida, então com a 0.7.2 o frontend recebia base64 nil e mostrava erro ao
+  # gerar o QR. Estes testes pinam as duas grafias.
+  describe '#get_qrcode_go' do
+    let(:controller_instance) { described_class.new }
+    let(:qr_url) { 'http://evo.example.com/instance/qr' }
+
+    it 'reads the lowercase fields returned by Evolution Go 0.7.2+' do
+      stub_request(:get, qr_url).with(headers: { 'apikey' => 'inst-tok' }).to_return(
+        status: 200,
+        body: { data: { qrcode: 'data:image/png;base64,AAA', code: '2@abc' }, message: 'success' }.to_json
+      )
+
+      result = controller_instance.send(:get_qrcode_go, 'http://evo.example.com', 'inst-tok')
+
+      expect(result).to eq(base64: 'data:image/png;base64,AAA', code: '2@abc', connected: false)
+    end
+
+    it 'still reads the capitalized fields returned up to Evolution Go 0.7.1' do
+      stub_request(:get, qr_url).with(headers: { 'apikey' => 'inst-tok' }).to_return(
+        status: 200,
+        body: { data: { Qrcode: 'data:image/png;base64,BBB', Code: '2@def' }, message: 'success' }.to_json
+      )
+
+      result = controller_instance.send(:get_qrcode_go, 'http://evo.example.com', 'inst-tok')
+
+      expect(result).to eq(base64: 'data:image/png;base64,BBB', code: '2@def', connected: false)
     end
   end
 end
