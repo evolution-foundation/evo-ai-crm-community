@@ -84,4 +84,54 @@ RSpec.describe AgentBotInbox do
       expect(eligible.should_process_conversation?(conversation)).to be(true)
     end
   end
+
+  describe '#group_mention_block_reason' do
+    let(:channel) { instance_double(Channel::Whatsapp, provider: 'evolution_go') }
+    let(:matcher) { instance_double(Whatsapp::EvolutionGoBotMentionMatcher, mentioned?: false) }
+
+    before do
+      allow(Whatsapp::EvolutionGoBotMentionMatcher).to receive(:new).with(channel).and_return(matcher)
+    end
+
+    def message(group: true, mentions: nil, channel: self.channel)
+      contact = instance_double(Contact, group?: group)
+      attrs = mentions ? { 'mentioned_jids' => mentions } : {}
+      instance_double(Message, content_attributes: attrs,
+                               conversation: instance_double(Conversation, contact: contact),
+                               inbox: instance_double(Inbox, channel: channel))
+    end
+
+    it 'blocks a group message that does not mention the inbox number' do
+      reason = described_class.new(group_mention_required: true).group_mention_block_reason(message)
+
+      expect(reason).to include('group message without mention')
+    end
+
+    it 'passes a group message that mentions the inbox number' do
+      allow(matcher).to receive(:mentioned?).with(['5571991589983@s.whatsapp.net']).and_return(true)
+
+      reason = described_class.new(group_mention_required: true)
+                              .group_mention_block_reason(message(mentions: ['5571991589983@s.whatsapp.net']))
+
+      expect(reason).to be_nil
+    end
+
+    it 'passes every group message when the option is off' do
+      expect(described_class.new(group_mention_required: false).group_mention_block_reason(message)).to be_nil
+    end
+
+    it 'ignores one-to-one conversations' do
+      expect(described_class.new(group_mention_required: true).group_mention_block_reason(message(group: false))).to be_nil
+    end
+
+    it 'ignores providers other than Evolution Go' do
+      other = instance_double(Channel::Whatsapp, provider: 'evolution')
+
+      expect(described_class.new(group_mention_required: true).group_mention_block_reason(message(channel: other))).to be_nil
+    end
+
+    it 'defaults the option to on for new records' do
+      expect(described_class.new.group_mention_required).to be(true)
+    end
+  end
 end

@@ -226,6 +226,10 @@ module Api
                 agent_bot_inbox.sentiment_analysis_enabled = config_params[:sentiment_analysis_enabled] || false
               end
 
+              if config_params.key?(:group_mention_required)
+                agent_bot_inbox.group_mention_required = ActiveModel::Type::Boolean.new.cast(config_params[:group_mention_required]) != false
+              end
+
               if config_params.key?(:auto_approve_responses)
                 agent_bot_inbox.auto_approve_responses = config_params[:auto_approve_responses] || false
               end

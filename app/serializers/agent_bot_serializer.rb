@@ -61,6 +61,7 @@ module AgentBotSerializer
       moderation_enabled: agent_bot_inbox.moderation_enabled || false,
       explicit_words_filter: agent_bot_inbox.explicit_words_filter || [],
       sentiment_analysis_enabled: agent_bot_inbox.sentiment_analysis_enabled || false,
+      group_mention_required: agent_bot_inbox.group_mention_required != false,
       auto_approve_responses: agent_bot_inbox.auto_approve_responses || false,
       auto_reject_explicit_words: agent_bot_inbox.auto_reject_explicit_words || false,
       auto_reject_offensive_sentiment: agent_bot_inbox.auto_reject_offensive_sentiment || false

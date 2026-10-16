@@ -47,6 +47,22 @@ module Whatsapp::EvolutionGoHandlers::Helpers
     @evolution_go_info&.dig(:IsGroup) == true
   end
 
+  # JIDs @-mentioned in the message (contextInfo.mentionedJID). The contextInfo
+  # lives at the root, inside the typed payload (extendedTextMessage,
+  # imageMessage, ...) or one wrapper deeper (ephemeralMessage.message.*,
+  # viewOnceMessage.message.*), so the payload is walked a few levels down.
+  def mentioned_jids
+    message_context_infos(@evolution_go_message).flat_map { |ctx| Array(ctx[:mentionedJID] || ctx[:mentionedJid]) }
+                                                .map(&:to_s).reject(&:blank?).uniq
+  end
+
+  def message_context_infos(node, depth = 0)
+    return [] unless node.is_a?(Hash) && depth < 5
+
+    own = node[:contextInfo].is_a?(Hash) ? [node[:contextInfo]] : []
+    own + node.except(:contextInfo).values.flat_map { |value| message_context_infos(value, depth + 1) }
+  end
+
   def raw_message_id
     @evolution_go_info&.dig(:ID)
   end

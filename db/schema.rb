@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_03_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_16_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -92,6 +92,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_03_000000) do
     t.boolean "auto_approve_responses", default: false, null: false
     t.boolean "auto_reject_explicit_words", default: false, null: false
     t.boolean "auto_reject_offensive_sentiment", default: false, null: false
+    t.boolean "group_mention_required", default: true, null: false
     t.index ["allowed_conversation_statuses"], name: "index_agent_bot_inboxes_on_allowed_conversation_statuses", using: :gin
     t.index ["allowed_label_ids"], name: "index_agent_bot_inboxes_on_allowed_label_ids", using: :gin
     t.index ["auto_reject_explicit_words"], name: "index_agent_bot_inboxes_on_auto_reject_explicit_words"
