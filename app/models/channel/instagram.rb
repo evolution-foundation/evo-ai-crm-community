@@ -57,6 +57,8 @@ class Channel::Instagram < ApplicationRecord
   end
 
   def subscribe
+    return true if Instagram::AmhConnection.managed_account?(self[:instagram_id])
+
     # In Hub mode the Hub already subscribed the IG user on its side with the
     # real Meta app token; the CRM doesn't have that token and shouldn't try.
     return if MetaBaseUrl.enabled?

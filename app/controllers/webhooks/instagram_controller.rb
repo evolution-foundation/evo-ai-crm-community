@@ -1,5 +1,6 @@
 class Webhooks::InstagramController < ActionController::API
   include MetaTokenVerifyConcern
+  before_action :receive_amh, only: :events
 
   def events
     Rails.logger.info('Instagram webhook received events')
@@ -34,6 +35,20 @@ class Webhooks::InstagramController < ActionController::API
   end
 
   private
+
+  def receive_amh
+    if ENV.fetch('INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID', '').present? && request.query_parameters.key?('entry')
+      return head :bad_request
+    end
+
+    result = Instagram::AmhIngress.new(raw: request.raw_post, signature: request.headers['X-Hub-Signature-256']).perform
+    return unless result
+    return head(result.status) unless result.status == 200
+    return head :ok if result.remaining.empty?
+
+    # Only the unrelated entries may enter the legacy logger/queue.
+    params[:entry] = result.remaining
+  end
 
   def valid_token?(token)
     # Validates against both IG_VERIFY_TOKEN (Instagram channel via Facebook page) and

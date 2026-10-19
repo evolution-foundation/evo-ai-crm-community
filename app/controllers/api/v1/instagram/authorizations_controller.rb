@@ -82,6 +82,8 @@ class Api::V1::Instagram::AuthorizationsController < Api::V1::BaseController
 
   def find_or_create_channel(user_details, token_response)
     instagram_id = extract_instagram_user_id(user_details)
+    return Instagram::AmhConnection.store!(user_details, token_response) if Instagram::AmhConnection.managed_account?(instagram_id)
+
     expires_at = Time.current + token_response['expires_in'].seconds
 
     # Try to find existing channel
