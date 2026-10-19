@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_19_150000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_19_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -706,6 +706,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_150000) do
     t.index ["event_key"], name: "index_instagram_amh_inbound_events_on_event_key", unique: true
     t.index ["inbox_id"], name: "index_instagram_amh_inbound_events_on_inbox_id"
     t.index ["state", "created_at"], name: "index_instagram_amh_pending"
+  end
+
+  create_table "instagram_amh_visual_proofs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "create_key", null: false
+    t.string "name", null: false
+    t.jsonb "draft", default: {}, null: false
+    t.jsonb "versions", default: [], null: false
+    t.jsonb "ledger", default: [], null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["create_key"], name: "index_instagram_amh_visual_proofs_on_create_key", unique: true
   end
 
   create_table "installation_configs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

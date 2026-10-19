@@ -1,0 +1,100 @@
+{
+  "nodes": [
+    {
+      "id": "comment",
+      "type": "comment",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {}
+    },
+    {
+      "id": "scope",
+      "type": "scope",
+      "position": {
+        "x": 280,
+        "y": 0
+      },
+      "data": {
+        "account": "qa-account",
+        "ad": "qa-ad",
+        "media": "qa-media"
+      }
+    },
+    {
+      "id": "keyword",
+      "type": "keyword",
+      "position": {
+        "x": 560,
+        "y": 0
+      },
+      "data": {
+        "keywords": [
+          "AMH"
+        ],
+        "mode": "word",
+        "ignoreCase": true,
+        "ignoreAccents": true
+      }
+    },
+    {
+      "id": "material",
+      "type": "material",
+      "position": {
+        "x": 840,
+        "y": 0
+      },
+      "data": {
+        "material": "amh"
+      }
+    },
+    {
+      "id": "reply",
+      "type": "reply",
+      "position": {
+        "x": 1120,
+        "y": 0
+      },
+      "data": {
+        "text": "Oi! Acesse {{link}}"
+      }
+    },
+    {
+      "id": "result",
+      "type": "result",
+      "position": {
+        "x": 1400,
+        "y": 0
+      },
+      "data": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "comment-scope",
+      "source": "comment",
+      "target": "scope"
+    },
+    {
+      "id": "scope-keyword",
+      "source": "scope",
+      "target": "keyword"
+    },
+    {
+      "id": "keyword-material",
+      "source": "keyword",
+      "target": "material"
+    },
+    {
+      "id": "material-reply",
+      "source": "material",
+      "target": "reply"
+    },
+    {
+      "id": "reply-result",
+      "source": "reply",
+      "target": "result"
+    }
+  ]
+}
