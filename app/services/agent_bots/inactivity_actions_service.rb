@@ -6,6 +6,8 @@ class AgentBots::InactivityActionsService
   end
 
   def process
+    return if Instagram::AmhSafety.blocked_inbox?(@inbox)
+
     return unless should_process?
 
     Rails.logger.info "[InactivityActions] Processing conversation #{@conversation.id}"

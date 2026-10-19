@@ -5,6 +5,8 @@ class WebhookJob < ApplicationJob
   # failure so Sidekiq surfaces the error; others swallow-and-warn per the
   # legacy contract (see lib/webhooks/trigger.rb#execute).
   def perform(url, payload, webhook_type = :account_webhook, macro_execution_id = nil)
+    return if Instagram::AmhSafety.blocked_payload?(payload)
+
     Webhooks::Trigger.execute(url, payload, webhook_type)
     finalize_macro_execution_success(macro_execution_id) if macro_execution_id
   rescue StandardError => e

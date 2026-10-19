@@ -14,6 +14,8 @@ class AutomationRules::ActionService < ActionService
   end
 
   def perform
+    return if Instagram::AmhSafety.blocked_inbox?(@conversation&.inbox)
+
     @rule.actions.each do |action|
       @conversation.reload
       action = action.with_indifferent_access

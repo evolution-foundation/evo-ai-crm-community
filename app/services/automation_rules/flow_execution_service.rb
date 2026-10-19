@@ -16,6 +16,8 @@ class AutomationRules::FlowExecutionService
   end
 
   def perform
+    return if Instagram::AmhSafety.blocked_inbox?(@conversation&.inbox) || Instagram::AmhSafety.blocked_contact?(@contact)
+
     return unless @rule.mode == 'flow' && @rule.flow_data.present?
 
     # Evitar execuções duplicadas muito próximas

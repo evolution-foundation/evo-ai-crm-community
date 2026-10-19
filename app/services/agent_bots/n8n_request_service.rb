@@ -10,6 +10,8 @@ class AgentBots::N8nRequestService
   end
 
   def perform
+    return if Instagram::AmhSafety.blocked_payload?(@payload)
+
     return if @agent_bot.outgoing_url.blank?
 
     unless should_process_message?

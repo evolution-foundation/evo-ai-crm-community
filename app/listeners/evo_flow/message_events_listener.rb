@@ -117,6 +117,8 @@ module EvoFlow
         occurred_at: message.created_at,
         message_id: message_id
       )
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::PublishEventWorker.perform_async(TRACK_PATH, JSON.parse(payload.to_json))
     end
 
@@ -134,6 +136,8 @@ module EvoFlow
         occurred_at: occurred_at,
         message_id: message_id
       )
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::PublishEventWorker.perform_async(TRACK_PATH, JSON.parse(payload.to_json))
     end
 

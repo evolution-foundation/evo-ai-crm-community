@@ -18,6 +18,8 @@ class Instagram::BaseMessageText < Instagram::WebhooksBaseService
       return
     end
 
+    return unless Instagram::AmhSafety.reception_enabled?(@inbox)
+
     if @inbox.channel.reauthorization_required?
       Rails.logger.info("[Instagram::BaseMessageText] Skipping message processing as reauthorization is required for inbox #{@inbox.id}")
       return
