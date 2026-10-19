@@ -96,7 +96,8 @@ class Api::V1::Instagram::AuthorizationsController < Api::V1::BaseController
       Rails.logger.info("Instagram: Updating existing channel for instagram_id=#{instagram_id}")
       channel_instagram.update!(
         access_token: token_response['access_token'],
-        expires_at: expires_at
+        expires_at: expires_at,
+        evolution_hub_meta: {}
       )
 
       if channel_instagram.inbox
