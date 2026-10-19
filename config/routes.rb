@@ -1,4 +1,5 @@
 Rails.application.routes.draw do
+  post '/internal/instagram-amh/resolve', to: 'instagram_amh_link_resolutions#create'
   get '/health/live', to: 'health#live'
   get '/health/ready', to: 'health#ready'
   get '/metrics', to: 'health#metrics'
@@ -259,6 +260,7 @@ Rails.application.routes.draw do
       resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy], controller: 'custom_attribute_definitions'
       resources :custom_filters, only: [:index, :show, :create, :update, :destroy], controller: 'custom_filters'
 
+      resources :instagram_amh_links, only: [:create, :destroy]
       resources :instagram_amh_proofs, only: [:index, :show, :create, :update] do
         member do
           post :publish
