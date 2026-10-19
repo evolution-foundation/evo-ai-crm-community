@@ -67,7 +67,7 @@ real Meta. Nesta fase as flags permanecem ausentes/false em produção.
 
 ## Validação
 
-`spec/safety/instagram`:67 testes em PostgreSQL isolado, WebMock sem rede, Redis
+`spec/safety/instagram`:68 testes em PostgreSQL isolado, WebMock sem rede, Redis
 isolado por namespace/DB15. Inclui concorrência real entre conexões, colisão com
 tombstone, revogação, replay HMAC, janela e rate limit, snapshot e conflitos.
 RuboCop sem ocorrências. Migração down/up/down/up ensaiada em transação revertida.

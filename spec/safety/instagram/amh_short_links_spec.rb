@@ -120,6 +120,14 @@ RSpec.describe 'AMH short links' do
     expect { issue(event.merge('comment' => 'different', 'ad' => nil)) }.to raise_error(model::Conflict)
   end
 
+  it 'recovers an already issued snapshot even if a later QA mapping becomes ambiguous' do
+    first = issue
+    other = Instagram::AmhVisualProof.create!(name: 'Later QA', draft: graph, create_key: SecureRandom.uuid)
+    other.publish_version!(other.lock_version, 'qa')
+    expect(issue[:url]).to eq(first[:url])
+    expect { issue(event.merge('comment' => 'new-comment')) }.to raise_error(model::Conflict)
+  end
+
   it 'requires a fresh signed request, rejects replay and rate limits using shared Redis' do
     code = issue[:url].split('/').last
     nonce = SecureRandom.hex(16)

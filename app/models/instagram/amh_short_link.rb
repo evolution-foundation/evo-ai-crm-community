@@ -20,10 +20,13 @@ class Instagram::AmhShortLink < ApplicationRecord
     graph = Instagram::AmhVisualEngine.validate!(version.fetch('graph'))
     data = graph['nodes'].to_h { |node| [node['id'], node['data']] }
     validate_event!(event, data)
-    ensure_unambiguous!(proof, event)
     material = data['material'].fetch('material')
     key = OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('amh-link-event-v1'),
                                   JSON.generate(event.values_at('account', 'app', 'comment')))
+    existing = find_by(event_hash: key)
+    return existing.recover_qa!(version['id']) if existing
+
+    ensure_unambiguous!(proof, event)
     issue_unique!(key, version, material, event)
   end
 
