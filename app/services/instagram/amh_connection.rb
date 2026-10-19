@@ -56,7 +56,7 @@ class Instagram::AmhConnection
       inbox = Inbox.find_by(id: reserved_id)
       validate_binding!(channel, inbox)
       channel ||= Channel::Instagram.new(instagram_id: id)
-      channel.assign_attributes(access_token: token['access_token'], expires_at: Time.current + expires.seconds)
+      channel.assign_attributes(access_token: token['access_token'], expires_at: Time.current + expires.seconds, evolution_hub_meta: {})
       channel.save!
       Inbox.create!(id: reserved_id, channel: channel, name: 'Instagram AMH') unless inbox
       channel.reload

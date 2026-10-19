@@ -180,6 +180,15 @@ RSpec.describe Instagram::AmhIngress do
     expect(channel.subscribe).to be true
   end
 
+  it 'clears stale Hub lifecycle metadata after successful direct AMH OAuth' do
+    channel = bind
+    channel.update!(evolution_hub_meta: { 'status' => 'inactive' })
+    reconnected = bind
+    expect(reconnected.evolution_hub_meta).to eq({})
+    allow(reconnected).to receive(:reauthorization_required?).and_return(false)
+    expect(Channels::ConnectionStateResolver.call(reconnected)[:state]).to eq('connected')
+  end
+
   it 'keeps legacy subscriptions for other accounts' do
     allow(MetaBaseUrl).to receive(:enabled?).and_return(false)
     response = instance_double(HTTParty::Response, success?: true)
