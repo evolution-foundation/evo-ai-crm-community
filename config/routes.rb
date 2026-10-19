@@ -259,6 +259,13 @@ Rails.application.routes.draw do
       resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy], controller: 'custom_attribute_definitions'
       resources :custom_filters, only: [:index, :show, :create, :update, :destroy], controller: 'custom_filters'
 
+      resources :instagram_amh_proofs, only: [:index, :show, :create, :update] do
+        member do
+          post :publish
+          post :simulate
+        end
+      end
+
       resources :automation_rules, only: [:index, :create, :show, :update, :destroy], controller: 'automation_rules' do
         post :clone, on: :member
         get :runs, on: :member
