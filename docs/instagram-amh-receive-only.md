@@ -49,4 +49,6 @@ Cobertura: inbound persiste contato sem e-mail e mensagem, duplicata não duplic
 
 Resultado local: 18 exemplos da etapa e 9 regressões existentes passaram (27 no total). RuboCop do serviço novo e dos testes da etapa sem infrações; arquivos legados têm dívida de lint preexistente e não foram reformatados em massa. Sintaxe Ruby e `git diff --check` conferidos.
 
+Regressão ampliada EvoFlow: 93 exemplos, 89 passaram e 4 falharam. As mesmas quatro falhas foram reproduzidas carregando os quatro listeners originais de `5ba3a4f`: expectativas antigas de `additionalAttributes`, BigDecimal/Time e mensagem de log. Sem nova falha nessa comparação; a suíte ampliada não está globalmente verde.
+
 Próxima etapa: 2, contratos e persistência da sincronização Mautic. Conexão real permanece na etapa 3, condicionada à conta correta e à implantação dos controles.
