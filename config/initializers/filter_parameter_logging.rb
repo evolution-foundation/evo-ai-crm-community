@@ -11,3 +11,6 @@ filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 
 # Apply the regex for filtering
 Rails.application.config.filter_parameters += [filter_regex]
+
+# Meta ingress contains private social data; keep it out of request logs.
+Rails.application.config.filter_parameters += [:entry, :code, :state]

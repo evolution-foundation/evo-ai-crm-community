@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_29_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_19_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -694,6 +694,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_29_120000) do
     t.uuid "out_of_office_message_template_id"
     t.index ["channel_id", "channel_type"], name: "index_inboxes_on_channel_id_and_channel_type"
     t.index ["default_conversation_status"], name: "index_inboxes_on_default_conversation_status"
+  end
+
+  create_table "instagram_amh_inbound_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "inbox_id", null: false
+    t.string "event_key", limit: 64, null: false
+    t.text "encrypted_contract", null: false
+    t.string "state", default: "pending", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["event_key"], name: "index_instagram_amh_inbound_events_on_event_key", unique: true
+    t.index ["inbox_id"], name: "index_instagram_amh_inbound_events_on_inbox_id"
+    t.index ["state", "created_at"], name: "index_instagram_amh_pending"
   end
 
   create_table "installation_configs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1427,6 +1439,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_29_120000) do
   add_foreign_key "deal_history_events", "users", column: "actor_id"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
+  add_foreign_key "instagram_amh_inbound_events", "inboxes"
   add_foreign_key "macro_executions", "conversations"
   add_foreign_key "macro_executions", "macros"
   add_foreign_key "macro_executions", "users"
