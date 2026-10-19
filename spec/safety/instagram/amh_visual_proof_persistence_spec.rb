@@ -37,7 +37,7 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
   end
 
   def create
-    response = request(:post, '', { name: 'QA AMH', graph: graph })
+    response = request(:post, '', { name: 'QA AMH', graph: graph, create_key: SecureRandom.uuid })
     expect(client.response.status).to eq(201), response.to_s
     response.fetch('data')
   end
@@ -56,13 +56,23 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
     changed['nodes'][2]['data']['keywords'] = ['CONSULTORIO']
     saved = request(:patch, "/#{id}", { graph: changed, lock_version: versioned['lock_version'] }).fetch('data')
     expect(saved['versions'].last['graph']).to eq(graph)
+    frozen = request(:post, "/#{id}/simulate", { version_id: version['id'], fixture: 'eligible', text: 'Quero AMH!' }).fetch('data').fetch('run')
+    expect(frozen['outcome']).to eq('simulated_accepted')
+    expect(frozen['trace'].find { |t| t['node'] == 'keyword' }['status']).to eq('passed')
+    expect(Instagram::AmhVisualEngine.simulate(changed, fixture: 'eligible', text: 'Quero AMH!')[:outcome]).to eq('rejected')
+    expect(Instagram::AmhVisualProof.find(id).lock_version).to eq(saved['lock_version'])
     run = request(:post, "/#{id}/simulate", { version_id: version['id'], fixture: 'timeout' }).fetch('data').fetch('run')
     expect(run['outcome']).to eq('uncertain')
     expect(run['graph_digest']).to eq(version['digest'])
     expect(run['outbound_calls']).to eq(0)
     retried = request(:post, "/#{id}/simulate", { version_id: version['id'], fixture: 'timeout' }).fetch('data')
     expect(retried['run']['id']).to eq(run['id'])
-    expect(retried['proof']['ledger'].size).to eq(1)
+    expect(retried['proof']['ledger'].size).to eq(2)
+    expect(run).not_to have_key('input_digest')
+    explicit = request(:post, "/#{id}/simulate", { version_id: version['id'], fixture: 'timeout', text: 'AMH' }).fetch('data')
+    expect(explicit['run']['id']).to eq(run['id'])
+    request(:patch, "/#{id}", { graph: changed, lock_version: saved['lock_version'] })
+    expect(client.response.status).to eq(200)
     expect(WebMock).not_to have_requested(:post, /graph\.(instagram|facebook)\.com/)
   end
 
@@ -82,15 +92,44 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
     expect(client.response.status).to eq(422)
   end
 
+  it 'deduplicates create retries by request key' do
+    key = SecureRandom.uuid
+    first = request(:post, '', { name: 'Retry QA', graph: graph, create_key: key }).fetch('data')
+    second = request(:post, '', { name: 'Retry QA', graph: graph, create_key: key }).fetch('data')
+    expect(second['id']).to eq(first['id'])
+    expect(Instagram::AmhVisualProof.where(create_key: key).count).to eq(1)
+  end
+
+  it 'rejects malformed node settings without a server error' do
+    [nil, [], 'invalid'].each do |invalid|
+      bad = graph.deep_dup
+      bad['nodes'][2]['data'] = invalid
+      request(:post, '', { name: 'Bad QA', graph: bad, create_key: SecureRandom.uuid })
+      expect(client.response.status).to eq(422)
+    end
+  end
+
+  it 'records the authenticated service principal on publication' do
+    proof = Instagram::AmhVisualProof.create!(name: 'Service QA', draft: graph, create_key: SecureRandom.uuid)
+    allow_any_instance_of(Api::BaseController).to receive(:authenticate_request!) do
+      Current.user = nil
+      Current.service_authenticated = true
+    end
+    result = request(:post, "/#{proof.id}/publish", { lock_version: proof.lock_version }).fetch('data')
+    expect(result['versions'].last['actor']).to eq('service:EVOAI_CRM_API_TOKEN')
+  end
+
   context 'read-only user' do
     let(:permissions) { %w[journeys.read] }
     it 'denies draft creation, editing and publication on the server' do
-      proof = Instagram::AmhVisualProof.create!(name: 'QA', draft: graph)
+      proof = Instagram::AmhVisualProof.create!(name: 'QA', draft: graph, create_key: SecureRandom.uuid)
       request(:post, '', { name: 'Denied', graph: graph })
       expect(client.response.status).to eq(403)
       request(:patch, "/#{proof.id}", { graph: graph, lock_version: 0 })
       expect(client.response.status).to eq(403)
       request(:post, "/#{proof.id}/publish", { lock_version: 0 })
+      expect(client.response.status).to eq(403)
+      request(:post, "/#{proof.id}/simulate", { version_id: 'any', fixture: 'eligible' })
       expect(client.response.status).to eq(403)
       expect(proof.reload.versions).to eq([])
       request(:get, "/#{proof.id}")
@@ -101,7 +140,7 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
   context 'user without read permission' do
     let(:permissions) { [] }
     it 'denies listing, reading and simulating' do
-      proof = Instagram::AmhVisualProof.create!(name: 'QA', draft: graph)
+      proof = Instagram::AmhVisualProof.create!(name: 'QA', draft: graph, create_key: SecureRandom.uuid)
       request(:get)
       expect(client.response.status).to eq(403)
       request(:get, "/#{proof.id}")

@@ -3,6 +3,7 @@
 # A separate inert namespace: never an AutomationRule, Journey or outbound job.
 class Instagram::AmhVisualProof < ApplicationRecord
   self.table_name = 'instagram_amh_visual_proofs'
+  validates :create_key, presence: true
   validates :name, presence: true, length: { maximum: 100 }
 
   def publish_version!(expected_lock, actor)
@@ -25,7 +26,9 @@ class Instagram::AmhVisualProof < ApplicationRecord
       raise Instagram::AmhVisualEngine::Invalid, 'Publique e selecione uma versão de simulação' unless version
 
       Instagram::AmhVisualEngine.validate_text!(text)
-      key = Digest::SHA256.hexdigest(JSON.generate([version['id'], fixture, text]))
+      text = Instagram::AmhVisualEngine.effective_text(version['graph'], fixture, text)
+      key = OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('amh-proof-dedup-v1'),
+                                    JSON.generate([version['id'], fixture, text]))
       existing = ledger.find { |run| run['key'] == key }
       existing || append_run!(version, fixture, text, key)
     end
@@ -37,7 +40,8 @@ class Instagram::AmhVisualProof < ApplicationRecord
     result = Instagram::AmhVisualEngine.simulate(version['graph'], fixture: fixture, text: text)
     run = result.merge(id: SecureRandom.uuid, key: key, version_id: version['id'], version_number: version['number'],
                        graph_digest: version['digest'], at: Time.current.iso8601(6))
-    update!(ledger: ledger + [run])
+    # Receipt writes hold the row lock but must not advance the draft revision.
+    update_columns(ledger: ledger + [run], updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     run
   end
 

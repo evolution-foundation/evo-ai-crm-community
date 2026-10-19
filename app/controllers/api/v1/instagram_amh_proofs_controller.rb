@@ -2,7 +2,7 @@
 
 class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
   require_permissions({ index: 'journeys.read', show: 'journeys.read', create: 'journeys.create',
-                        update: 'journeys.update', publish: 'journeys.toggle_active', simulate: 'journeys.read' })
+                        update: 'journeys.update', publish: 'journeys.toggle_active', simulate: 'journeys.update' })
   before_action :fetch_proof, except: %i[index create]
   rescue_from Instagram::AmhVisualEngine::Invalid, with: :invalid_graph
   rescue_from ActiveRecord::StaleObjectError, with: :stale
@@ -18,7 +18,13 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
   def create
     graph = graph_params
     Instagram::AmhVisualEngine.validate!(graph)
-    proof = Instagram::AmhVisualProof.create!(name: params.require(:name), draft: graph)
+    key = params.require(:create_key).to_s
+    raise Instagram::AmhVisualEngine::Invalid, 'Chave de criação inválida' unless /\A[0-9a-f-]{36}\z/i.match?(key)
+
+    proof = Instagram::AmhVisualProof.create_or_find_by!(create_key: key) do |record|
+      record.name = params.require(:name)
+      record.draft = graph
+    end
     success_response(data: proof.snapshot, status: :created)
   end
 
@@ -31,7 +37,7 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
 
   # 'Published' means an immutable simulation version, never channel activation.
   def publish
-    @proof.publish_version!(expected_lock_version, Current.user&.id.to_s)
+    @proof.publish_version!(expected_lock_version, publication_actor)
     success_response(data: @proof.snapshot)
   end
 
@@ -41,6 +47,13 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
   end
 
   private
+
+  def publication_actor
+    return Current.user.id.to_s if Current.user
+    return 'service:EVOAI_CRM_API_TOKEN' if Current.service_authenticated
+
+    raise Instagram::AmhVisualEngine::Invalid, 'Publicador não identificado'
+  end
 
   def graph_params
     graph = params.require(:graph)

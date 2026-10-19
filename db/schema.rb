@@ -709,6 +709,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_180000) do
   end
 
   create_table "instagram_amh_visual_proofs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "create_key", null: false
     t.string "name", null: false
     t.jsonb "draft", default: {}, null: false
     t.jsonb "versions", default: [], null: false
@@ -716,6 +717,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_180000) do
     t.integer "lock_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["create_key"], name: "index_instagram_amh_visual_proofs_on_create_key", unique: true
   end
 
   create_table "installation_configs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

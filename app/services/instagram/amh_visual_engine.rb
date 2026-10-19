@@ -51,6 +51,7 @@ class Instagram::AmhVisualEngine
   end
 
   def self.validate_parameters!(data)
+    require_valid!(%w[scope keyword material reply].all? { |id| data[id].is_a?(Hash) }, 'Configuração de nó inválida')
     scope = data['scope']
     require_valid!(valid_string?(scope['account'], 100), 'Informe a conta')
     require_valid!(valid_string?(scope['ad'], 100) || valid_string?(scope['media'], 100), 'Informe anúncio ou publicação')
@@ -61,6 +62,7 @@ class Instagram::AmhVisualEngine
   end
 
   def self.validate_keyword!(rule)
+    require_valid!(rule.is_a?(Hash), 'Configuração de palavra-chave inválida')
     require_valid!(%w[word contains].include?(rule['mode']), 'Modo de palavra-chave inválido')
     require_valid!([true, false].include?(rule['ignoreCase']) && [true, false].include?(rule['ignoreAccents']), 'Normalização inválida')
     keywords = rule['keywords']
@@ -98,17 +100,24 @@ class Instagram::AmhVisualEngine
     validate_text!(text)
     require_valid!(FIXTURES.include?(fixture), 'Fixture desconhecida')
     data = graph['nodes'].to_h { |n| [n['id'], n['data']] }
-    text = fixture == 'negative' ? '' : data['keyword']['keywords'].first if text.nil?
+    text = effective_text(graph, fixture, text)
     trace = build_trace(graph, data, fixture, text, now)
     result_metadata(data, text).merge(fixture: fixture, trace: trace, outcome: trace.find do |t|
       t[:status] != 'passed'
     end&.fetch(:status) || 'simulated_accepted')
   end
 
+  def self.effective_text(graph, fixture, text)
+    return text unless text.nil?
+    return '' if fixture == 'negative'
+
+    graph['nodes'].find { |node| node['id'] == 'keyword' }.fetch('data').fetch('keywords').first
+  end
+
   def self.result_metadata(data, text)
     { outbound_calls: 0, mautic_state: 'not_executed',
       preview: data['reply']['text'].gsub('{{link}}', 'https://co.agenciavetorial.com/QA000000'),
-      input_digest: Digest::SHA256.hexdigest(text), input_length: text.length,
+      input_length: text.length,
       material: data['material']['material'], link_state: 'fixture_only_not_issued', contract: 'amh-visual-v1', mode: 'inert' }
   end
 
