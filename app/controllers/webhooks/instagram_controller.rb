@@ -37,6 +37,10 @@ class Webhooks::InstagramController < ActionController::API
   private
 
   def receive_amh
+    if ENV.fetch('INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID', '').present? && request.query_parameters.key?('entry')
+      return head :bad_request
+    end
+
     result = Instagram::AmhIngress.new(raw: request.raw_post, signature: request.headers['X-Hub-Signature-256']).perform
     return unless result
     return head(result.status) unless result.status == 200

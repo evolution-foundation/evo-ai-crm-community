@@ -16,8 +16,10 @@ class Instagram::AmhIngress
   def perform
     return if ENV.fetch('INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID', '').blank?
 
+    return Result.new(status: 413) if @raw.bytesize > MAX_BODY
+
     body = JSON.parse(@raw)
-    return unless body.is_a?(Hash) && body['entry'].is_a?(Array)
+    return Result.new(status: 400) unless valid_body?(body)
 
     scoped, remaining = body['entry'].partition { |entry| managed_entry?(entry) }
     return if scoped.empty?
@@ -33,6 +35,10 @@ class Instagram::AmhIngress
 
   private
 
+  def valid_body?(body)
+    body.is_a?(Hash) && body['entry'].is_a?(Array)
+  end
+
   def managed_entry?(entry)
     entry.is_a?(Hash) && Instagram::AmhConnection.managed_account?(entry['id'])
   end
@@ -42,7 +48,6 @@ class Instagram::AmhIngress
   end
 
   def process_scoped(body, scoped, remaining)
-    return Result.new(status: 413) if @raw.bytesize > MAX_BODY
     return Result.new(status: 403) unless valid_signature?
     return Result.new(status: 400) unless body['object'] == 'instagram'
 
@@ -120,6 +125,11 @@ class Instagram::AmhIngress
          occurred_at(message['timestamp'], milliseconds: true))
   end
 
+  def comment_time(value)
+    # Meta integrations expose entry.time in seconds or milliseconds.
+    occurred_at(value, milliseconds: value.is_a?(Integer) && value >= 1_000_000_000_000)
+  end
+
   def normalize_comment(entry, change)
     return unless change.is_a?(Hash) && COMMENT_FIELDS.include?(change['field'])
 
@@ -127,7 +137,7 @@ class Instagram::AmhIngress
     raise InvalidEvent unless value.is_a?(Hash) && value['from'].is_a?(Hash)
     return if value.dig('from', 'id') == entry['id'] || value['is_spam'] == true
 
-    contract = base(entry, value.dig('from', 'id'), value['id'], 'comment', occurred_at(entry['time']))
+    contract = base(entry, value.dig('from', 'id'), value['id'], 'comment', comment_time(entry['time']))
     decorate_comment(contract, value)
   end
 

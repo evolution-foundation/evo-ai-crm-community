@@ -217,12 +217,34 @@ RSpec.describe Instagram::AmhIngress do
     expect(data.values).to all(eq('[FILTERED]'))
   end
 
+  it 'rejects oversized bodies before JSON parsing' do
+    expect(JSON).not_to receive(:parse)
+    expect(ingest('x' * (described_class::MAX_BODY + 1)).status).to eq(413)
+  end
+
+  it 'accepts millisecond comment timestamps without changing second timestamps' do
+    enable
+    timestamped = Marshal.load(Marshal.dump(entry))
+    timestamped['time'] = now * 1000
+    expect(ingest(body_for([timestamped])).status).to eq(200)
+    expect(Instagram::AmhInboundEvent.first.contract['occurred_at']).to eq(Time.at(now).utc.iso8601)
+  end
+
+  it 'rejects query supplied entries before the legacy queue' do
+    expect(Webhooks::InstagramEventsJob).not_to receive(:perform_later)
+    session = ActionDispatch::Integration::Session.new(Rails.application)
+    query = { 'object' => 'instagram', 'entry' => [entry] }.to_query
+    session.post("/webhooks/instagram?#{query}", params: '{}', headers: { 'CONTENT_TYPE' => 'application/json' })
+    expect(session.response.status).to eq(400)
+    expect(Instagram::AmhInboundEvent.count).to eq(0)
+  end
+
   it 'enforces size, app configuration and signed object type' do
     oversized = Marshal.load(Marshal.dump(entry))
     oversized['changes'][0]['value']['text'] = 'x' * (described_class::MAX_BODY + 1)
     expect(ingest(body_for([oversized])).status).to eq(413)
     oversized['id'] = '99999'
-    expect(ingest(body_for([oversized]))).to be_nil
+    expect(ingest(body_for([oversized])).status).to eq(413)
     bind
     ENV['INSTAGRAM_AMH_APP_ID'] = 'wrong-app'
     expect(ingest.status).to eq(503)

@@ -12,4 +12,6 @@ The ledger stores encrypted normalized metadata and bounded comment text, withou
 
 Rollback: pause both gates first; retain the ledger and reserved inbox outbound protection. Do not drop accepted events or revert to an unprotected OAuth callback for the managed account. Request logs redact webhook entries and OAuth codes/state.
 
-Validation: 44 isolated PostgreSQL examples cover scoped OAuth binding, legacy subscriptions, signature rejection, encrypted persistence, duplicate delivery, mixed batches, HTTP integration, pause, failed-batch rollback, spam exclusion and existing outbound protections. These tests do not constitute a real Meta event or a production deployment.
+Validation: 47 isolated PostgreSQL examples cover scoped OAuth binding, legacy subscriptions, signature rejection, encrypted persistence, duplicate delivery, mixed batches, HTTP integration, pause, failed-batch rollback, spam exclusion and existing outbound protections. These tests do not constitute a real Meta event or a production deployment.
+
+Review regressions: query-supplied entries are rejected before legacy routing, oversized bodies are rejected before JSON parsing, and comment entry timestamps accept seconds or milliseconds.
