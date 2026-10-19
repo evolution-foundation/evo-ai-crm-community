@@ -6,7 +6,20 @@ class Instagram::AmhVisualProof < ApplicationRecord
   validates :create_key, presence: true
   validates :name, presence: true, length: { maximum: 100 }
 
+  # One database transaction coordinates selectable QA mappings with link issuance.
+  # Transaction advisory locks also work with the installed transaction pooler.
+  def self.with_mapping_lock
+    transaction do
+      connection.execute('SELECT pg_advisory_xact_lock(419202619)')
+      yield
+    end
+  end
+
   def publish_version!(expected_lock, actor)
+    self.class.with_mapping_lock { publish_locked_version!(expected_lock, actor) }
+  end
+
+  def publish_locked_version!(expected_lock, actor)
     with_lock do
       raise ActiveRecord::StaleObjectError.new(self, 'publish') unless lock_version == expected_lock
 

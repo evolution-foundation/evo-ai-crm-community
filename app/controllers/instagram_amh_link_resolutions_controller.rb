@@ -7,12 +7,15 @@ class InstagramAmhLinkResolutionsController < ActionController::API
                             'Referrer-Policy' => 'no-referrer')
     return head :not_found unless ENV['INSTAGRAM_AMH_LINK_QA_ENABLED'] == 'true'
     return head :unauthorized unless authenticated?
-    return head :too_many_requests unless rate_allowed?
 
-    render json: Instagram::AmhShortLink.resolve(params[:code])
+    payload = signed_payload
+    return head :bad_request unless payload
+    return head :too_many_requests unless rate_allowed?(payload['rate_key'])
+
+    render json: Instagram::AmhShortLink.resolve(payload['code'])
   rescue Instagram::AmhShortLink::Unavailable
     render json: { error: 'Link indisponível' }, status: :not_found
-  rescue Redis::BaseError
+  rescue Redis::BaseError, ConnectionPool::TimeoutError
     head :service_unavailable # Fail closed if replay/rate-limit storage is unavailable.
   end
 
@@ -28,7 +31,7 @@ class InstagramAmhLinkResolutionsController < ActionController::API
     expected = OpenSSL::HMAC.hexdigest('SHA256', secret, "#{timestamp}.#{nonce}.#{request.raw_post}")
     return false unless ActiveSupport::SecurityUtils.secure_compare(expected, signature)
 
-    $velma.set("amh-link-nonce:#{nonce}", '1', nx: true, ex: 120).present? # rubocop:disable Style/GlobalVars
+    with_redis { |redis| redis.set("amh-link-nonce:#{nonce}", '1', nx: true, ex: 120).present? }
   end
 
   def valid_headers?(secret, timestamp, nonce, signature)
@@ -38,13 +41,24 @@ class InstagramAmhLinkResolutionsController < ActionController::API
     /\A[0-9a-f]{32}\z/.match?(nonce) && /\A[0-9a-f]{64}\z/.match?(signature)
   end
 
-  def rate_allowed?
-    key = params[:rate_key].to_s
+  def signed_payload
+    value = JSON.parse(request.raw_post)
+    value if value.is_a?(Hash) && value.keys.sort == %w[code rate_key]
+  rescue JSON::ParserError
+    nil
+  end
+
+  def with_redis(&)
+    $velma.with(&) # rubocop:disable Style/GlobalVars
+  end
+
+  def rate_allowed?(key)
+    key = key.to_s
     return false unless /\A[0-9a-f]{64}\z/.match?(key)
 
     # Atomic fixed window, shared by all CRM processes. Raw IP is never persisted.
     window = Time.current.to_i / 60
     script = "local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], 120) end; return n"
-    $velma.eval(script, keys: ["amh-link-rate:#{window}:#{key}"]).to_i <= 30 # rubocop:disable Style/GlobalVars
+    with_redis { |redis| redis.eval(script, keys: ["amh-link-rate:#{window}:#{key}"]).to_i <= 30 }
   end
 end

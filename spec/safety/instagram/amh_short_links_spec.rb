@@ -23,7 +23,9 @@ RSpec.describe 'AMH short links' do
     ENV['INSTAGRAM_AMH_LINK_SERVICE_SECRET'] = secret
     @old_velma = $velma
     @redis_namespace = "qa-links:#{SecureRandom.hex(8)}"
-    $velma = Redis::Namespace.new(@redis_namespace, redis: Redis.new(url: 'redis://127.0.0.1:6379/15'))
+    $velma = ConnectionPool.new(size: 2, timeout: 1) do
+      Redis::Namespace.new(@redis_namespace, redis: Redis.new(url: 'redis://127.0.0.1:6379/15'))
+    end
     if example.metadata[:concurrency]
       example.run
     else
@@ -34,7 +36,10 @@ RSpec.describe 'AMH short links' do
       Instagram::AmhShortLink.delete_all
       Instagram::AmhVisualProof.delete_all
     end
-    $velma&.keys('*')&.each { |k| $velma.del(k) } if @old_velma
+    if @old_velma
+      $velma.with { |redis| redis.keys('*').each { |key| redis.del(key) } }
+      $velma.shutdown(&:close)
+    end
     $velma = @old_velma
     %w[INSTAGRAM_AMH_LINK_QA_ENABLED INSTAGRAM_AMH_LINK_SERVICE_SECRET].each { |k| ENV[k] = saved_env[k] }
     Current.reset
@@ -45,10 +50,10 @@ RSpec.describe 'AMH short links' do
     model.issue_qa!(proof: proof, version_id: v['id'], event: ev)
   end
 
-  def resolve_request(code, nonce: SecureRandom.hex(16), timestamp: Time.current.to_i.to_s, signed: true)
+  def resolve_request(code, nonce: SecureRandom.hex(16), timestamp: Time.current.to_i.to_s, signed: true, query: '')
     body = JSON.generate(code: code, rate_key: 'a' * 64)
     signature = OpenSSL::HMAC.hexdigest('SHA256', secret, "#{timestamp}.#{nonce}.#{body}")
-    client.post('/internal/instagram-amh/resolve', params: body, headers: {
+    client.post('/internal/instagram-amh/resolve' + query, params: body, headers: {
                   'CONTENT_TYPE' => 'application/json', 'X-Amh-Timestamp' => timestamp, 'X-Amh-Nonce' => nonce,
                   'X-Amh-Signature' => signed ? signature : '0' * 64
                 })
@@ -126,6 +131,72 @@ RSpec.describe 'AMH short links' do
     other.publish_version!(other.lock_version, 'qa')
     expect(issue[:url]).to eq(first[:url])
     expect { issue(event.merge('comment' => 'new-comment')) }.to raise_error(model::Conflict)
+  end
+
+  it 'rejects competing older selectable versions even when the latest mapping differs' do
+    p = proof
+    other = Instagram::AmhVisualProof.create!(name: 'Older eligible QA', draft: graph, create_key: SecureRandom.uuid)
+    other.publish_version!(other.lock_version, 'qa')
+    changed = graph.deep_dup
+    changed['nodes'][1]['data']['ad'] = 'different-ad'
+    changed['nodes'][1]['data']['media'] = 'different-media'
+    other.update!(draft: changed)
+    other.publish_version!(other.lock_version, 'qa')
+    expect { issue }.to raise_error(model::Conflict)
+  end
+
+  it 'reloads stale rows at revocation boundaries and fails closed on unreadable encrypted payloads' do
+    issued = issue
+    stale = model.find(issued[:id])
+    model.find(issued[:id]).revoke!
+    expect { stale.recover_qa!(version['id']) }.to raise_error(model::Unavailable)
+    second = issue(event.merge('comment' => 'qa-second'))
+    model.find(second[:id]).update!(encrypted_payload: 'corrupt-qa-payload')
+    expect { issue(event.merge('comment' => 'qa-second')) }.to raise_error(model::Conflict)
+    expect(model.count).to eq(2)
+  end
+
+  it 'uses only signed body values despite conflicting query parameters and reports pool timeouts as 503' do
+    issued = issue
+    resolve_request(issued[:url].split('/').last, query: '?code=BAD00000&rate_key=wrong')
+    expect(client.response.status).to eq(200)
+    expect(JSON.parse(client.response.body)['attribution_id']).to eq(issued[:id])
+    allow($velma).to receive(:with).and_raise(ConnectionPool::TimeoutError)
+    resolve_request(issued[:url].split('/').last)
+    expect(client.response.status).to eq(503)
+    RSpec::Mocks.space.proxy_for($velma).reset
+  end
+
+  it 'rejects oversized bodies at Rack before JSON parameter parsing' do
+    client.post('/internal/instagram-amh/resolve', params: '', headers: { 'CONTENT_TYPE' => 'application/json' })
+    expect(client.response.status).to eq(401)
+    client.post('/internal/instagram-amh/resolve', params: 'x' * 1025, headers: { 'CONTENT_TYPE' => 'application/json' })
+    expect(client.response.status).to eq(413)
+    input = Class.new do
+      attr_reader :read_size
+      def read(size)
+        @read_size = size
+        'x' * size
+      end
+    end.new
+    middleware = AmhLinkBodyLimit.new(->(_env) { raise 'must not reach Rails' })
+    status, = middleware.call('PATH_INFO' => '/internal/instagram-amh/resolve', 'REQUEST_METHOD' => 'POST', 'rack.input' => input)
+    expect(status).to eq(413)
+    expect(input.read_size).to eq(1025)
+  end
+
+  it 'holds the same transaction lock used by publications and competing issuance', :concurrency do
+    observed = Queue.new
+    Instagram::AmhVisualProof.with_mapping_lock do
+      Thread.new do
+        ActiveRecord::Base.connection_pool.with_connection do |connection|
+          connection.transaction do
+            observed << connection.select_value('SELECT pg_try_advisory_xact_lock(419202619)')
+          end
+        end
+      end.join
+      expect(observed.pop).to be false
+    end
   end
 
   it 'requires a fresh signed request, rejects replay and rate limits using shared Redis' do

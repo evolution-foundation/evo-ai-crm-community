@@ -14,6 +14,13 @@ class Instagram::AmhShortLink < ApplicationRecord
 
   # Explicit QA issuance only. No webhook, scheduler or transport invokes this method.
   def self.issue_qa!(proof:, version_id:, event:)
+    Instagram::AmhVisualProof.with_mapping_lock do
+      proof.reload
+      issue_snapshot!(proof, version_id, event)
+    end
+  end
+
+  def self.issue_snapshot!(proof, version_id, event)
     version = proof.versions.find { |v| v['id'] == version_id }
     raise Unavailable unless version
 
@@ -33,15 +40,16 @@ class Instagram::AmhShortLink < ApplicationRecord
   def self.ensure_unambiguous!(proof, event)
     # QA mappings are frozen proof versions. Do not silently pick one of several eligible mappings.
     Instagram::AmhVisualProof.where.not(id: proof.id).find_each do |other|
-      version = other.versions.last
-      next unless version
-
-      data = version.fetch('graph').fetch('nodes').to_h { |n| [n['id'], n['data']] }
-      next unless candidate_scope?(data.fetch('scope'), event)
-
-      # Shared media without ad evidence is ambiguous even when keywords differ.
-      raise Conflict if event['ad'].blank? || Instagram::AmhVisualEngine.matches?(event['text'], data.fetch('keyword'))
+      raise Conflict if other.versions.any? { |version| conflicting_version?(version, event) }
     end
+  end
+
+  def self.conflicting_version?(version, event)
+    data = version.fetch('graph').fetch('nodes').to_h { |n| [n['id'], n['data']] }
+    return false unless candidate_scope?(data.fetch('scope'), event)
+
+    # Shared media without ad evidence is ambiguous even when keywords differ.
+    event['ad'].blank? || Instagram::AmhVisualEngine.matches?(event['text'], data.fetch('keyword'))
   end
 
   def self.candidate_scope?(scope, event)
@@ -114,10 +122,16 @@ class Instagram::AmhShortLink < ApplicationRecord
     raise Unavailable unless code.is_a?(String) && CODE.match?(code)
 
     row = find_by(code_hash: Digest::SHA256.hexdigest(code))
-    raise Unavailable unless row&.usable?
+    raise Unavailable unless row
 
-    { attribution_id: row.id, material: row.material, destination: DESTINATIONS.fetch(row.material),
-      version_id: row.version_id, graph_digest: row.graph_digest, expires_at: row.expires_at.to_i, mode: 'qa' }
+    row.with_lock { row.resolution }
+  end
+
+  def resolution
+    raise Unavailable unless usable?
+
+    { attribution_id: id, material: material, destination: DESTINATIONS.fetch(material),
+      version_id: version_id, graph_digest: graph_digest, expires_at: expires_at.to_i, mode: 'qa' }
   end
 
   def usable?
@@ -125,16 +139,23 @@ class Instagram::AmhShortLink < ApplicationRecord
   end
 
   def recover_qa!(version)
+    with_lock { recover_locked_qa!(version) }
+  end
+
+  def recover_locked_qa!(version)
     raise Conflict unless version_id == version
     raise Unavailable unless usable?
 
     code = self.class.encryptor.decrypt_and_verify(encrypted_payload).fetch('code')
     { id: id, url: "https://co.agenciavetorial.com/#{code}", material: material, expires_at: expires_at,
       mode: 'qa', outbound_enabled: false }
+  rescue ActiveSupport::MessageEncryptor::InvalidMessage
+    # Never rotate/reissue an existing event silently when the decryption key is unavailable.
+    raise Conflict
   end
 
   def revoke!
-    update!(revoked_at: Time.current, encrypted_payload: nil)
+    with_lock { update!(revoked_at: Time.current, encrypted_payload: nil) }
   end
 
   # Keep hashes permanently so expired/revoked codes and event keys cannot be reissued.
