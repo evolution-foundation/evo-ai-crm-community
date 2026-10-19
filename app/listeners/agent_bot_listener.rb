@@ -378,6 +378,8 @@ class AgentBotListener < BaseListener
   private
 
   def connected_agent_bot_exist?(inbox)
+    return false if Instagram::AmhSafety.blocked_inbox?(inbox)
+
     return false if inbox.agent_bot_inbox.blank?
     return false unless inbox.agent_bot_inbox.active?
 

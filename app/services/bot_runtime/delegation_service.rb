@@ -9,6 +9,8 @@ module BotRuntime
     end
 
     def delegate
+      return if Instagram::AmhSafety.blocked_inbox?(@conversation.inbox)
+
       event = build_message_event
       BotRuntime::SendEventJob.perform_later(event)
 

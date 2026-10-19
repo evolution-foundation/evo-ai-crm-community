@@ -70,6 +70,8 @@ module EvoFlow
       )
       # Sidekiq strict_args!(:raise) rejects symbol keys and non-JSON values;
       # PayloadBuilder is out of scope for this story — normalise at boundary.
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::PublishEventWorker.perform_async(TRACK_PATH, JSON.parse(payload.to_json))
     end
 
@@ -112,6 +114,8 @@ module EvoFlow
         occurred_at: occurred_at,
         message_id: message_id
       )
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::PublishEventWorker.perform_async(TRACK_PATH, JSON.parse(payload.to_json))
     end
 

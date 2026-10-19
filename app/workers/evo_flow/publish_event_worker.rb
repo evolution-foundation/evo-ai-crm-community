@@ -84,6 +84,8 @@ module EvoFlow
     end
 
     def perform(path, payload)
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::Client.new.post(path, payload)
       Rails.logger.info("[EvoFlow] published path=#{path} messageId=#{message_id(payload)}")
     rescue EvoFlow::InvalidEventName => e

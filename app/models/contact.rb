@@ -349,6 +349,8 @@ class Contact < ApplicationRecord
   # event. Without it, every contact write (including bulk import/sync) spawns an
   # empty background job that loads the contact only to find nothing to run.
   def enqueue_contact_automation(event_name)
+    return if Instagram::AmhSafety.blocked_contact?(self)
+
     return if Current.executed_by.is_a?(AutomationRule)
     return unless AutomationRule.exists?(event_name: event_name, active: true)
 

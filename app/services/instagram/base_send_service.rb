@@ -6,6 +6,8 @@ class Instagram::BaseSendService < Base::SendOnChannelService
   delegate :additional_attributes, to: :contact
 
   def perform_reply
+    return if Instagram::AmhSafety.blocked_message?(message)
+
     send_attachments if message.attachments.present?
     send_content if message.content.present?
   rescue StandardError => e

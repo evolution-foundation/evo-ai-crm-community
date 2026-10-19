@@ -12,6 +12,8 @@ class AgentBots::SegmentedMessageCreator
   end
 
   def create_messages(segments, conversation, force: false)
+    return if Instagram::AmhSafety.blocked_inbox?(conversation.inbox)
+
     return if segments.empty?
 
     # Verifica se a conversa é elegível para resposta do bot (a menos que force seja true)
@@ -48,6 +50,8 @@ class AgentBots::SegmentedMessageCreator
   end
 
   def process_segment_message(segment, conversation)
+    return if Instagram::AmhSafety.blocked_inbox?(conversation.inbox)
+
     # Verifica se é mídia formatada
     if media_segment?(segment)
       create_media_message(segment, conversation)

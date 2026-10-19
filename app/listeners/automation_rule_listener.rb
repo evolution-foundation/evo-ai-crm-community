@@ -83,6 +83,8 @@ class AutomationRuleListener < BaseListener
   end
 
   def contact_created(event)
+    return if Instagram::AmhSafety.blocked_contact?(event.data[:contact])
+
     return if performed_by_automation?(event)
 
     contact = event.data[:contact]
@@ -107,6 +109,8 @@ class AutomationRuleListener < BaseListener
   end
 
   def contact_updated(event)
+    return if Instagram::AmhSafety.blocked_contact?(event.data[:contact])
+
     return if performed_by_automation?(event)
 
     contact = event.data[:contact]
@@ -251,6 +255,8 @@ class AutomationRuleListener < BaseListener
   end
 
   def evaluate_and_execute_rule(rule:, conversation:, account:, changed_attributes:, payload: {}, message: nil, contact: nil)
+    return if Instagram::AmhSafety.blocked_inbox?(conversation&.inbox)
+
     recorder = ::AutomationRules::RunRecorder.new(rule: rule, event_name: rule.event_name, payload: payload)
     recorder.add_step('Event received', data: { event_name: rule.event_name, changed_attributes: changed_attributes })
 

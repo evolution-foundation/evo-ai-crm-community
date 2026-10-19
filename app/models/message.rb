@@ -430,6 +430,8 @@ class Message < ApplicationRecord
   end
 
   def send_reply
+    return if Instagram::AmhSafety.blocked_message?(self)
+
     # Active Storage attaches the file only after commit; wait gives storage provider time to make it available.
     # 5 s is safer than 2 s for large files (video/PDF) on slower storage backends.
     attachments.blank? ? ::SendReplyJob.perform_later(id) : ::SendReplyJob.set(wait: 5.seconds).perform_later(id)
