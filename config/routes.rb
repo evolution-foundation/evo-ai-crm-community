@@ -264,9 +264,14 @@ Rails.application.routes.draw do
       resources :instagram_amh_links, only: [:create, :destroy]
       resources :instagram_amh_proofs, only: [:index, :show, :create, :update] do
         get :operations, on: :collection
+        get :catalog, on: :collection
+        get :test_events, on: :collection
         member do
           post :publish
           post :simulate
+          post :activate
+          post :test_reply
+          get :deliveries
         end
       end
 

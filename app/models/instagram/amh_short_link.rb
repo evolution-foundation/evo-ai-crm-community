@@ -71,7 +71,8 @@ class Instagram::AmhShortLink < ApplicationRecord
   def self.validate_event_shape!(event)
     raise Unavailable unless event.is_a?(Hash)
     raise Unavailable unless (event.keys - %w[account app comment text ad media inbound_event_id]).empty?
-    raise Unavailable unless %w[account app comment text].all? { |k| Instagram::AmhVisualEngine.valid_string?(event[k], 200) }
+    raise Unavailable unless %w[account app comment].all? { |k| Instagram::AmhVisualEngine.valid_string?(event[k], 200) }
+    raise Unavailable unless Instagram::AmhVisualEngine.valid_string?(event['text'], 2200)
 
     validate_optional_event_ids!(event)
   end
