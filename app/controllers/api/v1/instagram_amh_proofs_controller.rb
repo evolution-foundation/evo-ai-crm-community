@@ -1,14 +1,19 @@
 # frozen_string_literal: true
 
 class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
-  require_permissions({ index: 'journeys.read', show: 'journeys.read', create: 'journeys.create',
+  require_permissions({ operations: 'journeys.read', index: 'journeys.read', show: 'journeys.read', create: 'journeys.create',
                         update: 'journeys.update', publish: 'journeys.toggle_active', simulate: 'journeys.update' })
-  before_action :fetch_proof, except: %i[index create]
+  before_action :fetch_proof, except: %i[index create operations]
   rescue_from Instagram::AmhVisualEngine::Invalid, with: :invalid_graph
   rescue_from ActiveRecord::StaleObjectError, with: :stale
 
   def index
     success_response(data: Instagram::AmhVisualProof.order(updated_at: :desc).limit(100).select(:id, :name).as_json(only: %i[id name]))
+  end
+
+  def operations
+    response.headers['Cache-Control'] = 'no-store'
+    success_response(data: Instagram::AmhOperations.snapshot)
   end
 
   def show

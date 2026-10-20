@@ -119,6 +119,73 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
     expect(result['versions'].last['actor']).to eq('service:EVOAI_CRM_API_TOKEN')
   end
 
+  it 'projects the published mapping, preserves the draft and reads only the bound inbox without decrypting PII' do
+    channel = Channel::Instagram.create!(instagram_id: 'qa-ops', access_token: 'fixture-inert', expires_at: 1.day.from_now)
+    inbox = Inbox.create!(name: 'QA ops', channel: channel)
+    allow(Instagram::AmhConnection).to receive(:bound_inbox!).and_return(inbox)
+    proof = create
+    id = proof['id']
+    request(:post, "/#{id}/publish", { lock_version: proof['lock_version'] })
+    saved = Instagram::AmhVisualProof.find(id)
+    draft = graph.deep_dup
+    draft['nodes'].find { |node| node['id'] == 'material' }['data']['material'] = 'amh-consultorio'
+    saved.update!(draft: draft)
+    2.times do |i|
+      Instagram::AmhInboundEvent.create!(inbox_id: inbox.id, event_key: "qa-ops-#{i}", encrypted_contract: 'DO-NOT-DECRYPT', state: 'pending')
+    end
+    other = Inbox.create!(name: 'QA other', channel: Channel::Instagram.create!(instagram_id: 'other-ops', access_token: 'inert', expires_at: 1.day.from_now))
+    Instagram::AmhInboundEvent.create!(inbox_id: other.id, event_key: 'qa-other', encrypted_contract: 'SECRET', state: 'failed')
+    result = request(:get, '/operations').fetch('data')
+    expect(client.response.status).to eq(200)
+    expect(client.response.headers['Cache-Control']).to eq('no-store')
+    expect(result.dig('inbound', 'counts')).to eq('pending' => 2)
+    expect(result.dig('inbound', 'recent').size).to eq(2)
+    expect(result.dig('inbound', 'recent').first.keys).to contain_exactly('id', 'state', 'created_at', 'updated_at')
+    rule = result['rules'].find { |row| row['id'] == id }
+    expect(rule['material']).to eq('amh')
+    expect(rule['draft_changed']).to be true
+    expect(rule['version']).to eq(1)
+    expect(result['outbound_enabled']).to be false
+    expect(result['mautic']).to eq('not_queried')
+    %w[SECRET DO-NOT-DECRYPT event_key encrypted_contract].each do |marker|
+      expect(client.response.body).not_to include(marker)
+    end
+    expect(saved.reload.draft).to eq(draft)
+    expect(WebMock).not_to have_requested(:any, /graph\.(instagram|facebook)\.com/)
+  end
+
+  it 'bounds counts to the same latest receipts and avoids materializing proof histories' do
+    channel = Channel::Instagram.create!(instagram_id: 'qa-bounded', access_token: 'inert', expires_at: 1.day.from_now)
+    inbox = Inbox.create!(name: 'QA bounded', channel: channel)
+    allow(Instagram::AmhConnection).to receive(:bound_inbox!).and_return(inbox)
+    55.times do |i|
+      Instagram::AmhInboundEvent.create!(inbox_id: inbox.id, event_key: "qa-bounded-#{i}", encrypted_contract: 'not-read',
+                                         state: i < 5 ? 'old' : 'pending', created_at: Time.current + i.seconds)
+    end
+    proof = Instagram::AmhVisualProof.create!(name: 'QA summary', draft: graph, create_key: SecureRandom.uuid)
+    proof.publish_version!(0, 'QA')
+    proof.simulate_version!(proof.versions.last['id'], 'timeout', 'AMH')
+    allow_any_instance_of(Instagram::AmhVisualProof).to receive(:ledger).and_raise('Full ledger must not be read')
+    allow_any_instance_of(Instagram::AmhVisualProof).to receive(:versions).and_raise('Full versions must not be read')
+    response = request(:get, '/operations').fetch('data')
+    expect(response.dig('inbound', 'recent').size).to eq(50)
+    expect(response.dig('inbound', 'counts')).to eq('pending' => 50)
+    expect(response.dig('inbound', 'counts_scope')).to eq('recent_receipts')
+    summary = response['rules'].find { |row| row['id'] == proof.id }
+    expect(summary['simulations']).to eq(1)
+    expect(summary.dig('last_simulation', 'outcome')).to eq('uncertain')
+    expect(summary['version']).to eq(1)
+  end
+
+  it 'reports missing account configuration as unavailable rather than an empty healthy queue' do
+    allow(Instagram::AmhConnection).to receive(:bound_inbox!).and_raise(Instagram::AmhConnection::ConfigurationError)
+    data = request(:get, '/operations').fetch('data')
+    expect(client.response.status).to eq(200)
+    expect(data.dig('inbound', 'available')).to be false
+    expect(data['reception_enabled']).to be false
+    expect(data['outbound_enabled']).to be false
+  end
+
   context 'read-only user' do
     let(:permissions) { %w[journeys.read] }
     it 'denies draft creation, editing and publication on the server' do
@@ -142,6 +209,8 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
     it 'denies listing, reading and simulating' do
       proof = Instagram::AmhVisualProof.create!(name: 'QA', draft: graph, create_key: SecureRandom.uuid)
       request(:get)
+      expect(client.response.status).to eq(403)
+      request(:get, '/operations')
       expect(client.response.status).to eq(403)
       request(:get, "/#{proof.id}")
       expect(client.response.status).to eq(403)
