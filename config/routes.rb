@@ -1,4 +1,5 @@
 Rails.application.routes.draw do
+  post '/internal/instagram-amh/associate', to: 'instagram_amh_link_associations#create'
   post '/internal/instagram-amh/resolve', to: 'instagram_amh_link_resolutions#create'
   get '/health/live', to: 'health#live'
   get '/health/ready', to: 'health#ready'
