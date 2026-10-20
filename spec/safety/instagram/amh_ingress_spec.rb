@@ -264,14 +264,18 @@ RSpec.describe Instagram::AmhIngress do
     enable
     payload = 'AMH_CONFIRM_V1:qa-signed-fixture'
     message = { 'sender' => { 'id' => '90002' }, 'recipient' => { 'id' => target }, 'timestamp' => now * 1000,
-                'message' => { 'mid' => 'qa-quick-reply', 'text' => 'Pode enviar', 'quick_reply' => { 'payload' => payload } } }
+                'message' => { 'mid' => 'a' * 164, 'text' => 'Pode enviar', 'quick_reply' => { 'payload' => payload } } }
     body = body_for([{ 'id' => target, 'messaging' => [message] }])
     expect(ingest(body).status).to eq(200)
     contract = Instagram::AmhInboundEvent.last.contract
     expect(contract['kind']).to eq('dm')
+    expect(contract['event_id']).to eq('a' * 164)
     expect(contract['amh_confirmation']).to eq(payload)
     expect(contract['confirmation_source']).to eq('quick_reply')
     expect(contract).not_to have_key('text')
+    message['message']['mid'] = 'a' * 1025
+    expect(ingest(body_for([{ 'id' => target, 'messaging' => [message] }])).status).to eq(400)
+    expect(Instagram::AmhInboundEvent.count).to eq(1)
   end
 
   it 'deduplicates postbacks without message IDs and never treats generic text as confirmation' do

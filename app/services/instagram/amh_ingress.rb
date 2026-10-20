@@ -85,7 +85,7 @@ class Instagram::AmhIngress
   end
 
   def event_id(value)
-    raise InvalidEvent unless value.is_a?(String) && value.present? && value.bytesize <= 128
+    raise InvalidEvent unless value.is_a?(String) && value.present? && value.bytesize <= 1024
 
     value
   end
