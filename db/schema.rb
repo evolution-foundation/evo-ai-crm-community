@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_19_180000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_19_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -706,6 +706,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_180000) do
     t.index ["event_key"], name: "index_instagram_amh_inbound_events_on_event_key", unique: true
     t.index ["inbox_id"], name: "index_instagram_amh_inbound_events_on_inbox_id"
     t.index ["state", "created_at"], name: "index_instagram_amh_pending"
+  end
+
+  create_table "instagram_amh_short_links", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "code_hash", limit: 64, null: false
+    t.string "event_hash", limit: 64, null: false
+    t.string "material", null: false
+    t.string "graph_digest", null: false
+    t.uuid "version_id", null: false
+    t.text "encrypted_payload"
+    t.datetime "expires_at", null: false
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code_hash"], name: "index_instagram_amh_short_links_on_code_hash", unique: true
+    t.index ["event_hash"], name: "index_instagram_amh_short_links_on_event_hash", unique: true
+    t.index ["expires_at"], name: "index_instagram_amh_short_links_on_expires_at"
+    t.check_constraint "material::text = ANY (ARRAY['amh'::character varying, 'amh-consultorio'::character varying]::text[])", name: "amh_short_link_material"
   end
 
   create_table "instagram_amh_visual_proofs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

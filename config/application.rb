@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'boot'
+require_relative '../lib/middleware/amh_link_body_limit'
 require_relative '../lib/evolution_app'
 
 require 'rails/all'
@@ -36,6 +37,7 @@ end
 
 module Evolution
   class Application < Rails::Application
+    config.middleware.insert_before ActionDispatch::RequestId, AmhLinkBodyLimit
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 7.0
 

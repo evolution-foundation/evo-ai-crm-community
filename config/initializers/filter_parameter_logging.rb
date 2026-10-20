@@ -14,3 +14,4 @@ Rails.application.config.filter_parameters += [filter_regex]
 
 # Meta ingress contains private social data; keep it out of request logs.
 Rails.application.config.filter_parameters += [:entry, :code, :state]
+Rails.application.config.filter_parameters += [:event, :rate_key, :encrypted_payload]
