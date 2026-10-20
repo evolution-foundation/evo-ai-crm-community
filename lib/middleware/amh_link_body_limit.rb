@@ -4,7 +4,7 @@ require 'stringio'
 
 # Bound reads before Rails parses/logs request parameters, including chunked bodies.
 class AmhLinkBodyLimit
-  PATH = '/internal/instagram-amh/resolve'
+  PATHS = %w[/internal/instagram-amh/resolve /internal/instagram-amh/associate].freeze
   LIMIT = 1024
 
   def initialize(app)
@@ -12,7 +12,7 @@ class AmhLinkBodyLimit
   end
 
   def call(env)
-    return @app.call(env) unless env['PATH_INFO'] == PATH && env['REQUEST_METHOD'] == 'POST'
+    return @app.call(env) unless PATHS.include?(env['PATH_INFO']) && env['REQUEST_METHOD'] == 'POST'
     return too_large if env['CONTENT_LENGTH'].to_i > LIMIT
 
     body = env.fetch('rack.input').read(LIMIT + 1) || ''
