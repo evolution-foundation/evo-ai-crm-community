@@ -3,10 +3,6 @@ require_relative '../../../config/environment'
 require 'webmock/rspec'
 
 RSpec.describe 'AMH short links' do
-  it 'loads the complete Rails autoload tree without middleware namespace errors' do
-    expect { Rails.autoloaders.main.eager_load }.not_to raise_error
-  end
-
   let(:graph) { JSON.parse(File.read(Rails.root.join('spec/fixtures/amh_visual_graph.json'))) }
   let(:proof) do
     p = Instagram::AmhVisualProof.create!(name: 'QA links', draft: graph, create_key: SecureRandom.uuid)
@@ -61,6 +57,10 @@ RSpec.describe 'AMH short links' do
                   'CONTENT_TYPE' => 'application/json', 'X-Amh-Timestamp' => timestamp, 'X-Amh-Nonce' => nonce,
                   'X-Amh-Signature' => signed ? signature : '0' * 64
                 })
+  end
+
+  it 'loads the complete Rails autoload tree without middleware namespace errors' do
+    expect { Rails.autoloaders.main.eager_load }.not_to raise_error
   end
 
   it 'issues 8 random characters, freezes the graph, recovers retries and resolves without changing a record' do
