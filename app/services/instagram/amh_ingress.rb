@@ -117,13 +117,23 @@ class Instagram::AmhIngress
   end
 
   def normalize_dm(entry, message)
-    return unless message.is_a?(Hash) && message['message'].is_a?(Hash)
+    return unless message.is_a?(Hash)
     return if message.dig('message', 'is_echo') || message.dig('sender', 'id') == entry['id']
+    return unless message['message'].is_a?(Hash) || message['postback'].is_a?(Hash)
 
     raise InvalidEvent unless message.dig('recipient', 'id') == entry['id']
 
-    base(entry, message.dig('sender', 'id'), message.dig('message', 'mid'), 'dm',
-         occurred_at(message['timestamp'], milliseconds: true))
+    postback = message['postback']
+    payload = postback.is_a?(Hash) ? postback['payload'] : message.dig('message', 'quick_reply', 'payload')
+    id = postback.is_a?(Hash) ? postback['mid'] : message.dig('message', 'mid')
+    # Postbacks without mid are deduplicated by account, sender, timestamp and signed payload.
+    id ||= Digest::SHA256.hexdigest(JSON.generate([entry['id'], message.dig('sender', 'id'), message['timestamp'], payload])) if postback
+    contract = base(entry, message.dig('sender', 'id'), id, 'dm', occurred_at(message['timestamp'], milliseconds: true))
+    if payload.is_a?(String) && payload.bytesize <= 1000 && payload.start_with?(Instagram::AmhConfirmationToken::PREFIX)
+      contract['amh_confirmation'] = payload
+      contract['confirmation_source'] = postback ? 'postback' : 'quick_reply'
+    end
+    contract
   end
 
   def comment_time(value)

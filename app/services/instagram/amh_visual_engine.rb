@@ -57,8 +57,18 @@ class Instagram::AmhVisualEngine
     require_valid!(valid_string?(scope['ad'], 100) || valid_string?(scope['media'], 100), 'Informe anúncio ou publicação')
     validate_keyword!(data['keyword'])
     require_valid!(MATERIALS.include?(data['material']['material']), 'Material não permitido')
-    reply = data['reply']['text']
-    require_valid!(valid_string?(reply, 1000) && reply.include?('{{link}}'), 'Prévia inválida; use {{link}}')
+    reply = data['reply']
+    if reply['confirmationRequired'] == true
+      require_valid!(safe_button_text?(reply['openingText'], 1000), 'Convite inválido; não inclua links antes da confirmação')
+      require_valid!(safe_button_text?(reply['text'], 640), 'Mensagem inválida; o link será enviado apenas no botão')
+      require_valid!(valid_string?(reply['buttonLabel'], 20), 'Use até 20 caracteres no botão do material')
+    else
+      require_valid!(valid_string?(reply['text'], 1000) && reply['text'].include?('{{link}}'), 'Prévia inválida; use {{link}}')
+    end
+  end
+
+  def self.safe_button_text?(text, max_bytes)
+    valid_string?(text, max_bytes) && text.bytesize <= max_bytes && !text.match?(/https?:|www\.|\{\{link\}\}/i)
   end
 
   def self.validate_keyword!(rule)
@@ -117,6 +127,7 @@ class Instagram::AmhVisualEngine
   def self.result_metadata(data, text)
     { outbound_calls: 0, mautic_state: 'not_executed',
       preview: data['reply']['text'].gsub('{{link}}', 'https://co.agenciavetorial.com/QA000000'),
+      requires_confirmation: data['reply']['confirmationRequired'] == true, opening_preview: data['reply']['openingText'],
       input_length: text.length,
       material: data['material']['material'], link_state: 'fixture_only_not_issued', contract: 'amh-visual-v1', mode: 'inert' }
   end

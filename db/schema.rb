@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_20_210000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -705,6 +705,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
     t.text "encrypted_receipt"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "prompt_state", default: "pending", null: false
+    t.text "encrypted_prompt_receipt"
+    t.datetime "prompt_accepted_at"
+    t.datetime "prompt_expires_at"
+    t.datetime "confirmation_received_at"
+    t.uuid "confirmation_event_id"
+    t.index ["confirmation_event_id"], name: "index_instagram_amh_deliveries_on_confirmation_event_id", unique: true
     t.index ["inbound_event_id"], name: "index_instagram_amh_deliveries_on_inbound_event_id", unique: true
     t.index ["proof_id"], name: "index_instagram_amh_deliveries_on_proof_id"
     t.index ["state", "created_at"], name: "index_instagram_amh_deliveries_on_state_and_created_at"
@@ -1486,6 +1493,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
   add_foreign_key "deal_history_events", "users", column: "actor_id"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
+  add_foreign_key "instagram_amh_deliveries", "instagram_amh_inbound_events", column: "confirmation_event_id"
   add_foreign_key "instagram_amh_deliveries", "instagram_amh_inbound_events", column: "inbound_event_id"
   add_foreign_key "instagram_amh_deliveries", "instagram_amh_visual_proofs", column: "proof_id"
   add_foreign_key "instagram_amh_inbound_events", "inboxes"

@@ -30,3 +30,13 @@ Member endpoints: `activate` (audience: paused/test/active with lock_version and
 Isolated PostgreSQL database `instagram_amh_safety_test`; WebMock disallows actual network access. Executor tests cover encrypted receipts, comment-scoped transport, duplicate requests, timeouts, wrong recipient, expired/live/DM/mismatching events, rule ambiguity, operational pause, activation revision and proof of controlled acceptance. Existing ingress, registration, short-link and safety suites remain applicable. Remote rollout and real Meta acceptance must be recorded separately from these local tests.
 
 Private replies contract: [Meta documentation](https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/private-replies), existing API version v23.0. The official site rate-limited this session; real provider validation remains part of rollout.
+
+## Confirmation required, 20 October product correction
+
+Current execution requires `reply.confirmationRequired=true`. The first reply is only `openingText` plus the `Pode enviar` quick reply. It carries a purpose-bound, seven-day signed delivery token and no material URL. A comment cannot issue a short link. Historical direct-response graphs remain readable/simulatable but cannot be activated or dispatched.
+
+The signed Meta receiver persists only the allowlisted quick-reply/postback payload, not the DM body. Plain text matching the button title is insufficient. The same identity/account/app/inbox, immutable version, active audience, operational gates, prompt receipt/expiry and a fresh inbound 24-hour window are checked again before delivery. A callback that arrives before the prompt receipt is saved has a bounded, pre-send retry. The link is issued only when the confirmed delivery is reserved durably. The material uses a button template with one `web_url`, `buttonLabel` and URL-free text, preventing a repeated raw link in the message.
+
+Migration `20261020210000` adds separate invitation receipt/state, expiry and a unique confirmation-event reference. Prompt acceptance alone cannot authorize commercial activation: the exact version requires an accepted material delivery with a persisted confirmation event. Pause or version replacement invalidates pending confirmations. Neither an uncertain prompt nor an uncertain material response is retried automatically. No fallback can bypass confirmation when the provider rejects the initial interactive message.
+
+This replaces the previous comment → direct material behavior following Ricardo's explicit correction. A new controlled comment and actual button tap are required for real Meta validation; the comment consumed by the historical direct test must not be replayed or fabricated.
