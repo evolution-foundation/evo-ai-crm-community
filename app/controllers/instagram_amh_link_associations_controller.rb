@@ -10,17 +10,24 @@ class InstagramAmhLinkAssociationsController < InstagramAmhLinkResolutionsContro
 
     payload = signed_payload
     return head :bad_request unless payload
-    return head :too_many_requests unless rate_allowed?(payload['rate_key'])
+    return head :too_many_requests unless association_rate_allowed?(payload['rate_key'])
 
     render json: { assertion: Instagram::AmhRegistrationBinding.issue!(payload) }
   rescue Instagram::AmhConnection::ConfigurationError, Instagram::AmhShortLink::Unavailable,
          ActiveRecord::RecordNotFound, ActiveSupport::MessageEncryptor::InvalidMessage
     render json: { error: 'Contexto indisponível' }, status: :not_found
-  rescue Redis::BaseError, ConnectionPool::TimeoutError
+  rescue Redis::BaseError, ConnectionPool::TimeoutError, ActiveRecord::ConnectionNotEstablished,
+         ActiveRecord::ConnectionTimeoutError, ActiveRecord::StatementInvalid
     head :service_unavailable
   end
 
   private
+
+  def association_rate_allowed?(client_key)
+    # One authenticated service credential in this QA contract. A caller cannot
+    # rotate a submitted rate_key to escape this independent server-owned budget.
+    rate_allowed?(Digest::SHA256.hexdigest('amh-association-service-v1')) && rate_allowed?(client_key)
+  end
 
   def signed_payload
     value = JSON.parse(request.raw_post)

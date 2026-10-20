@@ -8,7 +8,10 @@ continua sendo uma prova inerte; emitir um link de QA não o ativa.
 
 `POST /api/v1/instagram_amh_links`, autenticado pelo CRM e `journeys.update`, recebe
 `proof_id`, `version_id` congelada e `event`: strings `account`, `app`, `comment`,
-`text`, mais `ad`/`media` opcionais. Somente esses campos são aceitos. Usar fixtures
+`text`, mais `ad`/`media` e `inbound_event_id` opcionais. `inbound_event_id` é o UUID do
+evento já persistido pelo ingresso autenticado e é obrigatório para associação
+do cadastro (etapa6). Omiti-lo cria link resolvível sem capacidade de associação;
+não preencher com ID de perfil ou comentário. Somente esses campos são aceitos. Usar fixtures
 sintéticas em ambiente isolado. Resposta201 contém `id`, `url`, `material`,
 `expires_at`, `mode=qa`, `outbound_enabled=false`. A flag
 `INSTAGRAM_AMH_LINK_QA_ENABLED=true` habilita explicitamente emissão/resolução.

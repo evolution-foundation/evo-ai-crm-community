@@ -52,3 +52,13 @@ incluem corpo/HMAC/replay/flags, inbox/evento, material/versão, expiração e
 revogação. RuboCop e `git diff --check`. Contraparte site testa as duas rotas e
 fila durável; Mautic testa contrato nativo/reconciliação e ponte do worker em
 runtime7.2.1 descartável. Sem evidência nova de evento Meta real.
+
+## Revisão antes do merge —20/10/2026
+
+Escopo do evento autenticado é conferido contra o grafo congelado mesmo quando
+a emissão omitiu ad/mídia. Texto ausente/não textual retorna404; falha de
+banco/conexão/statement retorna503 privado. Há orçamento adicional30/minuto por
+credencial de serviço, controlado no servidor, além da chave cliente/IP. Não é
+possível escapar desse orçamento trocando `rate_key`. Testes usam a configuração
+real da inbox protegida, substituições de UUID/hash válidas e nonce novo no
+ensaio de adulteração do corpo.

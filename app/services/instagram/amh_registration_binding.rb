@@ -46,9 +46,19 @@ class Instagram::AmhRegistrationBinding
       row = Instagram::AmhInboundEvent.find(id)
       event = row.contract
       unavailable! unless row.inbox_id == Instagram::AmhConnection.bound_inbox!.id && matching_event?(event, source)
-      keyword = graph.fetch('nodes').find { |node| node['id'] == 'keyword' }.fetch('data')
-      unavailable! unless Instagram::AmhVisualEngine.matches?(event['comment_text'], keyword)
+      validate_graph_context!(event, graph)
       normalized_contract(event)
+    end
+
+    def validate_graph_context!(event, graph)
+      data = graph.fetch('nodes').to_h { |node| [node['id'], node['data']] }
+      unavailable! unless event['comment_text'].is_a?(String)
+      # Evidence in the authenticated event is authoritative, even when the QA
+      # issuance source omitted ad/media IDs. Never bypass the frozen scope.
+      Instagram::AmhShortLink.validate_scope!(data.fetch('scope'), 'ad' => event['ad_id'], 'media' => event['media_id'])
+      unavailable! unless Instagram::AmhVisualEngine.matches?(event['comment_text'], data.fetch('keyword'))
+    rescue Instagram::AmhShortLink::Conflict
+      unavailable!
     end
 
     def matching_event?(event, source)
