@@ -59,6 +59,10 @@ RSpec.describe 'AMH short links' do
                 })
   end
 
+  it 'loads the complete Rails autoload tree without middleware namespace errors' do
+    expect { Rails.autoloaders.main.eager_load }.not_to raise_error
+  end
+
   it 'issues 8 random characters, freezes the graph, recovers retries and resolves without changing a record' do
     result = issue
     code = result[:url].split('/').last
@@ -179,7 +183,7 @@ RSpec.describe 'AMH short links' do
         'x' * size
       end
     end.new
-    middleware = AmhLinkBodyLimit.new(->(_env) { raise 'must not reach Rails' })
+    middleware = Middleware::AmhLinkBodyLimit.new(->(_env) { raise 'must not reach Rails' })
     status, = middleware.call('PATH_INFO' => '/internal/instagram-amh/resolve', 'REQUEST_METHOD' => 'POST', 'rack.input' => input)
     expect(status).to eq(413)
     expect(input.read_size).to eq(1025)

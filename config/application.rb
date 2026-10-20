@@ -37,7 +37,7 @@ end
 
 module Evolution
   class Application < Rails::Application
-    config.middleware.insert_before ActionDispatch::RequestId, AmhLinkBodyLimit
+    config.middleware.insert_before ActionDispatch::RequestId, Middleware::AmhLinkBodyLimit
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 7.0
 
@@ -80,7 +80,6 @@ module Evolution
     # https://discuss.rubyonrails.org/t/cve-2022-32224-possible-rce-escalation-bug-with-serialized-columns-in-active-record/81017
     # FIX ME : fixes breakage of installation config. we need to migrate.
     config.active_record.yaml_column_permitted_classes = [ActiveSupport::HashWithIndifferentAccess]
-
 
     ActiveRecord::Base.logger = ActiveSupport::Logger.new($stdout) if defined?(Rails::Console)
   end
