@@ -114,4 +114,12 @@ RSpec.describe Instagram::AmhExecutor do
     Current.reset
   end
 
+  it 'matches keywords beyond the first 200 characters without persisting comment text in links' do
+    contract['comment_text'] = ('Texto do comentário. ' * 20) + 'AMH!'
+    stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-long'), headers: { 'Content-Type' => 'application/json' })
+    expect(call.state).to eq('accepted')
+    payload = Instagram::AmhShortLink.encryptor.decrypt_and_verify(Instagram::AmhShortLink.last.encrypted_payload)
+    expect(payload['event']).not_to have_key('text')
+  end
+
 end
