@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_20_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -696,6 +696,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_120000) do
     t.index ["default_conversation_status"], name: "index_inboxes_on_default_conversation_status"
   end
 
+  create_table "instagram_amh_deliveries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "inbound_event_id", null: false
+    t.uuid "proof_id", null: false
+    t.string "version_id", null: false
+    t.string "state", default: "pending", null: false
+    t.string "reason"
+    t.text "encrypted_receipt"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["inbound_event_id"], name: "index_instagram_amh_deliveries_on_inbound_event_id", unique: true
+    t.index ["proof_id"], name: "index_instagram_amh_deliveries_on_proof_id"
+    t.index ["state", "created_at"], name: "index_instagram_amh_deliveries_on_state_and_created_at"
+  end
+
   create_table "instagram_amh_inbound_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "inbox_id", null: false
     t.string "event_key", limit: 64, null: false
@@ -735,6 +749,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_120000) do
     t.integer "lock_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "active_version_id"
+    t.datetime "activated_at"
+    t.string "audience", default: "paused", null: false
     t.index ["create_key"], name: "index_instagram_amh_visual_proofs_on_create_key", unique: true
   end
 
@@ -1469,6 +1486,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_120000) do
   add_foreign_key "deal_history_events", "users", column: "actor_id"
   add_foreign_key "facebook_comment_moderations", "conversations"
   add_foreign_key "facebook_comment_moderations", "messages"
+  add_foreign_key "instagram_amh_deliveries", "instagram_amh_inbound_events", column: "inbound_event_id"
+  add_foreign_key "instagram_amh_deliveries", "instagram_amh_visual_proofs", column: "proof_id"
   add_foreign_key "instagram_amh_inbound_events", "inboxes"
   add_foreign_key "macro_executions", "conversations"
   add_foreign_key "macro_executions", "macros"

@@ -55,9 +55,10 @@ class Instagram::AmhIngress
     return Result.new(status: 503) unless enabled?
 
     contracts = scoped.flat_map { |entry| normalize(entry) }
-    Instagram::AmhInboundEvent.transaction(requires_new: true) do
-      contracts.each { |contract| persist(inbox, contract) }
+    events = Instagram::AmhInboundEvent.transaction(requires_new: true) do
+      contracts.map { |contract| persist(inbox, contract) }
     end
+    events.each { |event| Instagram::AmhDispatchJob.perform_later(event.id) } if Instagram::AmhExecutor.enabled?
     Result.new(status: 200, remaining: remaining)
   end
 
@@ -138,6 +139,7 @@ class Instagram::AmhIngress
     return if value.dig('from', 'id') == entry['id'] || value['is_spam'] == true
 
     contract = base(entry, value.dig('from', 'id'), value['id'], 'comment', comment_time(entry['time']))
+    contract['live'] = change['field'] == 'live_comments'
     decorate_comment(contract, value)
   end
 

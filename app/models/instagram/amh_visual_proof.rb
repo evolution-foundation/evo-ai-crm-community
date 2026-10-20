@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# A separate inert namespace: never an AutomationRule, Journey or outbound job.
+# Versioned comment automations, isolated from general journeys and campaign sends.
 class Instagram::AmhVisualProof < ApplicationRecord
   self.table_name = 'instagram_amh_visual_proofs'
+  validates :audience, inclusion: { in: %w[paused test active] }
   validates :create_key, presence: true
   validates :name, presence: true, length: { maximum: 100 }
 
@@ -59,6 +60,7 @@ class Instagram::AmhVisualProof < ApplicationRecord
   end
 
   def snapshot
-    as_json(only: %i[id name draft versions ledger lock_version updated_at]).merge('outbound_enabled' => false, 'state' => 'paused')
+    as_json(only: %i[id name draft versions ledger lock_version updated_at]).merge('outbound_enabled' => audience != 'paused' && Instagram::AmhExecutor.enabled?,
+                                                             'state' => audience, 'active_version_id' => active_version_id)
   end
 end
