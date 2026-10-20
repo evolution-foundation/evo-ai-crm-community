@@ -24,6 +24,7 @@
 #
 class Pipeline < ApplicationRecord
   VALID_TYPES = %w[sales support onboarding custom marketing].freeze
+  DEFAULT_DEAL_ATTRIBUTES = %w[utm_source utm_medium utm_campaign utm_content utm_term].freeze
 
   belongs_to :created_by, class_name: 'User'
 
@@ -56,7 +57,9 @@ class Pipeline < ApplicationRecord
     pipeline_items.create!(
       conversation: conversation,
       pipeline_stage: stage,
-      assigned_by: user
+      assigned_by: user,
+      owner: conversation.assignee || user,
+      title: "Negócio - #{conversation.contact&.name.presence || conversation.display_id}"
     )
   end
 
@@ -67,7 +70,9 @@ class Pipeline < ApplicationRecord
     pipeline_items.create!(
       contact: contact,
       pipeline_stage: stage,
-      assigned_by: user
+      assigned_by: user,
+      owner: user,
+      title: "Negócio - #{contact.name.presence || contact.id}"
     )
   end
   
@@ -86,14 +91,14 @@ class Pipeline < ApplicationRecord
   # CONTAGEM; sem isto, qualquer relatório financeiro (inclusive o do assistente) conclui
   # "não há valores". services_total_value já existe no PipelineItem.
   def total_value
-    pipeline_items.sum(&:services_total_value)
+    pipeline_items.sum(&:deal_value)
   end
 
   # Valor agregado POR ETAPA (stage_id/name => soma dos serviços dos itens daquela etapa).
   # Espelha stage_counts, mas com dinheiro em vez de contagem.
   def stage_values
     pipeline_stages.each_with_object({}) do |stage, acc|
-      acc[stage.name] = stage.pipeline_items.sum(&:services_total_value)
+      acc[stage.name] = stage.pipeline_items.sum(&:deal_value)
     end
   end
 
@@ -120,7 +125,7 @@ class Pipeline < ApplicationRecord
   def set_default_custom_fields
     self.custom_fields = {} if custom_fields.blank?
     # Ensure attributes is always an array
-    self.custom_fields['attributes'] ||= []
+    self.custom_fields['attributes'] = (Array(self.custom_fields['attributes']).map(&:to_s) + DEFAULT_DEAL_ATTRIBUTES).uniq
     # Normalize: keep only attributes array, remove any other keys
     self.custom_fields = { 'attributes' => custom_fields['attributes'] }
   end

@@ -35,11 +35,32 @@ class Webhooks::Trigger
   def perform_request
     RestClient::Request.execute(
       method: :post,
-      url: @url,
+      url: request_url,
       payload: @payload.to_json,
       headers: { content_type: :json, accept: :json },
       timeout: 5
     )
+  end
+
+  def request_url
+    internal_base_url = ENV['INTERNAL_WEBHOOK_BASE_URL'].to_s.strip
+    return @url if internal_base_url.blank?
+
+    public_uri = URI.parse(@url.to_s)
+    public_host = ENV.fetch('INTERNAL_WEBHOOK_PUBLIC_HOST', 'webhook.agenciavetorial.com')
+    return @url unless public_uri.host == public_host
+
+    internal_uri = URI.parse(internal_base_url)
+    return @url unless internal_uri.is_a?(URI::HTTP) && internal_uri.host.present?
+
+    base_path = internal_uri.path.to_s.delete_suffix('/')
+    request_path = public_uri.path.to_s.start_with?('/') ? public_uri.path : "/#{public_uri.path}"
+    internal_uri.path = "#{base_path}#{request_path}"
+    internal_uri.query = public_uri.query
+    internal_uri.fragment = nil
+    internal_uri.to_s
+  rescue URI::InvalidURIError
+    @url
   end
 
   def handle_error(error)

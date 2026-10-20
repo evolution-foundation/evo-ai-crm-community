@@ -31,9 +31,9 @@ Rails.application.config.after_initialize do
       alias_method :_static_service, :service
 
       def service
-        service_name = GlobalConfigService.load(
+        service_name = GlobalConfigService.load_env_first(
           'ACTIVE_STORAGE_SERVICE',
-          ENV.fetch('ACTIVE_STORAGE_SERVICE', 'local')
+          'local'
         ).presence || 'local'
 
         # Fail-safe: if a bucket-backed service is selected but no bucket is
@@ -64,7 +64,7 @@ Rails.application.config.after_initialize do
         return true if bucket_env.nil?
 
         bucket = begin
-          GlobalConfigService.load(bucket_env, ENV.fetch(bucket_env, nil))
+          GlobalConfigService.load_env_first(bucket_env, nil)
         rescue StandardError
           ENV.fetch(bucket_env, nil)
         end

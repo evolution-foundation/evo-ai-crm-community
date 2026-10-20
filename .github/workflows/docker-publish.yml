@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 # PR builds move the mutable :pr-<N> tag on every push — cancel superseded
 # runs so a retest always reflects the latest commit. Never cancel a
@@ -18,7 +19,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  IMAGE_NAME: evoapicloud/evo-ai-crm-community
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/evo-ai-crm-community
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -28,8 +30,7 @@ jobs:
   # docs/pr-review-testing-workflow.md §6.1.
   # ---------------------------------------------------------------------------
   build-pr:
-    # Só PR interna (mesmo repo): PR de fork não tem os secrets DOCKERHUB_* e
-    # não deve buildar/pushar código não-confiável com nossas credenciais.
+    # Só PR interna (mesmo repo): não conceder packages:write a código de fork.
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     name: Build PR image (amd64)
     runs-on: ubuntu-latest
@@ -42,8 +43,9 @@ jobs:
 
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve PR tags
         id: tags
@@ -98,8 +100,9 @@ jobs:
 
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push by digest
         id: build
@@ -148,8 +151,9 @@ jobs:
 
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve tags
         id: tags
@@ -179,10 +183,14 @@ jobs:
           MERGE_TAGS: ${{ steps.tags.outputs.tags }}
         run: |
           IFS=',' read -ra TAG_ARRAY <<< "${MERGE_TAGS}"
-          TAG_ARGS=""
+          TAG_ARGS=()
           for tag in "${TAG_ARRAY[@]}"; do
-            TAG_ARGS="${TAG_ARGS} -t ${tag}"
+            TAG_ARGS+=(-t "${tag}")
           done
 
-          docker buildx imagetools create ${TAG_ARGS} \
-            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          DIGEST_ARGS=()
+          for digest in *; do
+            DIGEST_ARGS+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${DIGEST_ARGS[@]}"

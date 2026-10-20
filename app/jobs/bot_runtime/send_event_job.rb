@@ -10,6 +10,8 @@ module BotRuntime
     end
 
     def perform(event)
+      return if Instagram::AmhSafety.blocked_payload?(event)
+
       Rails.logger.info "[BotRuntime::SendEventJob] Sending event: " \
                         "conversation_id=#{event[:conversation_id]} agent_bot_id=#{event[:agent_bot_id]}"
 

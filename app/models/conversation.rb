@@ -123,7 +123,9 @@ class Conversation < ApplicationRecord
   has_many :notifications, as: :primary_actor, dependent: :destroy_async
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
-  has_many :pipeline_items, dependent: :destroy_async
+  has_many :pipeline_items, dependent: :nullify
+  has_many :deal_conversations, dependent: :destroy_async
+  has_many :deals, through: :deal_conversations, source: :pipeline_item
   has_many :pipelines, through: :pipeline_items
 
   before_save :ensure_snooze_until_reset

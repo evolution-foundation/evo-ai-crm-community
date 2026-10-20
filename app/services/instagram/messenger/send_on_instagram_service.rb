@@ -8,6 +8,8 @@ class Instagram::Messenger::SendOnInstagramService < Instagram::BaseSendService
   # Deliver a message with the given payload.
   # @see https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message
   def send_message(message_content)
+    return if Instagram::AmhSafety.blocked_message?(message)
+
     access_token = channel.page_access_token
     app_secret_proof = calculate_app_secret_proof(GlobalConfigService.load('FB_APP_SECRET', ''), access_token)
     query = { access_token: access_token }

@@ -8,7 +8,8 @@
 #   Whatsapp (token providers)        -> configured == assumed connected
 #   Email                             -> configured == assumed connected
 #   Sendgrid                          -> webhook_registration_status
-#   FacebookPage / Instagram          -> evolution_hub_meta['status']
+#   FacebookPage / Hub Instagram      -> evolution_hub_meta['status']
+#   Direct Instagram                 -> stored OAuth credentials and expiry
 #   everything else                   -> unknown (no health signal exists)
 #
 # `source` tells the client how trustworthy the state is: 'provider_event'
@@ -55,7 +56,8 @@ module Channels
       when Channel::Whatsapp then whatsapp_state(channel)
       when Channel::Email then %w[connected stored_flag]
       when Channel::Sendgrid then sendgrid_state(channel)
-      when Channel::FacebookPage, Channel::Instagram then hub_state(channel)
+      when Channel::Instagram then instagram_state(channel)
+      when Channel::FacebookPage then hub_state(channel)
       else %w[unknown none]
       end
     end
@@ -85,6 +87,18 @@ module Channels
       when 'failed' then %w[error provider_event]
       else %w[unknown provider_event]
       end
+    end
+
+    def instagram_state(channel)
+      return hub_state(channel) if channel.evolution_hub_meta.present?
+
+      # Read stored credentials, never the accessor that can refresh the token.
+      # This is authorization state, not a live API probe.
+      return %w[disconnected stored_flag] if channel[:access_token].blank? || channel[:instagram_id].blank?
+      return %w[unknown none] if channel.expires_at.blank?
+      return %w[error stored_flag] if channel.expires_at <= Time.current
+
+      %w[connected stored_flag]
     end
 
     def hub_state(channel)

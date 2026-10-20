@@ -26,6 +26,7 @@ class AutomationContactEventJob < ApplicationJob
 
     contact = Contact.find_by(id: contact_id)
     return if contact.nil?
+    return if Instagram::AmhSafety.blocked_contact?(contact)
 
     event = Events::Base.new(event_name, Time.zone.now, { contact: contact, changed_attributes: changed_attributes })
     AutomationRuleListener.instance.public_send(event_name, event)

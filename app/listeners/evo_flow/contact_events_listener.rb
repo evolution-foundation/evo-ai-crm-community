@@ -189,6 +189,8 @@ module EvoFlow
       )
       # Sidekiq strict_args!(:raise) rejects symbol keys and non-JSON values;
       # round-tripping through JSON normalises both at the listener boundary.
+      return if Instagram::AmhSafety.blocked_payload?(payload)
+
       EvoFlow::PublishEventWorker.perform_async(IDENTIFY_PATH, JSON.parse(payload.to_json))
     end
 

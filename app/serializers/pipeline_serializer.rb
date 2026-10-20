@@ -34,6 +34,7 @@ module PipelineSerializer
       is_default: pipeline.is_default,
       custom_fields: pipeline.custom_fields || {},
       item_count: pipeline.item_count,
+      deal_count: pipeline.item_count,
       conversations_count: pipeline.item_count, # Alias for frontend compatibility
       created_at: pipeline.created_at&.iso8601,
       updated_at: pipeline.updated_at&.iso8601
@@ -86,6 +87,7 @@ module PipelineSerializer
           stage_data = PipelineStageSerializer.serialize(stage, include_item_count: true)
           # Include items directly in the stage
           stage_data[:items] = items_by_stage[stage.id] || []
+          stage_data[:deals] = stage_data[:items]
           stage_data
         end
       else

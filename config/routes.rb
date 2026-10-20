@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  post '/internal/instagram-amh/associate', to: 'instagram_amh_link_associations#create'
+  post '/internal/instagram-amh/resolve', to: 'instagram_amh_link_resolutions#create'
   get '/health/live', to: 'health#live'
   get '/health/ready', to: 'health#ready'
   get '/metrics', to: 'health#metrics'
@@ -258,6 +260,14 @@ Rails.application.routes.draw do
 
       resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy], controller: 'custom_attribute_definitions'
       resources :custom_filters, only: [:index, :show, :create, :update, :destroy], controller: 'custom_filters'
+
+      resources :instagram_amh_links, only: [:create, :destroy]
+      resources :instagram_amh_proofs, only: [:index, :show, :create, :update] do
+        member do
+          post :publish
+          post :simulate
+        end
+      end
 
       resources :automation_rules, only: [:index, :create, :show, :update, :destroy], controller: 'automation_rules' do
         post :clone, on: :member
@@ -564,6 +574,7 @@ Rails.application.routes.draw do
       post 'pipeline_tasks/for_conversation', to: 'pipeline_tasks#for_conversation'
 
       resources :pipelines, controller: 'pipelines' do
+        resources :deals, only: [:index, :create], controller: 'deals'
         collection do
           get :stats
           get 'by_conversation/:conversation_id', action: :by_conversation, as: :by_conversation
@@ -614,6 +625,13 @@ Rails.application.routes.draw do
           end
         end
         resources :pipeline_service_definitions, except: [:new, :edit], controller: 'pipeline_service_definitions'
+      end
+
+      resources :deals, only: [:show, :update, :destroy], controller: 'deals' do
+        resources :contacts, only: [:index, :create, :destroy], controller: 'deal_contacts'
+        resources :conversations, only: [:index, :create, :destroy], controller: 'deal_conversations'
+        resources :files, only: [:index, :create, :destroy], controller: 'deal_files'
+        resources :history, only: [:index], controller: 'deal_history'
       end
 
       namespace :integrations do

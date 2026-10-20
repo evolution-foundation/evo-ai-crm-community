@@ -27,6 +27,8 @@ class AutomationRules::ContactActionService
   end
 
   def perform
+    return if Instagram::AmhSafety.blocked_contact?(@contact)
+
     # Tag downstream events as performed-by-automation so the listener's loop
     # guard (`performed_by_automation?`) skips them.
     Current.executed_by = @rule

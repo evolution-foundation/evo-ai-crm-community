@@ -95,6 +95,8 @@ class Attachment < ApplicationRecord
       contact_metadata
     when :audio
       audio_metadata
+    when :ig_reel
+      external_link_metadata
     else
       file_metadata
     end
@@ -133,6 +135,18 @@ class Attachment < ApplicationRecord
       coordinates_long: coordinates_long,
       fallback_title: fallback_title,
       data_url: external_url
+    }
+  end
+
+  def external_link_metadata
+    {
+      extension: extension,
+      data_url: external_url,
+      thumb_url: thumb_url.presence || meta&.[]('preview_image_url'),
+      file_size: file.attached? ? file.byte_size : 0,
+      width: file.attached? ? file.metadata[:width] : nil,
+      height: file.attached? ? file.metadata[:height] : nil,
+      fallback_title: fallback_title
     }
   end
 

@@ -2,6 +2,9 @@ class Webhooks::WhatsappController < ActionController::API
   include MetaTokenVerifyConcern
 
   def process_payload
+    cloud_envelope = params[:object] == 'whatsapp_business_account' || params.key?(:entry)
+    return head :unauthorized if cloud_envelope && !valid_cloud_signature?
+
     # Check if this is an Evolution Go webhook payload
     if evolution_go_payload?
       Rails.logger.info 'Evolution Go webhook detected, processing with Evolution Go handler'
@@ -33,6 +36,18 @@ class Webhooks::WhatsappController < ActionController::API
   end
 
   private
+
+  def valid_cloud_signature?
+    secret = GlobalConfigService.load('WP_APP_SECRET', '').presence ||
+             GlobalConfigService.load('WHATSAPP_APP_SECRET', '').presence
+    return false if secret.blank?
+
+    supplied = request.headers['X-Hub-Signature-256'].to_s
+    return false unless supplied.match?(/\Asha256=[0-9a-f]{64}\z/)
+
+    expected = "sha256=#{OpenSSL::HMAC.hexdigest('SHA256', secret, request.raw_post)}"
+    ActiveSupport::SecurityUtils.secure_compare(expected, supplied)
+  end
 
   def valid_evolution_go_payload?
     # Evolution Go webhook must have: event, data, instanceId, instanceToken

@@ -5,9 +5,11 @@ class Messages::Messenger::MessageBuilder
     # This check handles very rare case if there are multiple files to attach with only one usupported file
     return if unsupported_file_type?(attachment['type'])
 
-    attachment_obj = @message.attachments.new(attachment_params(attachment).except(:remote_file_url))
+    params = attachment_params(attachment)
+    attachment_obj = @message.attachments.new(params.except(:remote_file_url, :preview_file_url))
     attachment_obj.save!
-    attach_file(attachment_obj, attachment_params(attachment)[:remote_file_url]) if attachment_params(attachment)[:remote_file_url]
+    attach_file(attachment_obj, params[:remote_file_url]) if params[:remote_file_url]
+    attach_preview_file(attachment_obj, params[:preview_file_url]) if params[:preview_file_url]
     fetch_story_link(attachment_obj) if attachment_obj.file_type == 'story_mention'
     update_attachment_file_type(attachment_obj)
   end
@@ -21,6 +23,12 @@ class Messages::Messenger::MessageBuilder
       filename: attachment_file.original_filename,
       content_type: attachment_file.content_type
     )
+  end
+
+  def attach_preview_file(attachment, file_url)
+    attach_file(attachment, file_url)
+  rescue StandardError => e
+    Rails.logger.info("Instagram Reel preview image unavailable: #{e.class}")
   end
 
   def attachment_params(attachment)
@@ -39,6 +47,18 @@ class Messages::Messenger::MessageBuilder
   end
 
   def file_type_params(attachment)
+    if attachment['type'].to_s == 'ig_reel'
+      metadata = Instagram::ReelPreview.new(attachment.dig('payload', 'url')).call
+      canonical_url = metadata[:canonical_url] || attachment.dig('payload', 'url')
+
+      return {
+        external_url: canonical_url,
+        fallback_title: metadata[:title].presence || 'Instagram Reel',
+        meta: metadata,
+        preview_file_url: metadata[:preview_image_url]
+      }
+    end
+
     {
       external_url: attachment['payload']['url'],
       remote_file_url: attachment['payload']['url']

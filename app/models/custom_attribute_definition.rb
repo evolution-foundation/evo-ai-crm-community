@@ -28,7 +28,8 @@ class CustomAttributeDefinition < ApplicationRecord
     :contact => %w[name email phone_number identifier country_code city created_at last_activity_at referer blocked],
     :pipeline => %w[id name description pipeline_type visibility is_active config created_at updated_at created_by_id],
     :pipeline_stage => %w[id name position color stage_type automation_rules created_at updated_at pipeline_id],
-    :pipeline_item => %w[pipeline_id conversation_id pipeline_stage_id custom_fields created_at updated_at contact_id]
+    :pipeline_item => %w[pipeline_id conversation_id pipeline_stage_id custom_fields created_at updated_at contact_id],
+    :company => %w[name email phone_number identifier tax_id website industry type]
   }.freeze
 
   scope :with_attribute_model, ->(attribute_model) { attribute_model.presence && where(attribute_model: attribute_model) }
@@ -48,7 +49,8 @@ class CustomAttributeDefinition < ApplicationRecord
     contact_attribute: 1,
     pipeline_attribute: 2,
     pipeline_stage_attribute: 3,
-    pipeline_item_attribute: 4
+    pipeline_item_attribute: 4,
+    company_attribute: 5
   }
   enum :attribute_display_type, { text: 0, number: 1, currency: 2, percent: 3, link: 4, date: 5, list: 6, checkbox: 7, datetime: 8 }
 
@@ -91,6 +93,7 @@ class CustomAttributeDefinition < ApplicationRecord
                  when :pipeline_attribute then :pipeline
                  when :pipeline_stage_attribute then :pipeline_stage
                  when :pipeline_item_attribute then :pipeline_item
+                 when :company_attribute then :company
                  end
     return unless model_keys && attribute_key.in?(STANDARD_ATTRIBUTES[model_keys])
 

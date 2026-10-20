@@ -1,8 +1,53 @@
 class Webhooks::WhatsappEventsJob < ApplicationJob
   queue_as :low
+  self.log_arguments = false
 
   def perform(params = {})
-    Rails.logger.info "WhatsApp webhook processing started: #{params.inspect}"
+    params = params.with_indifferent_access
+    if params[:object] == 'whatsapp_business_account'
+      failures = []
+      begin
+        Webhooks::WhatsappMirrorJob.enqueue_allowed(params)
+      rescue StandardError => e
+        # Finish local persistence, then retry the envelope to recover the mirror.
+        failures << e
+      end
+      Whatsapp::CloudEventNormalizer.call(params).each do |event|
+        begin
+          channel = find_channel(event)
+          if channel_is_inactive?(channel)
+            Rails.logger.warn('[WHATSAPP] ignored: unknown or inactive channel')
+            next
+          end
+          waba = channel.provider_config['waba_id'] || channel.provider_config['business_account_id']
+          if waba.present? && waba.to_s != event.dig(:entry, 0, :id).to_s
+            Rails.logger.warn('[WHATSAPP] ignored: business scope mismatch')
+            next
+          end
+          # A database row lock serializes contact creation and deduplication across workers.
+          channel.with_lock do
+            value = event.dig(:entry, 0, :changes, 0, :value)
+            if value[:statuses].present?
+              Whatsapp::ObservedStatusService.new(channel.inbox).receive(value[:statuses].first, value[:contacts])
+            else
+              perform_event(event)
+              id = (value[:messages] || value[:message_echoes])&.first&.dig(:id)
+              Whatsapp::ObservedStatusService.new(channel.inbox).reconcile(id) if id
+            end
+          end
+        rescue StandardError => e
+          Rails.logger.warn("[WHATSAPP] processing_failed class=#{e.class}")
+          failures << e
+        end
+      end
+      raise failures.first if failures.any?
+    else
+      perform_event(params)
+    end
+  end
+
+  def perform_event(params)
+    Rails.logger.info '[WHATSAPP] processing received event'
 
     channel = find_channel(params)
     if channel_is_inactive?(channel)

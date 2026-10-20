@@ -119,7 +119,7 @@ class Whatsapp::ConversationSyncService
     # on the same source_id the inbound path uses (BR 9th-digit normalization),
     # otherwise an echo to a brand-new contact would mint a twin of the contact
     # a later inbound message creates. (see incoming_message_service_helpers)
-    to_phone_number = processed_waid(echo_data[:to])
+    to_phone_number = echo_data[:to].match?(/\A\+?\d+\z/) ? processed_waid(echo_data[:to]) : echo_data[:to]
 
     # Create the contact if it does not exist yet: an echo can be the very first
     # event we see for a customer (owner reached out from their phone before the
@@ -134,7 +134,8 @@ class Whatsapp::ConversationSyncService
     # Create outgoing message (sent from business via WhatsApp Business App)
     create_echo_message_record(echo_data, conversation, contact_inbox.contact)
   rescue StandardError => e
-    Rails.logger.error "[WHATSAPP] Failed to create echo message: #{e.message}"
+    Rails.logger.warn "[WHATSAPP] echo_failed class=#{e.class}"
+    raise
   end
 
   def valid_message_data?(message_data)
@@ -147,7 +148,6 @@ class Whatsapp::ConversationSyncService
   def valid_echo_data?(echo_data)
     echo_data[:id].present? &&
       echo_data[:to].present? &&
-      echo_data[:from].present? &&
       echo_data[:timestamp].present? &&
       echo_data[:type].present?
   end
@@ -157,12 +157,12 @@ class Whatsapp::ConversationSyncService
     return contact_inbox if contact_inbox
 
     # Create contact if not exists
-    ::ContactInboxWithContactBuilder.new(
+    contact_inbox = ::ContactInboxWithContactBuilder.new(
       source_id: phone_number,
       inbox: inbox,
       contact_attributes: {
         name: format_phone_number(phone_number),
-        phone_number: format_phone_number(phone_number),
+        phone_number: phone_number.match?(/\A\+?\d+\z/) ? format_phone_number(phone_number) : nil,
         additional_attributes: {
           whatsapp_history_synced: true
         }
@@ -183,6 +183,7 @@ class Whatsapp::ConversationSyncService
     return conversation if conversation
 
     ::Conversation.create!(
+      source: message_echo_event? ? :imported : :live,
       inbox_id: inbox.id,
       contact_id: contact_inbox.contact_id,
       contact_inbox_id: contact_inbox.id,
@@ -244,7 +245,7 @@ class Whatsapp::ConversationSyncService
 
   def attach_media_content(message, message_data)
     case message_data[:type]
-    when 'image', 'audio', 'video', 'document'
+    when 'image', 'audio', 'video', 'document', 'sticker'
       attach_media_from_history(message, message_data)
     when 'location'
       attach_location_from_history(message, message_data)
@@ -260,12 +261,13 @@ class Whatsapp::ConversationSyncService
 
   def create_echo_message_record(echo_data, conversation, _contact)
     # Skip if message already exists
-    return if conversation.messages.find_by(source_id: echo_data[:id])
+    return if inbox.messages.find_by(source_id: echo_data[:id])
 
     message_content = extract_message_content(echo_data)
     external_timestamp = Time.zone.at(echo_data[:timestamp].to_i)
 
     message = conversation.messages.build(
+      source: :imported,
       content: message_content,
       inbox_id: inbox.id,
       message_type: :outgoing, # This is a message sent by the business
@@ -274,7 +276,10 @@ class Whatsapp::ConversationSyncService
       created_at: external_timestamp,
       content_attributes: {
         external_created_at: external_timestamp.iso8601,
-        whatsapp_echo_message: true
+        whatsapp_echo_message: true,
+        whatsapp_observed: true,
+        in_reply_to_external_id: echo_data.dig(:context, :id),
+        observed_payload: echo_data.except(:computed_content)
       }
     )
 
@@ -287,7 +292,7 @@ class Whatsapp::ConversationSyncService
 
   def attach_echo_media_content(message, echo_data)
     case echo_data[:type]
-    when 'image', 'audio', 'video', 'document'
+    when 'image', 'audio', 'video', 'document', 'sticker'
       attach_echo_media_file(message, echo_data)
     when 'location'
       attach_echo_location(message, echo_data)
@@ -298,7 +303,11 @@ class Whatsapp::ConversationSyncService
     media_data = echo_data[echo_data[:type].to_sym] || {}
     media_id = media_data[:id]
 
-    return unless media_id
+    if media_id.blank?
+      # External links are metadata only; fetch authenticated Meta media IDs exclusively.
+      attach_echo_media_info_fallback(message, echo_data) if message.attachments.empty?
+      return
+    end
 
     begin
       process_echo_media_download(message, echo_data, media_data, media_id)
@@ -377,7 +386,8 @@ class Whatsapp::ConversationSyncService
 
   def download_echo_attachment_file(media_id)
     # Use the same method as other WhatsApp services for downloading media
-    download_attachment_file({ id: media_id })
+    Whatsapp::IncomingMessageWhatsappCloudService.new(inbox: inbox, params: params)
+                                                .send(:download_attachment_file, { id: media_id })
   end
 
   def attach_echo_location(message, echo_data)
@@ -402,7 +412,8 @@ class Whatsapp::ConversationSyncService
       filename: media_data[:filename],
       mime_type: media_data[:mime_type],
       sha256: media_data[:sha256],
-      id: media_data[:id]
+      id: media_data[:id],
+      link: media_data[:link]
     }
 
     Rails.logger.warn "[WHATSAPP] Echo media stored as info only: #{echo_data[:type]}"
@@ -414,10 +425,12 @@ class Whatsapp::ConversationSyncService
     case message_type
     when 'text'
       extract_text_content(message_data)
-    when 'image', 'audio', 'video', 'document'
+    when 'image', 'audio', 'video', 'document', 'sticker'
       extract_media_content(message_data, message_type)
     when 'location'
       extract_location_content(message_data)
+    when 'template', 'interactive', 'button'
+      Whatsapp::ObservedContent.render(message_data)
     when 'media_placeholder'
       'Media message (not available in history sync)'
     else
@@ -457,7 +470,8 @@ class Whatsapp::ConversationSyncService
       filename: media_data[:filename],
       mime_type: media_data[:mime_type],
       sha256: media_data[:sha256],
-      id: media_data[:id]
+      id: media_data[:id],
+      link: media_data[:link]
     }
   end
 

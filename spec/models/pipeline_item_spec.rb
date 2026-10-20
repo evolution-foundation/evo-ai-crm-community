@@ -13,16 +13,16 @@ RSpec.describe PipelineItem, type: :model do
   let(:contact_inbox) { ContactInbox.create!(contact: contact, inbox: inbox, source_id: SecureRandom.hex(4)) }
 
   describe 'validations' do
-    it 'requires either conversation_id or contact_id' do
+    it 'allows an autonomous deal without contacts or conversations' do
       item = PipelineItem.new(
         pipeline: pipeline,
         pipeline_stage: pipeline_stage
       )
-      expect(item).not_to be_valid
-      expect(item.errors[:base]).to include('Must have either conversation_id or contact_id')
+      expect(item).to be_valid
+      expect(item.title).to be_present
     end
 
-    it 'does not allow both conversation_id and contact_id' do
+    it 'keeps both legacy references during the compatibility period' do
       conversation = Conversation.create!(
         inbox: inbox,
         contact: contact,
@@ -34,8 +34,7 @@ RSpec.describe PipelineItem, type: :model do
         conversation: conversation,
         contact: contact
       )
-      expect(item).not_to be_valid
-      expect(item.errors[:base]).to include('Cannot have both conversation_id and contact_id')
+      expect(item).to be_valid
     end
 
     it 'validates with contact_id only' do
@@ -59,6 +58,40 @@ RSpec.describe PipelineItem, type: :model do
         conversation: conversation
       )
       expect(item).to be_valid
+    end
+  end
+
+  describe 'deal associations' do
+    it 'links the conversation contact and promotes the first contact to primary' do
+      conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox)
+      item = PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage)
+
+      item.attach_conversation!(conversation)
+
+      expect(item.contacts).to contain_exactly(contact)
+      expect(item.reload.primary_contact).to eq(contact)
+    end
+
+    it 'keeps the contact when its conversation is removed' do
+      conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox)
+      item = PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage)
+      item.attach_conversation!(conversation)
+
+      item.detach_conversation!(conversation)
+
+      expect(item.reload.contacts).to contain_exactly(contact)
+      expect(item.conversations).to be_empty
+    end
+
+    it 'promotes the oldest remaining contact after removing the primary' do
+      second = Contact.create!(name: 'Second Contact', email: 'second@example.com')
+      item = PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline_stage)
+      item.attach_contact!(contact)
+      item.attach_contact!(second)
+
+      item.detach_contact!(contact)
+
+      expect(item.reload.primary_contact).to eq(second)
     end
   end
 

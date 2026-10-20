@@ -1,0 +1,57 @@
+name: Publish Vetorial CRM
+
+on:
+  push:
+    branches: ['vetorial/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-vetorial-crm-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/evo-ai-crm-community
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2
+
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve immutable tag
+        id: image
+        shell: bash
+        run: echo "sha_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            RAILS_ENV=production
+            BUNDLE_WITHOUT=development:test
+            RAILS_SERVE_STATIC_FILES=true
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:vetorial
+            ${{ env.IMAGE_NAME }}:vetorial-${{ steps.image.outputs.sha_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

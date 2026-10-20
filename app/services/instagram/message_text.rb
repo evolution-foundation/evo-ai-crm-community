@@ -26,48 +26,19 @@ class Instagram::MessageText < Instagram::BaseMessageText
   # 'profile_pic' é o campo do contato (sender-scoped id); 'profile_picture_url' só existe
   # p/ business account — process_successful_response lê os dois (fallback).
   def fetch_instagram_user(ig_scope_id)
-    fields = 'id,name,username,profile_pic'
+    fetcher = Instagram::ContactProfileFetcher.new(inbox: @inbox)
+    log_profile_request(fetcher, ig_scope_id)
+    response = fetcher.call(ig_scope_id)
+    log_profile_response(response)
+    return failed_profile_response(response) unless response.success?
 
-    if MetaBaseUrl.enabled?
-      url = "#{MetaBaseUrl.for(:instagram)}/#{ig_scope_id}?fields=#{fields}"
-      Rails.logger.info("[Instagram::MessageText] Fetching user via Hub proxy - ig_scope_id: #{ig_scope_id}")
-      response = HTTParty.get(url, headers: hub_auth_headers)
-    else
-      url = "#{base_uri}/#{ig_scope_id}?fields=#{fields}&access_token=#{@inbox.channel.access_token}"
-      Rails.logger.info("[Instagram::MessageText] Fetching user data from Instagram API - ig_scope_id: #{ig_scope_id}, url: #{url.gsub(
-        /access_token=[^&]+/, 'access_token=[FILTERED]'
-      )}")
-      response = HTTParty.get(url)
-    end
+    parsed_body = parse_profile_body(response)
+    return empty_profile_response(ig_scope_id) if parsed_body.blank?
+    return embedded_error_response(response, parsed_body) if parsed_body['error'].present?
 
-    Rails.logger.info("[Instagram::MessageText] Instagram API response - status: #{response.code}, success?: #{response.success?}, body: #{response.body.inspect}")
-
-    if response.success?
-      # Check if response body is empty or just {}
-      parsed_body = begin
-        JSON.parse(response.body)
-      rescue StandardError
-        {}
-      end
-      if parsed_body.blank? || parsed_body == {}
-        Rails.logger.warn("[Instagram::MessageText] Instagram API returned empty response (status 200) - this usually means user consent is required or token lacks permissions. User ID: #{ig_scope_id}")
-        return {}
-      end
-
-      # Check if there's an error in the response even with status 200
-      if parsed_body['error'].present?
-        Rails.logger.warn("[Instagram::MessageText] Instagram API returned error in successful response: #{parsed_body['error'].inspect}")
-        handle_error_response(response)
-        return {}
-      end
-
-      result = process_successful_response(response)
-      Rails.logger.info("[Instagram::MessageText] Processed successful response: #{result.inspect}")
-      return result
-    end
-
-    handle_error_response(response)
-    {}
+    result = process_successful_response(response)
+    Rails.logger.info("[Instagram::MessageText] Processed successful response: #{result.inspect}")
+    result
   end
 
   def process_successful_response(response)
@@ -90,26 +61,12 @@ class Instagram::MessageText < Instagram::BaseMessageText
     error_message = parsed_response.dig('error', 'message')
     error_code = parsed_response.dig('error', 'code')
 
-    Rails.logger.warn("[Instagram::MessageText] Instagram API error - code: #{error_code}, message: #{error_message}, full_response: #{parsed_response.inspect}")
-
-    # https://developers.facebook.com/docs/messenger-platform/error-codes
-    # Access token has expired or become invalid.
-    if error_code == 190
-      Rails.logger.error('[Instagram::MessageText] Access token expired or invalid (error 190), marking channel as requiring reauthorization')
-      channel.authorization_error!
-    end
-
-    # TODO: Remove this once we have a better way to handle this error.
-    # https://developers.facebook.com/docs/messenger-platform/instagram/features/user-profile/#user-consent
-    # The error typically occurs when the connected Instagram account attempts to send a message to a user
-    # who has never messaged this Instagram account before.
-    # We can only get consent to access a user's profile if they have previously sent a message to the connected Instagram account.
-    # In such cases, we receive the error "User consent is required to access user profile".
-    # We can safely ignore this error.
-    if error_code == 230
-      Rails.logger.info('[Instagram::MessageText] User consent required (error 230) - this is expected for first-time users. Using ig_scope_id as fallback.')
-      return
-    end
+    Rails.logger.warn(
+      "[Instagram::MessageText] Instagram API error - code: #{error_code}, " \
+      "message: #{error_message}, full_response: #{parsed_response.inspect}"
+    )
+    handle_authorization_error(error_code)
+    return log_missing_user_consent if error_code == 230
 
     Rails.logger.warn("[InstagramUserFetchError]: inbox_id #{@inbox.id}")
     Rails.logger.warn("[InstagramUserFetchError]: #{error_message} #{error_code}")
@@ -118,16 +75,59 @@ class Instagram::MessageText < Instagram::BaseMessageText
     EvolutionExceptionTracker.new(exception, account: nil).capture_exception
   end
 
-  def base_uri
-    "https://graph.instagram.com/#{GlobalConfigService.load('INSTAGRAM_API_VERSION', 'v23.0')}"
+  def handle_authorization_error(error_code)
+    return unless error_code == 190
+
+    Rails.logger.error(
+      '[Instagram::MessageText] Access token expired or invalid (error 190), ' \
+      'marking channel as requiring reauthorization'
+    )
+    channel.authorization_error!
   end
 
-  # Header de auth do proxy /meta do EvoHub (Hub-ON). O proxy EXIGE Bearer (rejeita
-  # ?access_token= com 401). Token = evolution_hub_meta['channel_token'] (NÃO o getter
-  # access_token, que é sobrescrito e retorna 'hub-managed-…'). Nunca logar o header.
-  def hub_auth_headers
-    token = (@inbox.channel.evolution_hub_meta || {})['channel_token']
-    { 'Authorization' => "Bearer #{token}" }
+  def log_missing_user_consent
+    Rails.logger.info(
+      '[Instagram::MessageText] User consent required (error 230) - ' \
+      'this is expected for first-time users. Using ig_scope_id as fallback.'
+    )
+  end
+
+  def log_profile_request(fetcher, ig_scope_id)
+    source = fetcher.hub? ? 'via Hub proxy' : 'from Instagram API'
+    Rails.logger.info("[Instagram::MessageText] Fetching user #{source} - ig_scope_id: #{ig_scope_id}")
+  end
+
+  def log_profile_response(response)
+    Rails.logger.info(
+      "[Instagram::MessageText] Instagram API response - status: #{response.code}, " \
+      "success?: #{response.success?}, body: #{response.body.inspect}"
+    )
+  end
+
+  def parse_profile_body(response)
+    JSON.parse(response.body)
+  rescue JSON::ParserError
+    {}
+  end
+
+  def failed_profile_response(response)
+    handle_error_response(response)
+    {}
+  end
+
+  def empty_profile_response(ig_scope_id)
+    Rails.logger.warn(
+      '[Instagram::MessageText] Instagram API returned an empty response; ' \
+      "user consent or profile permission may be missing. User ID: #{ig_scope_id}"
+    )
+    {}
+  end
+
+  def embedded_error_response(response, parsed_body)
+    Rails.logger.warn(
+      "[Instagram::MessageText] Instagram API returned an error body: #{parsed_body['error'].inspect}"
+    )
+    failed_profile_response(response)
   end
 
   def create_message

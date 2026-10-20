@@ -183,6 +183,11 @@ RSpec.describe Api::V1::PipelineItemsController, type: :controller do
   # server-side (same-pipeline / cross-pipeline / assign) so the Journey
   # node output matches the Automation Rules pipeline action (10.B parity).
   describe 'PATCH #move_conversation' do
+    # The shared contact-only item is useful for #update, but creating the
+    # conversation would auto-promote it and invalidate the placement scenarios
+    # below before #move_conversation is exercised.
+    before { pipeline_item.destroy! }
+
     let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
     let(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel) }
     let(:contact_inbox) { ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(4)) }

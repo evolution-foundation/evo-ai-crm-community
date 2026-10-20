@@ -24,6 +24,7 @@ class Instagram::TestEventService
 
     @inbox = ::Inbox.find_by(channel: channel)
     return unless @inbox
+    return unless Instagram::AmhSafety.reception_enabled?(@inbox)
 
     @contact = create_test_contact
 

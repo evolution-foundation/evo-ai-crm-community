@@ -46,6 +46,28 @@ RSpec.describe InboxSerializer do
       expect(result['health_source']).to eq('none')
     end
 
+    it 'exposes direct Instagram authorization without credentials or a live-check claim' do
+      direct = Channel::Instagram.new(instagram_id: '90001', access_token: 'inert-direct-secret', expires_at: 2.days.from_now)
+      allow(direct).to receive(:reauthorization_required?).and_return(false)
+      direct_inbox = Inbox.new(channel: direct, name: 'Direct QA')
+      expect(direct).not_to receive(:access_token)
+
+      result = described_class.serialize(direct_inbox)
+
+      expect(result).to include('connection_state' => 'connected', 'health_source' => 'stored_flag',
+                                'reauthorization_required' => false)
+      expect(result.to_json).not_to include('inert-direct-secret')
+    end
+
+    it 'exposes an expired direct Instagram token as requiring attention' do
+      direct = Channel::Instagram.new(instagram_id: '90001', access_token: 'inert-direct-secret', expires_at: 1.second.ago)
+      allow(direct).to receive(:reauthorization_required?).and_return(false)
+
+      result = described_class.serialize(Inbox.new(channel: direct, name: 'Direct QA'))
+
+      expect(result['connection_state']).to eq('error')
+    end
+
     it 'adds no secrets to the payload' do
       result = described_class.serialize(inbox)
 

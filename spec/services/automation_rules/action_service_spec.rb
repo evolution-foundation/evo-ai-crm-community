@@ -12,6 +12,8 @@ require 'rails_helper'
 # move_to_target_stage_after_assignment to move it to the requested stage.
 # This spec is a regression guard for that two-step sequence; removing the
 # follow-up move would silently leave conversations on the wrong stage.
+# Independent deals in other pipelines are preserved by the current deal model;
+# changing a stage must not silently destroy another commercial opportunity.
 
 RSpec.describe AutomationRules::ActionService do
   let(:user) { User.create!(name: 'Agent', email: "agent-#{SecureRandom.hex(4)}@test.com") }
@@ -53,18 +55,21 @@ RSpec.describe AutomationRules::ActionService do
         described_class.new(rule, nil, conversation).perform
 
         conversation.reload
-        items = conversation.pipeline_items
+        expect(conversation.pipeline_items.count).to eq(2)
+        items = conversation.pipeline_items.where(pipeline: pipeline_b)
         expect(items.count).to eq(1)
         expect(items.first.pipeline).to eq(pipeline_b)
         expect(items.first.pipeline_stage).to eq(stage_b3)
       end
 
-      it 'destroys the previous pipeline assignment (assign_to_pipeline-style behaviour)' do
+      it 'preserves the independent deal in the original pipeline when adding the target deal' do
+        original = conversation.pipeline_items.find_by!(pipeline: pipeline_a)
         rule = build_rule_with_stage_action(stage_b2)
         described_class.new(rule, nil, conversation).perform
 
         conversation.reload
-        expect(conversation.pipeline_items.where(pipeline: pipeline_a)).to be_empty
+        expect(original.reload.pipeline_stage).to eq(stage_a1)
+        expect(conversation.pipeline_items.where(pipeline: pipeline_a).pluck(:id)).to eq([original.id])
         expect(conversation.pipeline_items.where(pipeline: pipeline_b)).to exist
       end
     end

@@ -179,9 +179,16 @@ class Api::V1::PipelinesController < Api::V1::BaseController
   end
 
   def by_contact
+    item_scope = PipelineItem.left_joins(:deal_contacts).where(
+      'pipeline_items.contact_id = :id OR pipeline_items.primary_contact_id = :id OR deal_contacts.contact_id = :id',
+      id: @contact.id
+    )
     serialized_pipelines = fetch_pipelines_by_item_filter(
-      filter_condition: { contact_id: @contact.id },
-      item_filter: ->(item) { item.contact_id == @contact.id }
+      item_scope: item_scope,
+      item_filter: lambda do |item|
+        item.contact_id == @contact.id || item.primary_contact_id == @contact.id ||
+          item.contacts.any? { |contact| contact.id == @contact.id }
+      end
     )
 
     success_response(
@@ -198,9 +205,16 @@ class Api::V1::PipelinesController < Api::V1::BaseController
   end
 
   def by_conversation
+    item_scope = PipelineItem.left_joins(:deal_conversations).where(
+      'pipeline_items.conversation_id = :id OR deal_conversations.conversation_id = :id',
+      id: @conversation.id
+    )
     serialized_pipelines = fetch_pipelines_by_item_filter(
-      filter_condition: { conversation_id: @conversation.id },
-      item_filter: ->(item) { item.conversation_id == @conversation.id }
+      item_scope: item_scope,
+      item_filter: lambda do |item|
+        item.conversation_id == @conversation.id ||
+          item.conversations.any? { |conversation| conversation.id == @conversation.id }
+      end
     )
 
     success_response(
@@ -225,13 +239,25 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                             pipeline_stages: [],
                             pipeline_items: [
                               :pipeline_stage,
-                              :contact,
+                              :deal_contacts,
+                              :deal_conversations,
+                              :labels,
                               :tasks,
+                              owner: { avatar_attachment: :blob },
+                              company: [:labels, { avatar_attachment: :blob }],
+                              contact: [:labels, { avatar_attachment: :blob }],
+                              primary_contact: [:labels, { avatar_attachment: :blob }],
+                              contacts: [:labels, { avatar_attachment: :blob }],
+                              conversations: [
+                                :inbox,
+                                contact: [:labels, { avatar_attachment: :blob }],
+                                messages: [:attachments, :sender]
+                              ],
                               conversation: [
-                                :contact,
                                 :assignee,
                                 :team,
                                 :inbox,
+                                contact: [:labels, { avatar_attachment: :blob }],
                                 messages: [:attachments, :sender]
                               ]
                             ]
@@ -380,12 +406,9 @@ class Api::V1::PipelinesController < Api::V1::BaseController
     end
   end
 
-  def fetch_pipelines_by_item_filter(filter_condition:, item_filter:)
+  def fetch_pipelines_by_item_filter(item_scope:, item_filter:)
     # Buscar todos os pipelines que têm items que correspondem ao filtro
-    pipeline_ids_with_items = PipelineItem
-                                .where(filter_condition)
-                                .distinct
-                                .pluck(:pipeline_id)
+    pipeline_ids_with_items = item_scope.distinct.pluck(:pipeline_id)
 
     # Carregar pipelines com eager loading otimizado incluindo stages e items
     pipelines = Pipeline.all
@@ -394,10 +417,23 @@ class Api::V1::PipelinesController < Api::V1::BaseController
                            pipeline_stages: [],
                            pipeline_items: [
                              :pipeline_stage,
+                             :deal_contacts,
+                             :deal_conversations,
+                             :labels,
+                             owner: { avatar_attachment: :blob },
+                             company: [:labels, { avatar_attachment: :blob }],
+                             contact: [:labels, { avatar_attachment: :blob }],
+                             primary_contact: [:labels, { avatar_attachment: :blob }],
+                             contacts: [:labels, { avatar_attachment: :blob }],
+                             conversations: [
+                               :inbox,
+                               contact: [:labels, { avatar_attachment: :blob }],
+                               messages: [:attachments, :sender]
+                             ],
                              conversation: [
-                               :contact,
                                :assignee,
                                :inbox,
+                               contact: [:labels, { avatar_attachment: :blob }],
                              ]
                            ]
                          )

@@ -18,6 +18,8 @@ class Instagram::BaseMessageText < Instagram::WebhooksBaseService
       return
     end
 
+    return unless Instagram::AmhSafety.reception_enabled?(@inbox)
+
     if @inbox.channel.reauthorization_required?
       Rails.logger.info("[Instagram::BaseMessageText] Skipping message processing as reauthorization is required for inbox #{@inbox.id}")
       return
@@ -35,6 +37,9 @@ class Instagram::BaseMessageText < Instagram::WebhooksBaseService
       Rails.logger.info("[Instagram::BaseMessageText] First message from contact, ensuring contact exists")
       ensure_contact(contact_id)
       Rails.logger.info("[Instagram::BaseMessageText] After ensure_contact, contact_inbox: #{@contact_inbox.inspect}")
+    elsif !@contact_inbox.contact.avatar.attached?
+      Rails.logger.info("[Instagram::BaseMessageText] Contact avatar missing, refreshing Instagram profile")
+      ensure_contact(contact_id)
     end
 
     # Ensure contact_inbox is set even if it wasn't found in contacts_first_message?

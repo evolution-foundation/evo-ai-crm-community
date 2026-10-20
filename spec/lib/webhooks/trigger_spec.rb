@@ -92,4 +92,34 @@ RSpec.describe Webhooks::Trigger do
       })
     end
   end
+
+  describe '.execute (internal webhook routing)' do
+    before do
+      allow(RestClient::Request).to receive(:execute).and_return(true)
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:[]).with('INTERNAL_WEBHOOK_BASE_URL').and_return('http://n8n_webhook:5678')
+      allow(ENV).to receive(:fetch)
+        .with('INTERNAL_WEBHOOK_PUBLIC_HOST', 'webhook.agenciavetorial.com')
+        .and_return('webhook.agenciavetorial.com')
+    end
+
+    it 'routes the configured public n8n host through the internal service' do
+      described_class.execute(
+        'https://webhook.agenciavetorial.com/webhook/abc?token=123',
+        payload,
+        :account_webhook
+      )
+
+      expect(RestClient::Request).to have_received(:execute).with(
+        hash_including(url: 'http://n8n_webhook:5678/webhook/abc?token=123')
+      )
+    end
+
+    it 'leaves other webhook hosts unchanged' do
+      described_class.execute(url, payload, :account_webhook)
+
+      expect(RestClient::Request).to have_received(:execute).with(hash_including(url: url))
+    end
+  end
 end

@@ -31,13 +31,19 @@
 #  fk_rails_...  (pipeline_stage_id => pipeline_stages.id)
 #
 class PipelineItem < ApplicationRecord
+  LABEL_UUID_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i
+
   include Wisper::Publisher
+  include Labelable
 
   belongs_to :pipeline
   belongs_to :pipeline_stage
   belongs_to :conversation, optional: true
   belongs_to :contact, optional: true
   belongs_to :assigned_by, class_name: 'User', optional: true
+  belongs_to :owner, class_name: 'User', optional: true
+  belongs_to :company, class_name: 'Contact', optional: true
+  belongs_to :primary_contact, class_name: 'Contact', optional: true
 
   # Um item é OU por-contato (lead, conversation_id nil) OU por-conversa. Quando uma conversa
   # PROMOVE um lead-card (Conversation#promote_lead_card seta conversation_id e LIMPA contact_id),
@@ -48,20 +54,30 @@ class PipelineItem < ApplicationRecord
   end
 
   has_many :stage_movements, dependent: :destroy
+  has_many :deal_contacts, dependent: :destroy
+  has_many :contacts, through: :deal_contacts
+  has_many :deal_conversations, dependent: :destroy
+  has_many :conversations, through: :deal_conversations
+  has_many :deal_history_events
+  has_many :attachments, as: :attachable, dependent: :destroy
+  has_many :scheduled_actions, foreign_key: :deal_id, inverse_of: :deal, dependent: :nullify
   has_many :tasks, class_name: 'PipelineTask', dependent: :destroy
   has_many :pipeline_item_products, dependent: :destroy
   has_many :products, through: :pipeline_item_products
   has_many :product_variants, through: :pipeline_item_products
 
-  validates :conversation_id, uniqueness: { scope: :pipeline_id, conditions: -> { where(completed_at: nil) },
-                                            message: 'already has an active journey in this pipeline' }, allow_nil: true
-  validates :contact_id, uniqueness: { scope: :pipeline_id, conditions: -> { where(completed_at: nil) },
-                                       message: 'already has an active journey in this pipeline' }, allow_nil: true
-  validate :must_have_conversation_or_contact
   validate :validate_custom_fields_structure
+  validate :company_must_be_a_company
+  validate :primary_contact_must_be_a_person
+  validates :title, presence: true
+  validates :currency, presence: true, length: { is: 3 }
+  validates :value, numericality: { greater_than_or_equal_to: 0 }
 
+  before_validation :set_default_deal_values
   before_save :normalize_services_data!
   after_create :create_entry_movement
+  after_create :sync_legacy_associations
+  after_create :record_creation_history
   # `_commit` so the Wisper publish + dispatcher dispatch (and the Sidekiq job
   # they enqueue) only fire after the transaction commits — avoids orphan jobs
   # on rollback.
@@ -78,7 +94,9 @@ class PipelineItem < ApplicationRecord
   after_update :create_stage_change_movement, if: :saved_change_to_pipeline_stage_id?
   after_update_commit :broadcast_stage_update_to_evo_flow, if: :saved_change_to_pipeline_stage_id?
   after_update :publish_pipeline_item_updated
+  after_update :record_update_history
   after_update :publish_pipeline_item_completed, if: :saved_change_to_completed_at?
+  before_destroy :record_deletion_history
   after_destroy :publish_pipeline_item_deleted
 
   scope :in_stage, ->(stage) { where(pipeline_stage: stage) }
@@ -95,6 +113,77 @@ class PipelineItem < ApplicationRecord
 
     # The movement will be created automatically by the after_update callback
     true
+  end
+
+  def attach_contact!(new_contact, actor: Current.user, source: 'user')
+    if new_contact.type == 'company'
+      update!(company: new_contact)
+      record_history!('company_associated', actor: actor, source: source, metadata: { company_id: new_contact.id })
+      return new_contact
+    end
+
+    link = deal_contacts.find_or_create_by!(contact: new_contact)
+    update!(primary_contact: new_contact, contact_id: new_contact.id) if primary_contact_id.blank?
+    if link.previously_new_record?
+      record_history!('contact_attached', actor: actor, source: source, metadata: { contact_id: new_contact.id })
+    end
+    link
+  end
+
+  def detach_contact!(old_contact, actor: Current.user, source: 'user')
+    link = deal_contacts.find_by!(contact: old_contact)
+    link.destroy!
+    if primary_contact_id == old_contact.id
+      replacement = deal_contacts.order(:created_at, :id).first&.contact
+      update!(primary_contact: replacement, contact_id: replacement&.id)
+    end
+    record_history!('contact_detached', actor: actor, source: source, metadata: { contact_id: old_contact.id })
+  end
+
+  def attach_conversation!(new_conversation, actor: Current.user, source: 'user')
+    link = deal_conversations.find_or_create_by!(conversation: new_conversation)
+    update_column(:conversation_id, new_conversation.id) if conversation_id.blank? # rubocop:disable Rails/SkipsModelValidations
+    if link.previously_new_record?
+      record_history!(
+        'conversation_attached', actor: actor, source: source,
+                                 metadata: { conversation_id: new_conversation.id }
+      )
+    end
+    link
+  end
+
+  def detach_conversation!(old_conversation, actor: Current.user, source: 'user')
+    deal_conversations.find_by!(conversation: old_conversation).destroy!
+    if conversation_id == old_conversation.id
+      replacement_id = deal_conversations.order(:created_at, :id).pick(:conversation_id)
+      update_column(:conversation_id, replacement_id) # rubocop:disable Rails/SkipsModelValidations
+    end
+    record_history!(
+      'conversation_detached', actor: actor, source: source,
+                               metadata: { conversation_id: old_conversation.id }
+    )
+  end
+
+  def record_history!(action, actor: Current.user, source: 'user', changes: {}, metadata: {})
+    deal_history_events.create!(
+      actor: actor,
+      action: action,
+      source: source,
+      change_set: changes,
+      metadata: metadata
+    )
+  end
+
+  def update_deal_labels!(labels, actor: Current.user, source: 'user')
+    previous = label_list.to_a
+    update_labels(resolve_deal_label_titles(labels))
+    current = label_list.to_a
+    return if previous == current
+
+    record_history!(
+      'deal_labels_updated', actor: actor, source: source,
+                             changes: { labels: { previous: previous, current: current } }
+    )
   end
 
   def days_in_pipeline
@@ -126,6 +215,10 @@ class PipelineItem < ApplicationRecord
     custom_fields['services'].sum do |service|
       service['value'].to_f
     end
+  end
+
+  def deal_value
+    value.presence || services_total_value
   end
 
   def pending_tasks_count
@@ -213,15 +306,22 @@ class PipelineItem < ApplicationRecord
   end
 
   def deal?
-    conversation_id.present?
+    true
   end
 
   def push_event_data
     {
       id: id,
+      deal_id: id,
       pipeline_id: pipeline_id,
       conversation_id: conversation_id,
       contact_id: contact_id,
+      primary_contact_id: primary_contact_id,
+      company_id: company_id,
+      owner_id: owner_id,
+      title: title,
+      value: deal_value,
+      currency: currency,
       is_lead: lead?,
       pipeline_stage: pipeline_stage.push_event_data,
       custom_fields: custom_fields,
@@ -235,10 +335,18 @@ class PipelineItem < ApplicationRecord
   def webhook_data
     {
       id: id,
+      deal_id: id,
       pipeline_id: pipeline_id,
       pipeline_name: pipeline.name,
       conversation_id: conversation_id,
       contact_id: contact_id,
+      primary_contact_id: primary_contact_id,
+      company_id: company_id,
+      owner_id: owner_id,
+      title: title,
+      value: deal_value,
+      currency: currency,
+      notes: notes,
       is_lead: lead?,
       pipeline_stage_id: pipeline_stage_id,
       pipeline_stage_name: pipeline_stage.name,
@@ -254,6 +362,60 @@ class PipelineItem < ApplicationRecord
   end
 
   private
+
+  def resolve_deal_label_titles(labels)
+    tokens = Array(labels).map { |label| label.to_s.strip }.reject(&:blank?)
+    ids, titles = tokens.partition { |label| LABEL_UUID_PATTERN.match?(label) }
+    labels_by_id = Label.where(id: ids).pluck(:id, :title).to_h
+    (titles + ids.map { |id| labels_by_id[id] || id }).uniq
+  end
+
+  def set_default_deal_values
+    self.currency = 'BRL' if currency.blank?
+    self.value = custom_fields&.dig('value').presence || services_total_value if value.blank?
+    self.owner ||= conversation&.assignee || assigned_by
+    return if title.present?
+
+    contact_name = contact&.name.presence || conversation&.contact&.name.presence
+    self.title = "Negócio - #{contact_name || conversation&.display_id || id || 'Nova oportunidade'}"
+  end
+
+  def company_must_be_a_company
+    errors.add(:company, 'must be a company contact') if company && company.type != 'company'
+  end
+
+  def primary_contact_must_be_a_person
+    errors.add(:primary_contact, 'must be a person contact') if primary_contact && primary_contact.type != 'person'
+  end
+
+  def sync_legacy_associations
+    attach_conversation!(conversation, actor: assigned_by, source: 'migration') if conversation
+    attach_contact!(contact, actor: assigned_by, source: 'migration') if contact
+  end
+
+  def record_creation_history
+    record_history!(
+      'deal_created', actor: owner || assigned_by, source: 'system',
+                      changes: { current: attributes.slice('title', 'value', 'currency', 'pipeline_stage_id') }
+    )
+  end
+
+  def record_update_history
+    audited = previous_changes.slice(
+      'title', 'value', 'currency', 'notes', 'owner_id', 'company_id', 'primary_contact_id', 'custom_fields'
+    )
+    return if audited.empty?
+
+    changes = audited.transform_values { |values| { previous: values[0], current: values[1] } }
+    record_history!('deal_updated', actor: Current.user, source: Current.user ? 'user' : 'system', changes: changes)
+  end
+
+  def record_deletion_history
+    record_history!(
+      'deal_deleted', actor: Current.user, source: Current.user ? 'user' : 'system',
+                      changes: { previous: attributes.slice('title', 'value', 'currency', 'pipeline_stage_id') }
+    )
+  end
 
   def validate_custom_fields_structure
     return if custom_fields.blank?
@@ -311,14 +473,6 @@ class PipelineItem < ApplicationRecord
     return if valid_currencies.include?(custom_fields['currency'])
 
     errors.add(:custom_fields, 'Currency must be one of: BRL, USD, EUR')
-  end
-
-  def must_have_conversation_or_contact
-    if conversation_id.blank? && contact_id.blank?
-      errors.add(:base, 'Must have either conversation_id or contact_id')
-    elsif conversation_id.present? && contact_id.present?
-      errors.add(:base, 'Cannot have both conversation_id and contact_id')
-    end
   end
 
   def create_entry_movement

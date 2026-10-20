@@ -11,6 +11,8 @@ class AgentBots::ProcessInactivityActionsJob < ApplicationJob
     end
 
     agent_bot = AgentBot.find_by(id: agent_bot_id)
+    return if Instagram::AmhSafety.blocked_inbox?(conversation.inbox)
+
     unless agent_bot
       Rails.logger.warn "[ProcessInactivityActions] AgentBot #{agent_bot_id} not found"
       return

@@ -56,11 +56,12 @@ module PipelineItemSerializer
                   elsif pipeline_item.contact_id.present?
                     !pipeline_item.contact.present?
                   else
-                    true
+                    false
                   end
 
     result = {
       id: pipeline_item.id,
+      deal_id: pipeline_item.id,
       pipeline_id: pipeline_item.pipeline_id,
       pipeline_stage_id: pipeline_item.pipeline_stage_id,
       stage_id: pipeline_item.pipeline_stage_id,
@@ -79,8 +80,26 @@ module PipelineItemSerializer
       is_orphaned: is_orphaned
     }
 
+    result.merge!(
+      title: pipeline_item.title,
+      value: pipeline_item.deal_value.to_f,
+      currency: pipeline_item.currency,
+      notes: pipeline_item.notes,
+      labels: deal_labels(pipeline_item, labels_by_title),
+      owner: pipeline_item.owner && {
+        id: pipeline_item.owner.id,
+        name: pipeline_item.owner.name,
+        avatar_url: pipeline_item.owner.avatar_url
+      },
+      company: pipeline_item.company && ContactSerializer.serialize(pipeline_item.company, include_labels: false),
+      primary_contact_id: pipeline_item.primary_contact_id,
+      contact_count: pipeline_item.deal_contacts.size,
+      conversation_count: pipeline_item.deal_conversations.size
+    )
+
     return result if is_orphaned
-    if include_entity && pipeline_item.conversation.present? && pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
+    if include_entity && pipeline_item.conversation.present? &&
+       pipeline_item.association(:conversation).loaded? && pipeline_item.conversation
       result[:conversation] = ConversationSerializer.serialize(
         pipeline_item.conversation,
         include_messages: false,
@@ -93,7 +112,9 @@ module PipelineItemSerializer
         # include_labels: false — the pipelines board does not render contact labels
         # (it uses conversation.labels), and contact.labels triggers an N+1 (tags load
         # + a Label.find_by per tag). Skipping it keeps GET /pipelines off the timeout.
-        result[:contact] = ContactSerializer.serialize(pipeline_item.conversation.contact, include_labels: false)
+        result[:contact] = ContactSerializer.serialize(pipeline_item.conversation.contact, include_labels: include_labels,
+                                                                                           labels_by_title: labels_by_title)
+        result[:contact]['avatar_url'] = pipeline_item.conversation.contact.avatar_url.presence
       end
       if pipeline_item.conversation.association(:assignee).loaded? && pipeline_item.conversation.assignee
         result[:assignee] = {
@@ -108,7 +129,31 @@ module PipelineItemSerializer
 
     if include_entity && pipeline_item.contact.present? && pipeline_item.association(:contact).loaded? && pipeline_item.contact
       # include_labels: false — see note above; pipelines board does not use contact labels.
-      result[:contact] = ContactSerializer.serialize(pipeline_item.contact, include_labels: false)
+      result[:contact] = ContactSerializer.serialize(pipeline_item.contact, include_labels: include_labels,
+                                                                             labels_by_title: labels_by_title)
+      result[:contact]['avatar_url'] = pipeline_item.contact.avatar_url.presence
+    end
+
+
+    if pipeline_item.primary_contact
+      result[:primary_contact] = ContactSerializer.serialize(pipeline_item.primary_contact, include_labels: include_labels,
+                                                                                             labels_by_title: labels_by_title)
+      result[:primary_contact]['avatar_url'] = pipeline_item.primary_contact.avatar_url.presence
+    end
+
+    conversations = pipeline_item.conversations.to_a
+    latest_message = conversations.filter_map do |conversation|
+      messages = conversation.association(:messages).loaded? ? conversation.messages : conversation.messages.chat
+      messages.reject { |message| message.message_type == 'activity' || message.private? }.max_by(&:created_at)
+    end.max_by(&:created_at)
+    if latest_message
+      result[:latest_message] = {
+        id: latest_message.id,
+        content: ActionController::Base.helpers.strip_tags(latest_message.content.to_s).squish.first(280),
+        message_type: latest_message.message_type,
+        created_at: latest_message.created_at.iso8601,
+        conversation_id: latest_message.conversation_id
+      }
     end
 
     # Include tasks info if requested. When a pre-computed batch index is passed
@@ -156,10 +201,17 @@ module PipelineItemSerializer
           service_info
         end
       }
-      result[:value] = total_value
+      result[:value] = pipeline_item.deal_value.to_f
     end
 
     result
+  end
+
+  def deal_labels(pipeline_item, labels_by_title)
+    pipeline_item.label_list.to_a.map do |name|
+      label = labels_by_title&.[](name.to_s.downcase)
+      { id: label&.id, name: name, title: name, color: label&.color || '#1f93ff' }
+    end
   end
 
   # Serialize collection of PipelineItems

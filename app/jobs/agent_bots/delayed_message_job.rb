@@ -10,6 +10,7 @@ class AgentBots::DelayedMessageJob < ApplicationJob
 
     agent_bot = AgentBot.find(agent_bot_id)
     conversation = Conversation.find(conversation_id)
+    return if Instagram::AmhSafety.blocked_inbox?(conversation.inbox)
 
     Rails.logger.info "[AgentBot DelayedMessageJob] Processing segment #{segment_index} for conversation #{conversation_id}"
     Rails.logger.info "[AgentBot DelayedMessageJob] Current conversation status: #{conversation.status}"

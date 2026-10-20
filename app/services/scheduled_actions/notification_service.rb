@@ -90,8 +90,8 @@ module ScheduledActions
     def target_label
       if @scheduled_action.contact_id.present?
         " para #{@scheduled_action.contact&.name || @scheduled_action.contact_id}"
-      elsif @scheduled_action.deal_id.present?
-        " para deal #{@scheduled_action.deal_id}"
+      elsif @scheduled_action.canonical_deal_id.present?
+        " para deal #{@scheduled_action.canonical_deal_id}"
       elsif @scheduled_action.conversation_id.present?
         " para conversa #{@scheduled_action.conversation_id}"
       else

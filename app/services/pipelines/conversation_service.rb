@@ -103,15 +103,6 @@ class Pipelines::ConversationService
 
   def prepare_conversation_for_pipeline(conversation)
     conversation.reload
-
-    # Only remove active items from OTHER pipelines (not this one)
-    # This preserves completed journey history in the current pipeline
-    other_pipeline_items = conversation.pipeline_items.where.not(pipeline_id: @pipeline.id)
-    return unless other_pipeline_items.exists?
-
-    Rails.logger.info "Pipeline Service: Removing conversation #{conversation.id} from #{other_pipeline_items.count} other pipeline(s)"
-    other_pipeline_items.destroy_all
-    conversation.reload
   end
 
   def create_pipeline_item(conversation, stage, custom_fields)
@@ -119,6 +110,8 @@ class Pipelines::ConversationService
       conversation: conversation,
       pipeline_stage: stage,
       assigned_by: @user,
+      owner: conversation.assignee || @user,
+      title: "Negócio - #{conversation.contact&.name.presence || conversation.display_id}",
       custom_fields: custom_fields
     )
 

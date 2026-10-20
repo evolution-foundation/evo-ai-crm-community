@@ -18,7 +18,7 @@ RSpec.describe 'ActiveStorage dynamic service resolver' do
   end
 
   before do
-    allow(GlobalConfigService).to receive(:load) do |key, default|
+    allow(GlobalConfigService).to receive(:load_env_first) do |key, default|
       ENV.fetch(key.to_s, default)
     end
 
@@ -97,6 +97,21 @@ RSpec.describe 'ActiveStorage dynamic service resolver' do
       ENV['ACTIVE_STORAGE_SERVICE'] = nil
 
       expect(ActiveStorage::Blob.service).to eq(ActiveStorage::Blob.services.fetch(:local))
+    end
+  end
+
+  describe 'environment precedence' do
+    it 'uses the environment-selected service even when the database contains a stale value' do
+      ENV['ACTIVE_STORAGE_SERVICE'] = 's3_compatible'
+      ENV['STORAGE_BUCKET_NAME'] = 'evo-crm'
+      fake_s3 = instance_double(ActiveStorage::Service, name: :s3_compatible)
+      allow(ActiveStorage::Blob.services).to receive(:fetch).with(:s3_compatible).and_return(fake_s3)
+
+      expect(GlobalConfigService).to receive(:load_env_first)
+        .with('ACTIVE_STORAGE_SERVICE', 'local')
+        .and_return('s3_compatible')
+
+      expect(ActiveStorage::Blob.service).to eq(fake_s3)
     end
   end
 end

@@ -105,6 +105,56 @@ RSpec.describe Channels::ConnectionStateResolver do
     end
   end
 
+  describe 'direct Instagram OAuth' do
+    let(:channel) do
+      Channel::Instagram.new(instagram_id: '90001', access_token: 'inert-fixture', expires_at: 2.days.from_now)
+    end
+
+    before { stub_reauth(channel) }
+
+    it 'reports configured credentials separately from a live provider event' do
+      expect(channel).not_to receive(:access_token)
+      expect(resolve(channel)).to include(state: 'connected', source: 'stored_flag')
+    end
+
+    it 'reports an expired token as an error' do
+      channel.expires_at = 1.second.ago
+      expect(resolve(channel)).to include(state: 'error', source: 'stored_flag')
+    end
+
+    it 'does not accept a token at its expiry boundary' do
+      travel_to(Time.current.change(usec: 0)) do
+        channel.expires_at = Time.current
+        expect(resolve(channel)[:state]).to eq('error')
+      end
+    end
+
+    it 'does not report missing credentials as connected' do
+      channel[:access_token] = nil
+      expect(resolve(channel)).to include(state: 'disconnected', source: 'stored_flag')
+    end
+
+    it 'does not report a missing account binding as connected' do
+      channel[:instagram_id] = nil
+      expect(resolve(channel)[:state]).to eq('disconnected')
+    end
+
+    it 'does not invent validity when expiry is missing' do
+      channel.expires_at = nil
+      expect(resolve(channel)).to include(state: 'unknown', source: 'none')
+    end
+
+    it 'keeps reauthorization as the strongest signal' do
+      stub_reauth(channel, value: true)
+      expect(resolve(channel)).to include(state: 'error', reauthorization_required: true)
+    end
+
+    it 'keeps Hub lifecycle authoritative even when credentials are present' do
+      channel.evolution_hub_meta = { 'status' => 'pending' }
+      expect(resolve(channel)).to include(state: 'pending', source: 'provider_event')
+    end
+  end
+
   describe 'channel types without health support' do
     it 'degrades explicitly to unknown/none' do
       channel = Channel::Telegram.new

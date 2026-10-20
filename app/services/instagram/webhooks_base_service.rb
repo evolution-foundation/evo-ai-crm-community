@@ -15,7 +15,11 @@ class Instagram::WebhooksBaseService
     @contact_inbox = @inbox.contact_inboxes.where(source_id: user['id']).first
     @contact = @contact_inbox.contact if @contact_inbox
 
-    update_instagram_profile_link(user) && return if @contact
+    if @contact
+      update_instagram_profile_link(user)
+      sync_instagram_avatar(user)
+      return
+    end
 
     @contact_inbox = @inbox.channel.create_contact_inbox(
       user['id'], user['name']
@@ -23,9 +27,7 @@ class Instagram::WebhooksBaseService
 
     @contact = @contact_inbox.contact
     update_instagram_profile_link(user)
-    # Use profile_picture_url (correct field) or profile_pic (for backward compatibility)
-    profile_pic_url = user['profile_picture_url'] || user['profile_pic']
-    Avatar::AvatarFromUrlJob.perform_later(@contact, profile_pic_url) if profile_pic_url
+    sync_instagram_avatar(user)
   end
 
   def update_instagram_profile_link(user)
@@ -57,5 +59,12 @@ class Instagram::WebhooksBaseService
     end
 
     attributes
+  end
+
+  def sync_instagram_avatar(user)
+    return if @contact.avatar.attached?
+
+    profile_pic_url = user['profile_pic'].presence || user['profile_picture_url'].presence
+    Avatar::AvatarFromUrlJob.perform_later(@contact, profile_pic_url) if profile_pic_url
   end
 end

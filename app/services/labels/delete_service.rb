@@ -19,6 +19,12 @@ class Labels::DeleteService
         contact.update!(label_list: contact.label_list - [label_title])
       end
     end
+
+    tagged_deals.find_in_batches do |deal_batch|
+      deal_batch.each do |deal|
+        deal.update_deal_labels!(deal.label_list - [label_title], actor: nil, source: 'label_catalog')
+      end
+    end
   end
 
   private
@@ -29,5 +35,9 @@ class Labels::DeleteService
 
   def tagged_contacts
     Contact.tagged_with(label_title)
+  end
+
+  def tagged_deals
+    PipelineItem.tagged_with(label_title)
   end
 end

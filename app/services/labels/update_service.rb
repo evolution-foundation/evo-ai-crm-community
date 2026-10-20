@@ -22,6 +22,14 @@ class Labels::UpdateService
         contact.update!(label_list: contact.label_list - [old_label_title] + [new_label_title])
       end
     end
+
+    tagged_deals.find_in_batches do |deal_batch|
+      deal_batch.each do |deal|
+        deal.update_deal_labels!(
+          deal.label_list - [old_label_title] + [new_label_title], actor: nil, source: 'label_catalog'
+        )
+      end
+    end
   end
 
   private
@@ -32,5 +40,9 @@ class Labels::UpdateService
 
   def tagged_contacts
     Contact.tagged_with(old_label_title)
+  end
+
+  def tagged_deals
+    PipelineItem.tagged_with(old_label_title)
   end
 end

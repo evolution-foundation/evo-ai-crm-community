@@ -159,6 +159,10 @@ class Public::Leads::CreationService
       conversation: nil,
       pipeline_stage: @pipeline_stage,
       entered_at: Time.current,
+      title: deal_title,
+      value: deal_params[:value].presence || 0,
+      currency: deal_params[:currency].presence || 'BRL',
+      notes: deal_params[:notes],
       custom_fields: combined_custom_fields
     )
 
@@ -224,4 +228,3 @@ class Public::Leads::CreationService
     @lead_params[:metadata] || {}
   end
 end
-

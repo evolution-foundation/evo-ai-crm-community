@@ -51,6 +51,7 @@ class Contact < ApplicationRecord
   TYPES = %w[person company group].freeze
 
   validates :type, presence: true, inclusion: { in: TYPES }
+  validates :name, presence: true, on: :create, if: -> { type == 'company' }
   validates :email, allow_blank: true, uniqueness: { case_sensitive: false },
                     format: { with: URI::MailTo::EMAIL_REGEXP, message: I18n.t('errors.contacts.email.invalid') }
   validates :identifier, allow_blank: true, uniqueness: true
@@ -65,7 +66,11 @@ class Contact < ApplicationRecord
   has_many :inboxes, through: :contact_inboxes
   has_many :messages, as: :sender, dependent: :destroy_async
   has_many :notes, dependent: :destroy_async
-  has_many :pipeline_items, dependent: :destroy_async
+  has_many :pipeline_items, dependent: :nullify
+  has_many :deal_contacts, dependent: :destroy_async
+  has_many :deals, through: :deal_contacts, source: :pipeline_item
+  has_many :owned_company_deals, class_name: 'PipelineItem', foreign_key: :company_id, dependent: :nullify
+  has_many :primary_contact_deals, class_name: 'PipelineItem', foreign_key: :primary_contact_id, dependent: :nullify
 
   has_many :contact_companies, dependent: :destroy
   has_many :companies, through: :contact_companies, source: :company
@@ -344,6 +349,8 @@ class Contact < ApplicationRecord
   # event. Without it, every contact write (including bulk import/sync) spawns an
   # empty background job that loads the contact only to find nothing to run.
   def enqueue_contact_automation(event_name)
+    return if Instagram::AmhSafety.blocked_contact?(self)
+
     return if Current.executed_by.is_a?(AutomationRule)
     return unless AutomationRule.exists?(event_name: event_name, active: true)
 

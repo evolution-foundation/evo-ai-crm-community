@@ -19,10 +19,22 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     @pipeline_items = @pipeline.pipeline_items.includes(
       :conversation,
       :pipeline_stage,
+      :deal_contacts,
+      :deal_conversations,
+      :labels,
+      owner: { avatar_attachment: :blob },
+      company: [:labels, { avatar_attachment: :blob }],
+      primary_contact: [:labels, { avatar_attachment: :blob }],
+      contacts: [:labels, { avatar_attachment: :blob }],
+      conversations: [
+        :inbox,
+        contact: [:labels, { avatar_attachment: :blob }],
+        messages: [:attachments, :sender]
+      ],
       conversation: [
-        :contact,
         :assignee,
         :team,
+        contact: [:labels, { avatar_attachment: :blob }],
         messages: [:attachments, :sender]
       ]
     )
@@ -55,14 +67,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
         return
       end
 
-      # Check if conversation has an ACTIVE (not completed) item in this pipeline
-      if @pipeline.pipeline_items.where(conversation: conversation, completed_at: nil).exists?
-        error_response(
-          ApiErrorCodes::BUSINESS_RULE_VIOLATION,
-          'Item already has an active journey in this pipeline'
-        )
-        return
-      end
     end
 
     if params[:type] == 'contact'
@@ -76,14 +80,6 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
         return
       end
 
-      # Check if contact has an ACTIVE (not completed) item in this pipeline
-      if @pipeline.pipeline_items.where(contact: contact, completed_at: nil).exists?
-        error_response(
-          ApiErrorCodes::BUSINESS_RULE_VIOLATION,
-          'Contact already has an active journey in this pipeline'
-        )
-        return
-      end
     end
 
     # If no stage_id provided, use the first stage of the pipeline
@@ -99,28 +95,17 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
     pipeline_stage = @pipeline.pipeline_stages.find(stage_id)
 
-    if conversation.present?
-      # Check if conversation already has an ACTIVE journey in this pipeline
-      existing_pc = @pipeline.pipeline_items.find_by(conversation: conversation, completed_at: nil)
-
-      if existing_pc
-        error_response(
-          ApiErrorCodes::BUSINESS_RULE_VIOLATION,
-          "Item already has an active journey in this pipeline in stage '#{existing_pc.pipeline_stage.name}'",
-          details: {
-            existing_stage: existing_pc.pipeline_stage.name,
-            existing_stage_id: existing_pc.pipeline_stage_id
-          }
-        )
-        return
-      end
-    end
-
     @pipeline_item = @pipeline.pipeline_items.new(
       conversation: conversation,
       contact: contact,
       pipeline_stage: pipeline_stage,
       assigned_by: Current.user,
+      owner: conversation&.assignee || Current.user,
+      title: params[:title].presence || suggested_deal_title(contact, conversation),
+      value: params[:value].presence || params.dig(:custom_fields, :value).presence ||
+             Array(params.dig(:custom_fields, :services)).sum { |service| service[:value].to_f },
+      currency: params[:currency].presence || params.dig(:custom_fields, :currency) || 'BRL',
+      notes: params[:notes],
       custom_fields: params[:custom_fields] || {}
     )
 
@@ -466,14 +451,11 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   end
 
   def available_conversations
-    # Get conversation IDs that are already in THIS specific pipeline
-    conversation_ids_in_pipeline = @pipeline.pipeline_items
-                                             .where.not(conversation_id: nil)
-                                             .pluck(:conversation_id)
-
+    # Conversations may participate in more than one deal, including multiple
+    # deals in the same pipeline. This endpoint is therefore a searchable picker,
+    # not an exclusion list.
     current_conversations = Conversations::PermissionFilterService.new(Conversation.all, current_user).perform
                       .joins(:contact, :inbox)
-                      .where.not(conversations: { id: conversation_ids_in_pipeline })
                       .where.not(status: 'resolved')
                       .includes(:contact, :inbox, :assignee, :team)
                       .order(last_activity_at: :desc)
@@ -496,12 +478,9 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   end
 
   def available_contacts
-    # Get contacts that are NOT already in THIS specific pipeline
-    contacts_in_current_pipeline = @pipeline.pipeline_items.where.not(contact_id: nil).select(:contact_id)
-
+    # Contacts can be linked to any number of opportunities.
     current_contacts = Contact.non_groups
                        .includes(avatar_attachment: :blob)
-                       .where.not(contacts: { id: contacts_in_current_pipeline })
                        .order(name: :desc)
                        .limit(50)
 
@@ -627,6 +606,11 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
 
   def pipeline_item_params
     params.require(:pipeline_item).permit(custom_fields: {})
+  end
+
+  def suggested_deal_title(contact, conversation)
+    contact_name = contact&.name.presence || conversation&.contact&.name.presence
+    "Negócio - #{contact_name || conversation&.display_id || 'Nova oportunidade'}"
   end
 
   def calculate_total_services_value

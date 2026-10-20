@@ -23,7 +23,8 @@ module ContactSerializer
   #
   # @return [Hash] Serialized contact ready for Oj
   #
-  def serialize(contact, include_contact_inboxes: false, include_labels: true, include_companies: false, include_pipelines: false)
+  def serialize(contact, include_contact_inboxes: false, include_labels: true, include_companies: false, include_pipelines: false,
+                labels_by_title: nil)
     result = contact.as_json(
       only: [:id, :name, :type, :email, :phone_number, :identifier, :blocked,
              :availability_status, :tax_id, :website, :industry],
@@ -52,7 +53,7 @@ module ContactSerializer
     # Conditionally include labels
     if include_labels
       result['labels'] = contact.labels.map do |tag|
-        label = Label.find_by(title: tag.name)
+        label = labels_by_title&.[](tag.name.to_s.downcase) || Label.find_by(title: tag.name)
         { name: tag.name, color: label&.color || '#1f93ff' }
       end
     end
