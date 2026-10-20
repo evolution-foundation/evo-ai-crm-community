@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Durable, per-comment reservation; crashed/uncertain sends are never retried.
+# Comments reserve and send only an invitation. A material link cannot be issued here.
 class Instagram::AmhExecutor
   class Unavailable < StandardError; end
 
@@ -40,6 +40,8 @@ class Instagram::AmhExecutor
 
     graph = Instagram::AmhVisualEngine.validate!(version.fetch('graph'))
     data = graph.fetch('nodes').to_h { |node| [node['id'], node['data']] }
+    raise Unavailable unless data['reply']['confirmationRequired'] == true
+
     payload = event_data(contract, event)
     Instagram::AmhShortLink.validate_event!(payload, data)
     [inbox, version, data, payload]
@@ -48,44 +50,46 @@ class Instagram::AmhExecutor
   end
 
   def self.call(event:, proof:, explicit_test: false)
-    # Hold mapping lock through reservation, not during the external request.
-    delivery, inbox, text = Instagram::AmhVisualProof.with_mapping_lock do
+    delivery, inbox, opening = Instagram::AmhVisualProof.with_mapping_lock do
       proof.reload
-      inbox, version, data, payload = eligible!(event, proof, explicit_test: explicit_test)
-      candidates = Instagram::AmhVisualProof.where(audience: %w[test active]).filter_map do |candidate|
-        next if candidate.id == proof.id
+      inbox, version, data, = eligible!(event, proof, explicit_test: explicit_test)
+      ambiguous = Instagram::AmhVisualProof.where(audience: %w[test active]).any? do |candidate|
+        next false if candidate.id == proof.id
+
         begin
           eligible!(event, candidate, explicit_test: explicit_test)
-          candidate.id
+          true
         rescue Unavailable
-          nil
+          false
         end
       end
-      raise Unavailable if candidates.any?
+      raise Unavailable if ambiguous
 
       row = Instagram::AmhDelivery.create_or_find_by!(inbound_event_id: event.id) do |record|
         record.proof = proof
         record.version_id = version['id']
       end
-      next [row, nil, nil] unless row.state == 'pending'
+      # Historical direct deliveries and terminal/abandoned invitations never replay.
+      next [row, nil, nil] unless row.state == 'pending' && row.prompt_state == 'pending'
+
       raise Unavailable unless row.proof_id == proof.id && row.version_id == version['id']
 
-      key = OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('amh-link-event-v1'),
-                                   JSON.generate(payload.values_at('account', 'app', 'comment')))
-      link = Instagram::AmhShortLink.issue_unique!(key, version, data['material']['material'], payload)
-      row.update!(state: 'sending', reason: 'reserved_no_automatic_retry')
-      [row, inbox, data['reply']['text'].gsub('{{link}}', link.fetch(:url))]
+      row.update!(state: 'prompt_sending', prompt_state: 'sending', reason: 'invitation_reserved')
+      [row, inbox, data['reply']['openingText']]
     end
     return delivery unless inbox
 
-    # Recheck operational gates immediately before crossing the transport boundary.
     unless enabled? && proof.reload.active_version_id == delivery.version_id && %w[test active].include?(proof.audience)
-      delivery.update!(state: 'blocked', reason: 'paused_before_send')
+      delivery.update!(state: 'blocked', prompt_state: 'blocked', reason: 'paused_before_invitation')
       return delivery
     end
-    result = Instagram::AmhPrivateReply.call(channel: inbox.channel, comment_id: event.contract['event_id'], text: text)
+    result = Instagram::AmhPrivateReply.prompt(channel: inbox.channel, comment_id: event.contract['event_id'],
+                                              text: opening, payload: Instagram::AmhConfirmationToken.issue(delivery))
+    accepted = result.state == 'accepted'
     receipt = result.receipt && Instagram::AmhInboundEvent.encryptor.encrypt_and_sign(result.receipt)
-    delivery.update!(state: result.state, reason: result.reason, encrypted_receipt: receipt)
+    delivery.update!(state: accepted ? 'awaiting_confirmation' : "prompt_#{result.state}", prompt_state: result.state,
+                     reason: accepted ? 'waiting_for_button_click' : result.reason, encrypted_prompt_receipt: receipt,
+                     prompt_accepted_at: accepted ? Time.current : nil, prompt_expires_at: accepted ? 7.days.from_now : nil)
     delivery
   end
 end

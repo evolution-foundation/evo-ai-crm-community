@@ -47,19 +47,26 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
       unless audience == 'paused'
         raise Instagram::AmhExecutor::Unavailable unless Instagram::AmhExecutor.enabled? && version
         Instagram::AmhVisualEngine.validate!(version['graph'])
+        reply = version['graph']['nodes'].find { |n| n['id'] == 'reply' }['data']
+        unless reply['confirmationRequired'] == true
+          raise Instagram::AmhVisualEngine::Invalid, 'Publique uma versão com confirmação antes da entrega'
+        end
         scope = version['graph']['nodes'].find { |n| n['id'] == 'scope' }['data']
         raise Instagram::AmhExecutor::Unavailable unless Instagram::AmhConnection.managed_account?(scope['account'])
         unless %w[media ad].all? { |key| scope[key].blank? || /\A[0-9]{1,64}\z/.match?(scope[key]) }
           raise Instagram::AmhVisualEngine::Invalid, 'Use o ID numérico da publicação ou anúncio'
         end
         # A successful controlled provider receipt is required for the selected version.
-        if audience == 'active' && !Instagram::AmhDelivery.where(proof_id: @proof.id, version_id: version['id'], state: 'accepted').exists?
+        if audience == 'active' && !Instagram::AmhDelivery.where(proof_id: @proof.id, version_id: version['id'], state: 'accepted').where.not(confirmation_event_id: nil).exists?
           raise Instagram::AmhVisualEngine::Invalid, 'Conclua o teste real desta versão antes de ativar'
         end
         if audience == 'test' && ENV.fetch('INSTAGRAM_AMH_TEST_IGSIDS', '').split(',').reject(&:blank?).empty?
           raise Instagram::AmhExecutor::Unavailable
         end
       end
+      waiting = Instagram::AmhDelivery.where(proof_id: @proof.id, state: 'awaiting_confirmation')
+      waiting = waiting.where.not(version_id: version['id']) unless audience == 'paused'
+      waiting.update_all(state: 'blocked', reason: 'rule_paused_or_version_replaced', updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
       @proof.update!(audience: audience, active_version_id: audience == 'paused' ? nil : version['id'], activated_at: Time.current)
     end
     success_response(data: @proof.snapshot)

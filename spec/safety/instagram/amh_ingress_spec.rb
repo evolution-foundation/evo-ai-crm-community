@@ -260,4 +260,33 @@ RSpec.describe Instagram::AmhIngress do
     body = body_for.sub('instagram', 'page')
     expect(ingest(body).status).to eq(400)
   end
+  it 'persists a quick-reply confirmation payload without recording the message body' do
+    enable
+    payload = 'AMH_CONFIRM_V1:qa-signed-fixture'
+    message = { 'sender' => { 'id' => '90002' }, 'recipient' => { 'id' => target }, 'timestamp' => now * 1000,
+                'message' => { 'mid' => 'qa-quick-reply', 'text' => 'Pode enviar', 'quick_reply' => { 'payload' => payload } } }
+    body = body_for([{ 'id' => target, 'messaging' => [message] }])
+    expect(ingest(body).status).to eq(200)
+    contract = Instagram::AmhInboundEvent.last.contract
+    expect(contract['kind']).to eq('dm')
+    expect(contract['amh_confirmation']).to eq(payload)
+    expect(contract['confirmation_source']).to eq('quick_reply')
+    expect(contract).not_to have_key('text')
+  end
+
+  it 'deduplicates postbacks without message IDs and never treats generic text as confirmation' do
+    enable
+    message = { 'sender' => { 'id' => '90002' }, 'recipient' => { 'id' => target }, 'timestamp' => now * 1000,
+                'postback' => { 'title' => 'Pode enviar', 'payload' => 'AMH_CONFIRM_V1:qa-postback' } }
+    body = body_for([{ 'id' => target, 'messaging' => [message] }])
+    2.times { expect(ingest(body).status).to eq(200) }
+    expect(Instagram::AmhInboundEvent.count).to eq(1)
+    expect(Instagram::AmhInboundEvent.last.contract['confirmation_source']).to eq('postback')
+    message.delete('postback')
+    message['message'] = { 'mid' => 'qa-typed-text', 'text' => 'Pode enviar' }
+    expect(ingest(body_for([{ 'id' => target, 'messaging' => [message] }])).status).to eq(200)
+    typed = Instagram::AmhInboundEvent.all.map(&:contract).find { |c| c['event_id'] == 'qa-typed-text' }
+    expect(typed).not_to have_key('amh_confirmation')
+  end
+
 end

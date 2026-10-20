@@ -8,6 +8,7 @@ RSpec.describe Instagram::AmhExecutor do
   let(:graph) { JSON.parse(File.read(Rails.root.join('spec/fixtures/amh_visual_graph.json'))) }
   let(:proof) do
     graph['nodes'].find { |n| n['id'] == 'scope' }['data'] = { 'account' => target, 'media' => '90004' }
+    graph['nodes'].find { |n| n['id'] == 'reply' }['data'] = { 'confirmationRequired' => true, 'openingText' => 'Posso enviar o material?', 'text' => 'Seu material está pronto.', 'buttonLabel' => 'Acessar material' }
     record = Instagram::AmhVisualProof.create!(name: 'QA product', draft: graph, create_key: SecureRandom.uuid)
     record.publish_version!(record.lock_version, 'qa')
     record.reload.update!(active_version_id: record.versions.last['id'], audience: 'test', activated_at: 1.hour.ago)
@@ -44,22 +45,59 @@ RSpec.describe Instagram::AmhExecutor do
   def call
     described_class.call(event: event, proof: proof, explicit_test: true)
   end
-  it 'sends a comment-scoped private reply once and encrypts the provider receipt' do
-    request = stub_request(:post, "https://graph.instagram.com/v23.0/#{target}/messages").with do |req|
-      body = JSON.parse(req.body)
-      body.dig('recipient', 'comment_id') == contract['event_id'] && body.dig('message', 'text').include?('https://co.agenciavetorial.com/')
-    end.to_return(status: 200, body: JSON.generate(message_id: 'qa-message', recipient_id: '90002'), headers: { 'Content-Type' => 'application/json' })
+  def confirm(row, identity: contract['identity'], token: nil, source: 'quick_reply')
+    click = { 'kind' => 'dm', 'identity' => identity, 'event_id' => SecureRandom.uuid,
+              'occurred_at' => Time.current.iso8601(6), 'confirmation_source' => source,
+              'amh_confirmation' => token || Instagram::AmhConfirmationToken.issue(row) }
+    Instagram::AmhInboundEvent.create!(inbox_id: reserved, event_key: SecureRandom.hex(32),
+      encrypted_contract: Instagram::AmhInboundEvent.encryptor.encrypt_and_sign(click))
+  end
+
+  it 'sends only an invitation before the click, then delivers one URL button to the same identity' do
+    bodies = []
+    request = stub_request(:post, "https://graph.instagram.com/v23.0/#{target}/messages").with { |req| bodies << JSON.parse(req.body); true }
+      .to_return(status: 200, body: JSON.generate(message_id: 'qa-message'), headers: { 'Content-Type' => 'application/json' })
     first = call
-    expect(first.state).to eq('accepted')
-    expect(first.encrypted_receipt).not_to include('qa-message')
+    expect(first.state).to eq('awaiting_confirmation')
+    expect(first.prompt_state).to eq('accepted')
+    expect(first.encrypted_prompt_receipt).not_to include('qa-message')
+    expect(Instagram::AmhShortLink.count).to eq(0)
+    expect(bodies.first.dig('recipient', 'comment_id')).to eq(contract['event_id'])
+    expect(bodies.first.dig('message', 'quick_replies', 0, 'title')).to eq('Pode enviar')
+    expect(bodies.first.to_s).not_to include('https://co.agenciavetorial.com')
     expect(call.id).to eq(first.id)
     expect(request).to have_been_requested.once
+    click = confirm(first)
+    accepted = Instagram::AmhConfirmation.call(event: click)
+    expect(accepted.state).to eq('accepted')
+    expect(accepted.confirmation_event_id).to eq(click.id)
     expect(Instagram::AmhShortLink.count).to eq(1)
+    final = bodies.last
+    expect(final.dig('recipient', 'id')).to eq('90002')
+    expect(final.dig('message', 'attachment', 'payload', 'text')).not_to include('https://')
+    expect(final.dig('message', 'attachment', 'payload', 'buttons', 0, 'type')).to eq('web_url')
+    expect(Instagram::AmhConfirmation.call(event: click).id).to eq(first.id)
+    expect(request).to have_been_requested.twice
   end
+
+  it 'rejects a typed confirmation, other identity, forged token, expiry and pause without issuing any link' do
+    stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-prompt'), headers: { 'Content-Type' => 'application/json' })
+    row = call
+    [confirm(row, identity: contract['identity'].merge('igsid' => '90099')), confirm(row, token: 'AMH_CONFIRM_V1:forged'), confirm(row, source: 'typed_text')].each do |click|
+      expect { Instagram::AmhConfirmation.call(event: click) }.to raise_error(described_class::Unavailable)
+    end
+    row.update!(prompt_expires_at: 1.second.ago)
+    expect { Instagram::AmhConfirmation.call(event: confirm(row)) }.to raise_error(described_class::Unavailable)
+    row.update!(prompt_expires_at: 1.day.from_now)
+    proof.update!(audience: 'paused')
+    expect { Instagram::AmhConfirmation.call(event: confirm(row)) }.to raise_error(described_class::Unavailable)
+    expect(Instagram::AmhShortLink.count).to eq(0)
+  end
+
   it 'never retries a timeout or an abandoned sending reservation' do
     request = stub_request(:post, /graph.instagram.com/).to_timeout
-    expect(call.state).to eq('uncertain')
-    expect(call.state).to eq('uncertain')
+    expect(call.state).to eq('prompt_uncertain')
+    expect(call.state).to eq('prompt_uncertain')
     expect(request).to have_been_requested.once
   end
   it 'blocks unauthorized recipients, expired comments, live and nonmatching words before issuing a link' do
@@ -99,7 +137,10 @@ RSpec.describe Instagram::AmhExecutor do
     client.post(path, params: { audience: 'active', version_id: p.active_version_id, lock_version: p.lock_version }, as: :json)
     expect(client.response.status).to eq(422)
     stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-message'), headers: { 'Content-Type' => 'application/json' })
-    call
+    row = call
+    client.post(path, params: { audience: 'active', version_id: p.active_version_id, lock_version: p.lock_version }, as: :json)
+    expect(client.response.status).to eq(422)
+    Instagram::AmhConfirmation.call(event: confirm(row))
     client.post(path, params: { audience: 'active', version_id: p.active_version_id, lock_version: p.lock_version }, as: :json)
     expect(client.response.status).to eq(200), client.response.body
     expect(JSON.parse(client.response.body).dig('data', 'state')).to eq('active')
@@ -117,9 +158,19 @@ RSpec.describe Instagram::AmhExecutor do
   it 'matches keywords beyond the first 200 characters without persisting comment text in links' do
     contract['comment_text'] = ('Texto do comentário. ' * 20) + 'AMH!'
     stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-long'), headers: { 'Content-Type' => 'application/json' })
-    expect(call.state).to eq('accepted')
+    row = call
+    Instagram::AmhConfirmation.call(event: confirm(row))
     payload = Instagram::AmhShortLink.encryptor.decrypt_and_verify(Instagram::AmhShortLink.last.encrypted_payload)
     expect(payload['event']).not_to have_key('text')
+  end
+
+  it 'never retries a material delivery with uncertain result, even after a second valid click' do
+    request = stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-prompt'), headers: { 'Content-Type' => 'application/json' }).then.to_timeout
+    row = call
+    expect(Instagram::AmhConfirmation.call(event: confirm(row)).state).to eq('uncertain')
+    expect(Instagram::AmhConfirmation.call(event: confirm(row)).state).to eq('uncertain')
+    expect(request).to have_been_requested.twice
+    expect(Instagram::AmhShortLink.count).to eq(1)
   end
 
 end
