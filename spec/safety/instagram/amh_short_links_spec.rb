@@ -3,6 +3,10 @@ require_relative '../../../config/environment'
 require 'webmock/rspec'
 
 RSpec.describe 'AMH short links' do
+  it 'loads the complete Rails autoload tree without middleware namespace errors' do
+    expect { Rails.autoloaders.main.eager_load }.not_to raise_error
+  end
+
   let(:graph) { JSON.parse(File.read(Rails.root.join('spec/fixtures/amh_visual_graph.json'))) }
   let(:proof) do
     p = Instagram::AmhVisualProof.create!(name: 'QA links', draft: graph, create_key: SecureRandom.uuid)
@@ -179,7 +183,7 @@ RSpec.describe 'AMH short links' do
         'x' * size
       end
     end.new
-    middleware = AmhLinkBodyLimit.new(->(_env) { raise 'must not reach Rails' })
+    middleware = Middleware::AmhLinkBodyLimit.new(->(_env) { raise 'must not reach Rails' })
     status, = middleware.call('PATH_INFO' => '/internal/instagram-amh/resolve', 'REQUEST_METHOD' => 'POST', 'rack.input' => input)
     expect(status).to eq(413)
     expect(input.read_size).to eq(1025)

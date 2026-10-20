@@ -37,7 +37,7 @@ end
 
 module Evolution
   class Application < Rails::Application
-    config.middleware.insert_before ActionDispatch::RequestId, AmhLinkBodyLimit
+    config.middleware.insert_before ActionDispatch::RequestId, Middleware::AmhLinkBodyLimit
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 7.0
 
