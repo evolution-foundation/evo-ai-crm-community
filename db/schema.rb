@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_19_190000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -704,6 +704,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_190000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["event_key"], name: "index_instagram_amh_inbound_events_on_event_key", unique: true
+    t.index ["inbox_id", "created_at", "id"], name: "index_instagram_amh_inbox_recent"
     t.index ["inbox_id"], name: "index_instagram_amh_inbound_events_on_inbox_id"
     t.index ["state", "created_at"], name: "index_instagram_amh_pending"
   end

@@ -147,9 +147,34 @@ RSpec.describe 'AMH visual proof HTTP and persistence' do
     expect(rule['version']).to eq(1)
     expect(result['outbound_enabled']).to be false
     expect(result['mautic']).to eq('not_queried')
-    expect(client.response.body).not_to include('SECRET', 'DO-NOT-DECRYPT', 'event_key', 'encrypted_contract')
+    %w[SECRET DO-NOT-DECRYPT event_key encrypted_contract].each do |marker|
+      expect(client.response.body).not_to include(marker)
+    end
     expect(saved.reload.draft).to eq(draft)
     expect(WebMock).not_to have_requested(:any, /graph\.(instagram|facebook)\.com/)
+  end
+
+  it 'bounds counts to the same latest receipts and avoids materializing proof histories' do
+    channel = Channel::Instagram.create!(instagram_id: 'qa-bounded', access_token: 'inert', expires_at: 1.day.from_now)
+    inbox = Inbox.create!(name: 'QA bounded', channel: channel)
+    allow(Instagram::AmhConnection).to receive(:bound_inbox!).and_return(inbox)
+    55.times do |i|
+      Instagram::AmhInboundEvent.create!(inbox_id: inbox.id, event_key: "qa-bounded-#{i}", encrypted_contract: 'not-read',
+                                         state: i < 5 ? 'old' : 'pending', created_at: Time.current + i.seconds)
+    end
+    proof = Instagram::AmhVisualProof.create!(name: 'QA summary', draft: graph, create_key: SecureRandom.uuid)
+    proof.publish_version!(0, 'QA')
+    proof.simulate_version!(proof.versions.last['id'], 'timeout', 'AMH')
+    allow_any_instance_of(Instagram::AmhVisualProof).to receive(:ledger).and_raise('Full ledger must not be read')
+    allow_any_instance_of(Instagram::AmhVisualProof).to receive(:versions).and_raise('Full versions must not be read')
+    response = request(:get, '/operations').fetch('data')
+    expect(response.dig('inbound', 'recent').size).to eq(50)
+    expect(response.dig('inbound', 'counts')).to eq('pending' => 50)
+    expect(response.dig('inbound', 'counts_scope')).to eq('recent_receipts')
+    summary = response['rules'].find { |row| row['id'] == proof.id }
+    expect(summary['simulations']).to eq(1)
+    expect(summary.dig('last_simulation', 'outcome')).to eq('uncertain')
+    expect(summary['version']).to eq(1)
   end
 
   it 'reports missing account configuration as unavailable rather than an empty healthy queue' do
