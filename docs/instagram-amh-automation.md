@@ -81,6 +81,19 @@ commercial rules paused until the full test is accepted. Rollback: disable the
 like gate; preserve reservations and receipts. Never clear a reservation to retry
 an uncertain result. Existing blocked/historical rows are not backfilled.
 
-Current limitation: implementation and isolated tests do not prove real permission
-or a real like. No compatible Facebook credential existed in the Evo runtime during
-this revision; production provisioning and controlled real acceptance remain pending.
+Acceptance on 21 October 2026: a Facebook Login USER token issued by the SuperChat
+app was provisioned separately from Direct credentials. Granted scopes and the
+Page/Instagram binding were checked in the published runtime. One new comment from
+the authorized test identity produced an accepted like and accepted material after
+the real confirmation click. Commercial rules remain off; no historical backfill.
+
+The initial SYSTEM_USER token did not include instagram_manage_engagement despite
+selecting all permissions offered in its generator. Do not assume a system user's
+control of an app grants that scope; inspect the token's actual grants. This is not
+proof that every SYSTEM_USER token is unsupported. The validated path uses USER.
+
+The long-lived token expires on 20 December 2026 at 10:46:36 UTC. Before expiry,
+renew through the official Facebook Login flow, verify granted permissions and the
+same account binding, and replace the protected value on both web and worker via
+Portainer. Never overwrite the Instagram Login Direct token. If renewal fails,
+disable only the like gate and preserve the existing invitation/material flow.
