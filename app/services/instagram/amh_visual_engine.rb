@@ -54,13 +54,20 @@ class Instagram::AmhVisualEngine
     require_valid!(%w[scope keyword material reply].all? { |id| data[id].is_a?(Hash) }, 'Configuração de nó inválida')
     scope = data['scope']
     require_valid!(valid_string?(scope['account'], 100), 'Informe a conta')
-    require_valid!(valid_string?(scope['ad'], 100) || valid_string?(scope['media'], 100), 'Informe anúncio ou publicação')
+    require_valid!(!scope.key?('allContent') || [true, false].include?(scope['allContent']), 'Abrangência inválida')
+    require_valid!(scope['allContent'] == true || valid_string?(scope['ad'], 100) || valid_string?(scope['media'], 100),
+                   'Informe anúncio ou publicação')
+    require_valid!(scope['allContent'] != true || [scope['ad'], scope['media']].all?(&:blank?), 'Todos os conteúdos não aceita IDs específicos')
     validate_keyword!(data['keyword'])
-    require_valid!(MATERIALS.include?(data['material']['material']), 'Material não permitido')
+    validate_material!(data['material'])
     reply = data['reply']
     if reply.key?('publicReplyEnabled')
       require_valid!([true, false].include?(reply['publicReplyEnabled']), 'Opção de resposta pública inválida')
-      require_valid!(safe_button_text?(reply['publicReplyText'], 500), 'Resposta pública inválida (até 500 bytes, sem links)') if reply['publicReplyEnabled']
+      if reply['publicReplyEnabled']
+        variants = reply['publicReplyVariants'] || [reply['publicReplyText']]
+        require_valid!(variants.is_a?(Array) && variants.size.between?(1, 10), 'Use de 1 a 10 respostas públicas')
+        require_valid!(variants.all? { |text| safe_button_text?(text, 500) }, 'Resposta pública inválida (até 500 bytes, sem links)')
+      end
     end
     if reply['confirmationRequired'] == true
       require_valid!(safe_button_text?(reply['openingText'], 1000), 'Convite inválido; não inclua links antes da confirmação')
@@ -68,6 +75,30 @@ class Instagram::AmhVisualEngine
       require_valid!(valid_string?(reply['buttonLabel'], 20), 'Use até 20 caracteres no botão do material')
     else
       require_valid!(valid_string?(reply['text'], 1000) && reply['text'].include?('{{link}}'), 'Prévia inválida; use {{link}}')
+    end
+  end
+
+  def self.validate_material!(material)
+    require_valid!(!material.key?('mode') || %w[fixed context].include?(material['mode']), 'Seleção de material inválida')
+    return require_valid!(MATERIALS.include?(material['material']), 'Material não permitido') unless material['mode'] == 'context'
+
+    validate_mappings!(material['mappings'])
+    routes = material['routes']
+    require_valid!(routes.is_a?(Array) && routes.size.between?(1, 2), 'Configure os materiais por contexto')
+    require_valid!(routes.all? { |r| r.is_a?(Hash) && MATERIALS.include?(r['material']) }, 'Material contextual não permitido')
+    require_valid!(routes.pluck('material').uniq.size == routes.size, 'Material duplicado')
+    routes.each do |route|
+      validate_keyword!('keywords' => route['keywords'], 'mode' => 'word', 'ignoreCase' => true, 'ignoreAccents' => true)
+    end
+  end
+
+  def self.validate_mappings!(mappings)
+    require_valid!(mappings.is_a?(Array) && mappings.size <= 100, 'Mapa de criativos inválido (máximo 100 vínculos)')
+    id_keys = %w[account ad media]
+    mappings.each do |row|
+      require_valid!(row.is_a?(Hash) && MATERIALS.include?(row['material']), 'Material do criativo inválido')
+      require_valid!(id_keys.all? { |key| row[key].is_a?(String) && /\A[0-9]{1,64}\z/.match?(row[key]) }, 'IDs do criativo inválidos')
+      require_valid!(!row.key?('editorial') || valid_string?(row['editorial'], 100), 'Nome editorial inválido')
     end
   end
 
@@ -152,6 +183,9 @@ class Instagram::AmhVisualEngine
   def self.node_result(node, data, fixture, text)
     return ['rejected', 'Nenhuma palavra-chave corresponde'] if node == 'keyword' && !matches?(text, data['keyword'])
     return STOP[fixture].drop(1) if STOP[fixture]&.first == node
+    if node == 'material' && %w[context].include?(data['material']['mode'])
+      return ['blocked', 'Seleção contextual exige legenda real e análise no teste controlado']
+    end
     return ['passed', 'Transporte inerte aceitou a prévia; zero envio externo'] if node == 'reply'
     return ['passed', 'Simulação concluída; sincronização Mautic não executada'] if node == 'result'
 

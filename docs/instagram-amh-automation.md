@@ -128,10 +128,36 @@ instead of offering a broken creation action. When configured, new conventional
 journeys start paused. Provisioning Evo Flow is a separate infrastructure task;
 it is unnecessary for Instagram automation execution.
 
-Content routing currently matches configured account, publication/ad and words.
-It does not infer the topic of arbitrary content or select unconfigured materials
-using AI. The UI must not claim otherwise. Multiple saved automations can route
-different content; overlapping eligible rules remain blocked.
+Content routing supports a specific publication or account-wide `scope.allContent=true`.
+Account-wide scope requires blank media/ad selectors and still enforces account/app,
+keyword, window, allowlist and activation time. Reception covers only events Meta delivers.
+It never scans historical comments on deployment or activation.
+
+`material.mode=context` uses a frozen reviewed inventory under `material.mappings`:
+account + exact ad ID first, then unambiguous media. Conflicting IDs/materials block.
+The taxonomy comes from the creative spreadsheet's Lista de Assuntos. The shipped
+inventory has 23 ads / 20 media, verified destinations on 2026-10-21: 20 Highlights
+and 3 No consultório. Editorial IDs alone are insufficient: Ad067/068 have been reused.
+If an ID is absent, the executor reads the authenticated media caption and requires
+one explicit subject/material phrase in `material.routes`. Generic AMH comments and
+ambiguous/missing captions never select a default. No AI connection is required.
+
+The catalog exposes the reviewed inventory; the editor imports it into the draft.
+Updating the catalog does not modify published versions. There is no live or
+bidirectional spreadsheet synchronization. Refresh the reviewed export and publish
+the draft to add newly mapped IDs. New media with a unique explicit subject phrase
+can resolve by caption. `encrypted_routing_context` retains the per-version decision;
+`resolved_material` and `routing_source` record it on the delivery before invitation.
+Confirmation uses that immutable selection rather than re-reading a mutable caption.
+A context failure creates a blocked receipt (`context_unresolved`), without sending.
+
+`reply.publicReplyVariants` permits 1–10 URL-free texts, each <=500 UTF-8 bytes.
+Legacy single-text versions remain valid. A hash of inbound-event ID and immutable
+version selects the variation; the reserved index is persisted. Duplicate jobs never
+choose again or issue another reply. The editor supports add/edit/remove and preview.
+Migration `20261021160000` is additive and does not backfill historical deliveries.
+
+Local verification and reviewed code do not establish rollout or real Meta acceptance.
 
 Overlay deployment uses `docker/Dockerfile.instagram-overlay` with a generated
 `files/` tree and reviewed before/after hashes. Preserve the base image runtime

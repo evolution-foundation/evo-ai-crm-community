@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_21_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -721,6 +721,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
     t.text "encrypted_public_reply_receipt"
     t.datetime "public_reply_requested_at"
     t.datetime "public_reply_accepted_at"
+    t.string "resolved_material"
+    t.string "routing_source"
+    t.integer "public_reply_variant"
     t.index ["confirmation_event_id"], name: "index_instagram_amh_deliveries_on_confirmation_event_id", unique: true
     t.index ["inbound_event_id"], name: "index_instagram_amh_deliveries_on_inbound_event_id", unique: true
     t.index ["proof_id"], name: "index_instagram_amh_deliveries_on_proof_id"
@@ -734,6 +737,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
     t.string "state", default: "pending", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "encrypted_routing_context"
     t.index ["event_key"], name: "index_instagram_amh_inbound_events_on_event_key", unique: true
     t.index ["inbox_id", "created_at", "id"], name: "index_instagram_amh_inbox_recent"
     t.index ["inbox_id"], name: "index_instagram_amh_inbound_events_on_inbox_id"

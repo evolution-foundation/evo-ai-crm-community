@@ -6,7 +6,7 @@ class Instagram::AmhOperations
 
   def self.snapshot
     inbox = Instagram::AmhConnection.bound_inbox!
-    { at: Time.current.iso8601(6), outbound_enabled: Instagram::AmhExecutor.enabled? && Instagram::AmhVisualProof.where(audience: %w[test active]).exists?,
+    { at: Time.current.iso8601(6), outbound_enabled: Instagram::AmhExecutor.enabled? && Instagram::AmhVisualProof.exists?(audience: %w[test active]),
       state: Instagram::AmhExecutor.enabled? ? 'configured' : 'paused',
       reception_enabled: ENV['INSTAGRAM_AMH_RECEPTION_ENABLED'] == 'true' && ENV['INSTAGRAM_AMH_INGRESS_ENABLED'] == 'true',
       inbound: inbound(inbox),
@@ -16,7 +16,8 @@ class Instagram::AmhOperations
   rescue Instagram::AmhConnection::ConfigurationError
     { at: Time.current.iso8601(6), outbound_enabled: false, state: 'paused', reception_enabled: false,
       inbound: { available: false, counts_scope: 'recent_receipts', counts: {}, recent: [] }, rules: rules, limit: LIMIT,
-      activation: Instagram::AmhExecutor.enabled? ? 'controlled_test_required_per_version' : 'execution_disabled', private_reply_button: 'pending_real_contract_validation', mautic: 'not_queried' }
+      activation: Instagram::AmhExecutor.enabled? ? 'controlled_test_required_per_version' : 'execution_disabled',
+      private_reply_button: 'pending_real_contract_validation', mautic: 'not_queried' }
   end
 
   def self.inbound(inbox)
@@ -40,9 +41,13 @@ class Instagram::AmhOperations
     data = graph.fetch('nodes').to_h { |node| [node.fetch('id'), node.fetch('data')] }
     { id: proof.id, name: proof.name, state: proof.audience, version: version&.fetch('number'),
       draft_changed: version.present? && proof.draft != graph,
-      scope: data.fetch('scope').slice('account', 'ad', 'media'),
-      material: data.fetch('material')['material'], keywords: data.fetch('keyword')['keywords'],
+      scope: data.fetch('scope').slice('account', 'ad', 'media', 'allContent'),
+      material: material_label(data.fetch('material')), keywords: data.fetch('keyword')['keywords'],
       preview: data.fetch('reply')['text'] }.merge(simulation_summary(proof))
+  end
+
+  def self.material_label(material)
+    %w[context].include?(material['mode']) ? material['mode'] : material['material']
   end
 
   def self.simulation_summary(proof)
