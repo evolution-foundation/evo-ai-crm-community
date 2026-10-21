@@ -1,0 +1,5 @@
+# Build with a generated files/ tree whose hashes match the reviewed manifest.
+# Inherit the exact runtime user/entrypoint of the deployed base image.
+ARG BASE_IMAGE=ghcr.io/ricardoisus/evo-ai-crm-community:vetorial-instagram-likes-1f17086@sha256:7547c0d1a9e03e1edb59a9c9febf47d613d45f3a26911bccd0b3efe51036eeb8
+FROM ${BASE_IMAGE}
+COPY --chown=0:0 files/ /app/

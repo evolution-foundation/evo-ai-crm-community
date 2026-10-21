@@ -132,3 +132,10 @@ Content routing currently matches configured account, publication/ad and words.
 It does not infer the topic of arbitrary content or select unconfigured materials
 using AI. The UI must not claim otherwise. Multiple saved automations can route
 different content; overlapping eligible rules remain blocked.
+
+Overlay deployment uses `docker/Dockerfile.instagram-overlay` with a generated
+`files/` tree and reviewed before/after hashes. Preserve the base image runtime
+user and entrypoint: the deployed likes base runs as root and owns `/app` and
+`/app/log`. Do not impose USER 1000 on that image. A Rails runner-only rehearsal
+misses Rails::Server creating `/app/tmp`; the rehearsal must also boot the actual
+web server and verify HTTP health in the restored isolated environment.
