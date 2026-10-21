@@ -27,10 +27,12 @@ class Instagram::AmhCatalog
 
       { id: contract['media_id'], label: 'Publicação com comentário recebido', source: 'received', ad: contract['ad_id'] }
     end
-    { account: { id: channel.instagram_id, label: account_label(channel), inbox_label: inbox.name }, publications: (publications + observed).uniq { |p| p[:id] },
+    { account: { id: channel.instagram_id, label: account_label(channel), inbox_label: inbox.name },
+      publications: (publications + observed).uniq { |publication| publication[:id] },
       test_available: ENV.fetch('INSTAGRAM_AMH_TEST_IGSIDS', '').split(',').any?(&:present?),
       execution_available: ENV['INSTAGRAM_AMH_EXECUTION_ENABLED'] == 'true',
-      comment_like_status: comment_like_status }
+      comment_like_status: comment_like_status,
+      material_routing: Instagram::AmhMaterialInventory.snapshot }
   rescue Instagram::AmhConnection::ConfigurationError, Net::OpenTimeout, Net::ReadTimeout, SocketError, KeyError
     raise Unavailable
   end

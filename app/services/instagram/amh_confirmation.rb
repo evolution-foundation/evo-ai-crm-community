@@ -35,6 +35,12 @@ class Instagram::AmhConfirmation
 
     source = Instagram::AmhExecutor.event_data(original, delivery.inbound_event)
     Instagram::AmhShortLink.validate_event!(source, data)
+    data = data.deep_dup
+    if data['material']['mode'] == 'context'
+      raise Unavailable unless Instagram::AmhVisualEngine::MATERIALS.include?(delivery.resolved_material)
+
+      data['material']['material'] = delivery.resolved_material
+    end
     [inbox, version, data, source, clicked_at]
   rescue ArgumentError, KeyError, Instagram::AmhShortLink::Unavailable, Instagram::AmhShortLink::Conflict
     raise Unavailable
@@ -52,7 +58,7 @@ class Instagram::AmhConfirmation
       next [delivery, nil, nil, nil] unless delivery.state == 'awaiting_confirmation'
 
       key = OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('amh-link-event-v1'),
-                                   JSON.generate(source.values_at('account', 'app', 'comment')))
+                                    JSON.generate(source.values_at('account', 'app', 'comment')))
       link = Instagram::AmhShortLink.issue_unique!(key, version, data['material']['material'], source)
       delivery.update!(state: 'sending', reason: 'confirmed_delivery_reserved', confirmation_event_id: event.id,
                        confirmation_received_at: clicked_at)
@@ -66,7 +72,7 @@ class Instagram::AmhConfirmation
       return row
     end
     result = Instagram::AmhPrivateReply.deliver(channel: inbox.channel, recipient_id: event.contract.dig('identity', 'igsid'),
-                                               text: data['text'], url: link.fetch(:url), label: data['buttonLabel'])
+                                                text: data['text'], url: link.fetch(:url), label: data['buttonLabel'])
     receipt = result.receipt && Instagram::AmhInboundEvent.encryptor.encrypt_and_sign(result.receipt)
     row.update!(state: result.state, reason: result.reason, encrypted_receipt: receipt)
     row

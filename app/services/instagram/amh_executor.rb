@@ -18,7 +18,7 @@ class Instagram::AmhExecutor
       'media' => contract['media_id'], 'inbound_event_id' => event.id }.compact
   end
 
-  def self.eligible!(event, proof, explicit_test: false)
+  def self.eligible!(event, proof, explicit_test: false, resolve_material: true)
     raise Unavailable unless enabled?
 
     inbox = Instagram::AmhConnection.bound_inbox!
@@ -44,12 +44,18 @@ class Instagram::AmhExecutor
 
     payload = event_data(contract, event)
     Instagram::AmhShortLink.validate_event!(payload, data)
+    if resolve_material
+      material, source = Instagram::AmhContextRouter.resolve(event, data['material'], version)
+      data = data.deep_dup
+      data['material'] = data['material'].merge('material' => material, 'routingSource' => source)
+    end
     [inbox, version, data, payload]
   rescue ArgumentError, KeyError, Instagram::AmhShortLink::Unavailable, Instagram::AmhShortLink::Conflict
     raise Unavailable
   end
 
   def self.call(event:, proof:, explicit_test: false)
+    prepare_context!(event, proof, explicit_test: explicit_test)
     delivery, inbox, opening = Instagram::AmhVisualProof.with_mapping_lock do
       proof.reload
       inbox, version, data, = eligible!(event, proof, explicit_test: explicit_test)
@@ -57,7 +63,7 @@ class Instagram::AmhExecutor
         next false if candidate.id == proof.id
 
         begin
-          eligible!(event, candidate, explicit_test: explicit_test)
+          eligible!(event, candidate, explicit_test: explicit_test, resolve_material: false)
           true
         rescue Unavailable
           false
@@ -68,6 +74,8 @@ class Instagram::AmhExecutor
       row = Instagram::AmhDelivery.create_or_find_by!(inbound_event_id: event.id) do |record|
         record.proof = proof
         record.version_id = version['id']
+        record.resolved_material = data['material']['material']
+        record.routing_source = data['material']['routingSource']
         record.like_state = 'pending'
         record.public_reply_state = data['reply']['publicReplyEnabled'] == true ? 'pending' : 'not_requested'
       end
@@ -93,6 +101,25 @@ class Instagram::AmhExecutor
                      reason: accepted ? 'waiting_for_button_click' : result.reason, encrypted_prompt_receipt: receipt,
                      prompt_accepted_at: accepted ? Time.current : nil, prompt_expires_at: accepted ? 7.days.from_now : nil)
     finish_like(delivery, explicit_test: explicit_test)
+  end
+
+  def self.prepare_context!(event, proof, explicit_test:)
+    inbox, version, data, = eligible!(event, proof.reload, explicit_test: explicit_test, resolve_material: false)
+    return unless data['material']['mode'] == 'context'
+
+    begin
+      Instagram::AmhContextRouter.prepare!(event, inbox, version)
+      Instagram::AmhContextRouter.resolve(event, data['material'], version)
+    rescue Unavailable
+      Instagram::AmhDelivery.create_or_find_by!(inbound_event_id: event.id) do |record|
+        record.proof = proof
+        record.version_id = version['id']
+        record.state = 'blocked'
+        record.prompt_state = 'blocked'
+        record.reason = 'context_unresolved'
+      end
+      raise
+    end
   end
 
   def self.finish_like(delivery, explicit_test:)

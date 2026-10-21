@@ -54,7 +54,10 @@ class Instagram::AmhPublicReply
           next
         end
         delivery.update!(public_reply_state: 'sending', public_reply_reason: 'reply_reserved', public_reply_requested_at: Time.current)
-        data['reply']['publicReplyText']
+        variants = data['reply']['publicReplyVariants'] || [data['reply']['publicReplyText']]
+        index = Digest::SHA256.hexdigest("#{delivery.inbound_event_id}:#{delivery.version_id}").to_i(16) % variants.size
+        delivery.update!(public_reply_variant: index)
+        variants[index]
       end
     end
   end

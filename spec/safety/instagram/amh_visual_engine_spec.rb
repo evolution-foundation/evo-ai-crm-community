@@ -67,4 +67,19 @@ RSpec.describe Instagram::AmhVisualEngine do
     end
     expect { described_class.simulate(graph, fixture: 'real_customer') }.to raise_error(described_class::Invalid)
   end
+  it 'validates broad scope, safe variants and context routes without silently changing legacy graphs' do
+    configured = graph
+    data = configured['nodes'].to_h { |n| [n['id'], n['data']] }
+    data['scope'].replace('account' => 'qa', 'allContent' => true)
+    data['material'].replace('mode' => 'context', 'mappings' => [], 'routes' => [{ 'material' => 'amh', 'keywords' => ['highlights'] }])
+    data['reply'].merge!('publicReplyEnabled' => true, 'publicReplyVariants' => ['Confira seu Direct!', 'Enviei um convite.'])
+    expect { described_class.validate!(configured) }.not_to raise_error
+    expect(described_class.simulate(configured, fixture: 'eligible')[:outcome]).to eq('blocked')
+    data['reply']['publicReplyVariants'] << 'https://example.com'
+    expect { described_class.validate!(configured) }.to raise_error(described_class::Invalid)
+    data['reply']['publicReplyVariants'].pop
+    data['scope']['media'] = 'qa-media'
+    expect { described_class.validate!(configured) }.to raise_error(described_class::Invalid)
+  end
+
 end

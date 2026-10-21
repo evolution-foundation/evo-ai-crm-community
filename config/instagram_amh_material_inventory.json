@@ -1,0 +1,199 @@
+{
+  "revision": "2026-10-21",
+  "source": "Lista de Criativos + Lista de Assuntos e destinos Meta conferidos em 21/10/2026",
+  "spreadsheet": "https://docs.google.com/spreadsheets/d/16z6A0cAbJ_jddb_5V1li-ivio_hK26OygJkvU-7sSG8/edit",
+  "subjects": [
+    {
+      "id": "StgMRAMH",
+      "description": "Material Rico | AMH na Prática Ginecológica",
+      "material": "amh"
+    },
+    {
+      "id": "StgMRAMHV2",
+      "description": "Material Rico | AMH no Consultorio",
+      "material": "amh-consultorio"
+    }
+  ],
+  "mappings": [
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979790060",
+      "media": "17995816620013358",
+      "material": "amh",
+      "editorial": "Ad065_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979810060",
+      "media": "17953010829275296",
+      "material": "amh",
+      "editorial": "Ad061_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979820060",
+      "media": "18105975641202491",
+      "material": "amh",
+      "editorial": "Ad064_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979830060",
+      "media": "17911840593552059",
+      "material": "amh",
+      "editorial": "Ad062_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979840060",
+      "media": "18081194498742000",
+      "material": "amh",
+      "editorial": "Ad063_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979850060",
+      "media": "18251675620308814",
+      "material": "amh",
+      "editorial": "Ad061_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979860060",
+      "media": "18150534259561844",
+      "material": "amh",
+      "editorial": "Ad064_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979870060",
+      "media": "18143330191587857",
+      "material": "amh",
+      "editorial": "Ad063_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979880060",
+      "media": "17920171911241696",
+      "material": "amh",
+      "editorial": "Ad062_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469979890060",
+      "media": "18153663082553951",
+      "material": "amh",
+      "editorial": "Ad065_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983810060",
+      "media": "18119842483985188",
+      "material": "amh",
+      "editorial": "Ad064_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983820060",
+      "media": "18217687192350059",
+      "material": "amh",
+      "editorial": "Ad065_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983830060",
+      "media": "18167298379465209",
+      "material": "amh",
+      "editorial": "Ad062_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983840060",
+      "media": "18010312472994292",
+      "material": "amh",
+      "editorial": "Ad063_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983860060",
+      "media": "18088343066286012",
+      "material": "amh",
+      "editorial": "Ad061_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983870060",
+      "media": "18119842483985188",
+      "material": "amh",
+      "editorial": "Ad064_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983880060",
+      "media": "18127837402895062",
+      "material": "amh",
+      "editorial": "Ad061_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983890060",
+      "media": "18024354902865440",
+      "material": "amh",
+      "editorial": "Ad062_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983900060",
+      "media": "18143330191587857",
+      "material": "amh",
+      "editorial": "Ad063_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251469983910060",
+      "media": "18153663082553951",
+      "material": "amh",
+      "editorial": "Ad065_CC_StgMRAMH"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251548205980060",
+      "media": "18012262568977659",
+      "material": "amh-consultorio",
+      "editorial": "Ad066_CC_StgMRAMHV2"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251550380830060",
+      "media": "17950345239299782",
+      "material": "amh-consultorio",
+      "editorial": "Ad067_CC_StgMRAMHV2"
+    },
+    {
+      "account": "17841467175558324",
+      "ad": "120251550598570060",
+      "media": "18036384113847440",
+      "material": "amh-consultorio",
+      "editorial": "Ad068_CC_StgMRAMHV2"
+    }
+  ],
+  "routes": [
+    {
+      "material": "amh",
+      "keywords": [
+        "StgMRAMH",
+        "AMH na Prática Ginecológica",
+        "amh-na-pratica-ginecologica",
+        "highlights"
+      ]
+    },
+    {
+      "material": "amh-consultorio",
+      "keywords": [
+        "StgMRAMHV2",
+        "AMH no consultório",
+        "amh-no-consultorio"
+      ]
+    }
+  ]
+}

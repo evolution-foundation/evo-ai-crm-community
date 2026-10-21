@@ -27,6 +27,8 @@ class Instagram::AmhShortLink < ApplicationRecord
     graph = Instagram::AmhVisualEngine.validate!(version.fetch('graph'))
     data = graph['nodes'].to_h { |node| [node['id'], node['data']] }
     validate_event!(event, data)
+    raise Unavailable if data['material']['mode'] == 'context'
+
     material = data['material'].fetch('material')
     key = OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('amh-link-event-v1'),
                                   JSON.generate(event.values_at('account', 'app', 'comment')))
@@ -54,6 +56,7 @@ class Instagram::AmhShortLink < ApplicationRecord
 
   def self.candidate_scope?(scope, event)
     return false unless scope['account'] == event['account']
+    return true if scope['allContent'] == true
     return scope['ad'] == event['ad'] if event['ad'].present?
 
     scope['media'].present? && scope['media'] == event['media']
@@ -91,6 +94,8 @@ class Instagram::AmhShortLink < ApplicationRecord
   end
 
   def self.validate_scope!(scope, event)
+    return if scope['allContent'] == true
+
     # A present ad ID is authoritative. Never fall back from a different ad to the same media.
     if event['ad'].present?
       raise Unavailable unless event['ad'] == scope['ad']
