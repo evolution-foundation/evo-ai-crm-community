@@ -8,7 +8,7 @@ The product editor replaces the simulation canvas with a guided publication → 
 
 `AmhExecutor` checks the bound inbox, app, professional account, token expiry, keyword, publication/ad, comment timestamp, active version and optional test identity. A transaction advisory lock serializes rule ambiguity checks and the unique per-inbound-event reservation. Only activated rules participate. Conflicting eligible rules stop the send. New commercial activation never replays older comments. Explicit controlled tests can select a persisted comment still inside seven days.
 
-A `sending` reservation commits before the network call. Accepted, failed and uncertain outcomes are terminal: neither job retries nor repeated requests send again. A crash after reservation is deliberately left for reconciliation. Receipts are encrypted; the API exposes only operational IDs/states/timestamps. Provider acceptance is not proof of delivery or reading. No public reply, like or follow-up is sent.
+A `sending` reservation commits before the network call. Accepted, failed and uncertain outcomes are terminal: neither job retries nor repeated requests send again. A crash after reservation is deliberately left for reconciliation. Receipts are encrypted; the API exposes only operational IDs/states/timestamps. Provider acceptance is not proof of delivery or reading. No public reply or follow-up is sent. Comment likes have an independent gated transport and receipt, described below.
 
 ## Configuration and rollout
 
@@ -40,3 +40,47 @@ The signed Meta receiver persists only the allowlisted quick-reply/postback payl
 Migration `20261020210000` adds separate invitation receipt/state, expiry and a unique confirmation-event reference. Prompt acceptance alone cannot authorize commercial activation: the exact version requires an accepted material delivery with a persisted confirmation event. Pause or version replacement invalidates pending confirmations. Neither an uncertain prompt nor an uncertain material response is retried automatically. No fallback can bypass confirmation when the provider rejects the initial interactive message.
 
 This replaces the previous comment → direct material behavior following Ricardo's explicit correction. A new controlled comment and actual button tap are required for real Meta validation; the comment consumed by the historical direct test must not be replayed or fabricated.
+
+
+## Comment likes (Facebook Login)
+
+The invitation path reserves a separate `like_state=pending` only for new eligible
+comments. Historical deliveries keep `not_requested`; deploying or supplying a
+token never likes historical comments. The like runs after the invitation has its
+own persisted outcome. A refusal, timeout or unavailable credential never blocks
+the invitation, confirmation or material. Replays return the existing like receipt;
+`sending`, accepted, refused, blocked and uncertain outcomes are not retried.
+
+Meta documents `POST https://graph.facebook.com/v26.0/<IG_USER_ID>/likes` with a
+JSON `comment_id`, a **Facebook Login user access token**, `instagram_basic` and
+`instagram_manage_engagement`. An Instagram Login messaging token is insufficient.
+Source checked on 20 October 2026:
+[Meta User Likes](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/user-likes).
+
+Provision these protected runtime variables on web/worker only after the account
+owner grants the new permission in Meta:
+
+- `INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN`: Facebook Login user token, not a Page token.
+- `INSTAGRAM_AMH_LIKES_FACEBOOK_PAGE_ID`: Page linked to the managed professional account.
+- `INSTAGRAM_AMH_LIKES_FACEBOOK_IG_USER_ID`: linked IG ID; it must match the managed
+  account. Do not infer equivalence across login modes; confirm the binding.
+- `INSTAGRAM_AMH_LIKES_ENABLED=true`: separate switch, default off.
+
+Preflight reads granted scopes and the Page's `instagram_business_account`. A
+mismatch or missing permission produces a blocked receipt and no like request.
+The rule/version, test allowlist, expiry and gates are rechecked immediately before
+the mutation. A database lock reserves at most 40 requests in five seconds across
+workers, below Meta's 50-request burst limit. Excess work is blocked for review,
+never automatically replayed. Provider error metadata is allowlisted/encrypted;
+API snapshots expose only state, reason and acceptance time.
+
+After provisioning, validate one new comment from the existing authorized test
+identity, confirm the like in Instagram, click the invitation and check the material
+receipt. Repeat the same event and prove zero additional outbound calls. Keep
+commercial rules paused until the full test is accepted. Rollback: disable the
+like gate; preserve reservations and receipts. Never clear a reservation to retry
+an uncertain result. Existing blocked/historical rows are not backfilled.
+
+Current limitation: implementation and isolated tests do not prove real permission
+or a real like. No compatible Facebook credential existed in the Evo runtime during
+this revision; production provisioning and controlled real acceptance remain pending.

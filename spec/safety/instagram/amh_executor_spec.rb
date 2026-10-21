@@ -26,11 +26,13 @@ RSpec.describe Instagram::AmhExecutor do
   around do |example|
     raise 'Isolated DB required' unless ActiveRecord::Base.connection_db_config.database == 'instagram_amh_safety_test'
     keys = %w[INSTAGRAM_AMH_EXECUTION_ENABLED INSTAGRAM_AMH_LINK_QA_ENABLED INSTAGRAM_AMH_TEST_IGSIDS
-              INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID INSTAGRAM_AMH_RESERVED_INBOX_ID INSTAGRAM_AMH_INBOX_IDS INSTAGRAM_AMH_APP_ID]
+              INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID INSTAGRAM_AMH_RESERVED_INBOX_ID INSTAGRAM_AMH_INBOX_IDS INSTAGRAM_AMH_APP_ID INSTAGRAM_AMH_LIKES_ENABLED
+              INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN INSTAGRAM_AMH_LIKES_FACEBOOK_PAGE_ID INSTAGRAM_AMH_LIKES_FACEBOOK_IG_USER_ID]
     previous = ENV.to_h.slice(*keys)
     ENV.update('INSTAGRAM_AMH_EXECUTION_ENABLED' => 'true', 'INSTAGRAM_AMH_LINK_QA_ENABLED' => 'true',
       'INSTAGRAM_AMH_TEST_IGSIDS' => '90002', 'INSTAGRAM_AMH_PROFESSIONAL_ACCOUNT_ID' => target,
       'INSTAGRAM_AMH_RESERVED_INBOX_ID' => reserved, 'INSTAGRAM_AMH_INBOX_IDS' => reserved, 'INSTAGRAM_AMH_APP_ID' => '90003')
+    ENV['INSTAGRAM_AMH_LIKES_ENABLED'] = 'false'
     WebMock.disable_net_connect!
     ActiveRecord::Base.transaction { example.run; raise ActiveRecord::Rollback }
   ensure
@@ -171,6 +173,128 @@ RSpec.describe Instagram::AmhExecutor do
     expect(Instagram::AmhConfirmation.call(event: confirm(row)).state).to eq('uncertain')
     expect(request).to have_been_requested.twice
     expect(Instagram::AmhShortLink.count).to eq(1)
+  end
+
+  context 'independent comment like' do
+    let(:like_url) { "https://graph.facebook.com/v26.0/#{target}/likes" }
+    before do
+      contract['event_id'] = '90006'
+      ENV.update('INSTAGRAM_AMH_LIKES_ENABLED' => 'true', 'INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN' => 'inert-facebook-user',
+                 'INSTAGRAM_AMH_LIKES_FACEBOOK_PAGE_ID' => '90007', 'INSTAGRAM_AMH_LIKES_FACEBOOK_IG_USER_ID' => target)
+      stub_request(:get, 'https://graph.facebook.com/v26.0/me/permissions').to_return(
+        status: 200, body: JSON.generate(data: %w[instagram_basic instagram_manage_engagement].map { |p| {permission: p, status: 'granted'} }),
+        headers: { 'Content-Type' => 'application/json' })
+      stub_request(:get, 'https://graph.facebook.com/v26.0/90007').with(query: {fields: 'instagram_business_account{id}'}).to_return(
+        status: 200, body: JSON.generate(instagram_business_account: {id: target}), headers: { 'Content-Type' => 'application/json' })
+      stub_request(:post, /graph.instagram.com/).to_return(status: 200, body: JSON.generate(message_id: 'qa-prompt'),
+                                                        headers: { 'Content-Type' => 'application/json' })
+    end
+
+    it 'reserves before calling the correct user edge and preserves separate encrypted receipts on replay' do
+      request = stub_request(:post, like_url).with(headers: {'Authorization' => 'Bearer inert-facebook-user'}, body: {comment_id: '90006'}.to_json).to_return do
+        expect(Instagram::AmhDelivery.last.like_state).to eq('sending')
+        { status: 200, body: '{"success":true}', headers: { 'Content-Type' => 'application/json' } }
+      end
+      row = call
+      expect(row.state).to eq('awaiting_confirmation')
+      expect(row.like_state).to eq('accepted')
+      expect(row.like_accepted_at).to be_present
+      expect(row.encrypted_like_receipt).not_to include('success')
+      expect(call.id).to eq(row.id)
+      expect(request).to have_been_requested.once
+      expect(Instagram::AmhConfirmation.call(event: confirm(row)).state).to eq('accepted')
+      expect(row.reload.like_state).to eq('accepted')
+    end
+
+    it 'does not retry timeout or rejection and never blocks invitation or material' do
+      request = stub_request(:post, like_url).to_timeout
+      row = call
+      expect(row.like_state).to eq('uncertain')
+      expect(call.like_state).to eq('uncertain')
+      expect(request).to have_been_requested.once
+      expect(Instagram::AmhConfirmation.call(event: confirm(row)).state).to eq('accepted')
+    end
+
+    it 'records provider refusal separately from the invitation' do
+      request = stub_request(:post, like_url).to_return(status: 403, body: '{"error":{"code":200,"message":"private diagnostic"}}', headers: { 'Content-Type' => 'application/json' })
+      row = call
+      expect(row.like_state).to eq('failed')
+      expect(row.like_reason).to eq('provider_403')
+      expect(row.state).to eq('awaiting_confirmation')
+      expect(call.like_state).to eq('failed')
+      expect(request).to have_been_requested.once
+      expect(row.snapshot.to_s).not_to include('private diagnostic', 'inert-facebook-user')
+    end
+
+    it 'blocks missing permissions without attempting a like' do
+      stub_request(:get, 'https://graph.facebook.com/v26.0/me/permissions').to_return(status: 200, body: '{"data":[]}', headers: { 'Content-Type' => 'application/json' })
+      row = call
+      expect(row.like_reason).to eq('engagement_permission_required')
+      expect(row.state).to eq('awaiting_confirmation')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+    it 'blocks a mismatched Facebook account' do
+      ENV['INSTAGRAM_AMH_LIKES_FACEBOOK_IG_USER_ID'] = '90099'
+      expect(call.like_reason).to eq('facebook_account_mismatch')
+      expect(WebMock).not_to have_requested(:post, /graph.facebook.com/)
+    end
+
+    it 'blocks an absent Facebook token and does not replay it when credentials later appear' do
+      ENV.delete('INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN')
+      expect(call.like_reason).to eq('facebook_connection_required')
+      ENV['INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN'] = 'inert-facebook-user'
+      expect(call.like_state).to eq('blocked')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+
+    it 'keeps the like independent even if the invitation is refused' do
+      stub_request(:post, /graph.instagram.com/).to_return(status: 403, body: '{}', headers: { 'Content-Type' => 'application/json' })
+      request = stub_request(:post, like_url).to_return(status: 200, body: '{"success":true}', headers: { 'Content-Type' => 'application/json' })
+      row = call
+      expect(row.state).to eq('prompt_failed')
+      expect(row.reload.like_state).to eq('accepted')
+      expect(request).to have_been_requested.once
+    end
+
+    it 'rechecks pause after permission preflight and before the mutation' do
+      stub_request(:get, 'https://graph.facebook.com/v26.0/90007').with(query: {fields: 'instagram_business_account{id}'}).to_return do
+        proof.update!(audience: 'paused')
+        {status: 200, body: JSON.generate(instagram_business_account: {id: target}), headers: { 'Content-Type' => 'application/json' }}
+      end
+      row = call
+      expect(row.reload.like_reason).to eq('rule_unavailable')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+    it 'reserves the burst budget across deliveries before calling Meta' do
+      allow(Instagram::AmhDelivery).to receive(:where).with('like_requested_at > ?', anything).and_return(double(count: 40))
+      row = call
+      expect(row.reload.like_reason).to eq('like_rate_limited')
+      expect(row.state).to eq('awaiting_confirmation')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+    it 'does not attempt a like for an unauthorized test identity' do
+      contract['identity']['igsid'] = '90099'
+      expect { call }.to raise_error(described_class::Unavailable)
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+    it 'never resumes an abandoned sending reservation or historical delivery' do
+      row = Instagram::AmhDelivery.create!(inbound_event: event, proof: proof, version_id: proof.active_version_id, state: 'awaiting_confirmation', prompt_state: 'accepted', like_state: 'sending')
+      expect(call.like_state).to eq('sending')
+      row.update!(like_state: 'not_requested')
+      expect(call.like_state).to eq('not_requested')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
+
+    it 'blocks the like when its independent gate is off' do
+      ENV['INSTAGRAM_AMH_LIKES_ENABLED'] = 'false'
+      expect(call.reload.like_reason).to eq('like_gate_disabled')
+      expect(WebMock).not_to have_requested(:post, like_url)
+    end
   end
 
 end

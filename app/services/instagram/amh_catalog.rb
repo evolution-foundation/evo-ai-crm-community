@@ -29,8 +29,16 @@ class Instagram::AmhCatalog
     end
     { account: { id: channel.instagram_id, label: inbox.name }, publications: (publications + observed).uniq { |p| p[:id] },
       test_available: ENV.fetch('INSTAGRAM_AMH_TEST_IGSIDS', '').split(',').any?(&:present?),
-      execution_available: ENV['INSTAGRAM_AMH_EXECUTION_ENABLED'] == 'true' }
+      execution_available: ENV['INSTAGRAM_AMH_EXECUTION_ENABLED'] == 'true',
+      comment_like_status: comment_like_status }
   rescue Instagram::AmhConnection::ConfigurationError, Net::OpenTimeout, Net::ReadTimeout, SocketError, KeyError
     raise Unavailable
+  end
+
+  def self.comment_like_status
+    return 'connection_required' if ENV['INSTAGRAM_AMH_LIKES_FACEBOOK_USER_TOKEN'].blank? ||
+                                    ENV['INSTAGRAM_AMH_LIKES_FACEBOOK_PAGE_ID'].blank? || ENV['INSTAGRAM_AMH_LIKES_FACEBOOK_IG_USER_ID'].blank?
+
+    ENV['INSTAGRAM_AMH_LIKES_ENABLED'] == 'true' ? 'configured' : 'disabled'
   end
 end

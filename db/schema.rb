@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_20_210000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_21_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -711,6 +711,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_210000) do
     t.datetime "prompt_expires_at"
     t.datetime "confirmation_received_at"
     t.uuid "confirmation_event_id"
+    t.string "like_state", default: "not_requested", null: false
+    t.string "like_reason"
+    t.text "encrypted_like_receipt"
+    t.datetime "like_requested_at"
+    t.datetime "like_accepted_at"
     t.index ["confirmation_event_id"], name: "index_instagram_amh_deliveries_on_confirmation_event_id", unique: true
     t.index ["inbound_event_id"], name: "index_instagram_amh_deliveries_on_inbound_event_id", unique: true
     t.index ["proof_id"], name: "index_instagram_amh_deliveries_on_proof_id"

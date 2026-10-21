@@ -68,6 +68,7 @@ class Instagram::AmhExecutor
       row = Instagram::AmhDelivery.create_or_find_by!(inbound_event_id: event.id) do |record|
         record.proof = proof
         record.version_id = version['id']
+        record.like_state = 'pending'
       end
       # Historical direct deliveries and terminal/abandoned invitations never replay.
       next [row, nil, nil] unless row.state == 'pending' && row.prompt_state == 'pending'
@@ -77,19 +78,29 @@ class Instagram::AmhExecutor
       row.update!(state: 'prompt_sending', prompt_state: 'sending', reason: 'invitation_reserved')
       [row, inbox, data['reply']['openingText']]
     end
-    return delivery unless inbox
+    return finish_like(delivery, explicit_test: explicit_test) unless inbox
 
     unless enabled? && proof.reload.active_version_id == delivery.version_id && %w[test active].include?(proof.audience)
       delivery.update!(state: 'blocked', prompt_state: 'blocked', reason: 'paused_before_invitation')
       return delivery
     end
     result = Instagram::AmhPrivateReply.prompt(channel: inbox.channel, comment_id: event.contract['event_id'],
-                                              text: opening, payload: Instagram::AmhConfirmationToken.issue(delivery))
+                                               text: opening, payload: Instagram::AmhConfirmationToken.issue(delivery))
     accepted = result.state == 'accepted'
     receipt = result.receipt && Instagram::AmhInboundEvent.encryptor.encrypt_and_sign(result.receipt)
     delivery.update!(state: accepted ? 'awaiting_confirmation' : "prompt_#{result.state}", prompt_state: result.state,
                      reason: accepted ? 'waiting_for_button_click' : result.reason, encrypted_prompt_receipt: receipt,
                      prompt_accepted_at: accepted ? Time.current : nil, prompt_expires_at: accepted ? 7.days.from_now : nil)
+    finish_like(delivery, explicit_test: explicit_test)
+  end
+
+  def self.finish_like(delivery, explicit_test:)
+    Instagram::AmhCommentLike.call(delivery: delivery, explicit_test: explicit_test)
+    delivery
+  rescue StandardError => e
+    # A like failure must never turn a persisted invitation into a failed send.
+    Rails.logger.error("AMH comment like unavailable: #{e.class}")
     delivery
   end
+  private_class_method :finish_like
 end
