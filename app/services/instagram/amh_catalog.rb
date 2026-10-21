@@ -27,12 +27,22 @@ class Instagram::AmhCatalog
 
       { id: contract['media_id'], label: 'Publicação com comentário recebido', source: 'received', ad: contract['ad_id'] }
     end
-    { account: { id: channel.instagram_id, label: inbox.name }, publications: (publications + observed).uniq { |p| p[:id] },
+    { account: { id: channel.instagram_id, label: account_label(channel), inbox_label: inbox.name }, publications: (publications + observed).uniq { |p| p[:id] },
       test_available: ENV.fetch('INSTAGRAM_AMH_TEST_IGSIDS', '').split(',').any?(&:present?),
       execution_available: ENV['INSTAGRAM_AMH_EXECUTION_ENABLED'] == 'true',
       comment_like_status: comment_like_status }
   rescue Instagram::AmhConnection::ConfigurationError, Net::OpenTimeout, Net::ReadTimeout, SocketError, KeyError
     raise Unavailable
+  end
+
+  def self.account_label(channel)
+    response = HTTParty.get("https://graph.instagram.com/v23.0/#{channel.instagram_id}",
+                            headers: { 'Authorization' => "Bearer #{channel.access_token}" },
+                            query: { fields: 'username' }, timeout: 10)
+    username = response.parsed_response['username'] if response.success? && response.parsed_response.is_a?(Hash)
+    username.present? ? "@#{username}" : "Instagram · #{channel.instagram_id}"
+  rescue StandardError
+    "Instagram · #{channel.instagram_id}"
   end
 
   def self.comment_like_status

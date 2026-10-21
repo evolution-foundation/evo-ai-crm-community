@@ -69,6 +69,7 @@ class Instagram::AmhExecutor
         record.proof = proof
         record.version_id = version['id']
         record.like_state = 'pending'
+        record.public_reply_state = data['reply']['publicReplyEnabled'] == true ? 'pending' : 'not_requested'
       end
       # Historical direct deliveries and terminal/abandoned invitations never replay.
       next [row, nil, nil] unless row.state == 'pending' && row.prompt_state == 'pending'
@@ -95,7 +96,12 @@ class Instagram::AmhExecutor
   end
 
   def self.finish_like(delivery, explicit_test:)
-    Instagram::AmhCommentLike.call(delivery: delivery, explicit_test: explicit_test)
+    begin
+      Instagram::AmhCommentLike.call(delivery: delivery, explicit_test: explicit_test)
+    rescue StandardError => e
+      Rails.logger.error("AMH comment like unavailable: #{e.class}")
+    end
+    Instagram::AmhPublicReply.call(delivery: delivery, explicit_test: explicit_test)
     delivery
   rescue StandardError => e
     # A like failure must never turn a persisted invitation into a failed send.

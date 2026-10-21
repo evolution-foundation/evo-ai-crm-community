@@ -297,4 +297,50 @@ RSpec.describe Instagram::AmhExecutor do
     end
   end
 
+  context 'public acknowledgement' do
+    before do
+      graph['nodes'].find { |n| n['id'] == 'scope' }['data'] = { 'account' => target, 'media' => '90004' }
+      graph['nodes'].find { |n| n['id'] == 'reply' }['data'] = {
+        'confirmationRequired' => true, 'openingText' => 'Posso enviar?', 'text' => 'Seu material.',
+        'buttonLabel' => 'Acessar', 'publicReplyEnabled' => true, 'publicReplyText' => 'Confira seu Direct!'
+      }
+      # Build explicitly: the standard proof fixture intentionally remains legacy-compatible.
+      record = Instagram::AmhVisualProof.create!(name: 'Public QA', draft: graph, create_key: SecureRandom.uuid)
+      record.publish_version!(record.lock_version, 'qa')
+      record.reload.update!(active_version_id: record.versions.last['id'], audience: 'test', activated_at: 1.hour.ago)
+      allow(self).to receive(:proof).and_return(record)
+      stub_request(:post, "https://graph.instagram.com/v23.0/#{target}/messages")
+        .to_return(status: 200, body: JSON.generate(message_id: 'qa-prompt'), headers: { 'Content-Type' => 'application/json' })
+    end
+
+    it 'reserves before sending, encrypts the receipt and never duplicates the public reply' do
+      request = stub_request(:post, 'https://graph.instagram.com/v23.0/qa-comment/replies')
+        .with(body: JSON.generate(message: 'Confira seu Direct!'), headers: { 'Authorization' => 'Bearer inert-qa' })
+        .to_return do
+          expect(Instagram::AmhDelivery.last.public_reply_state).to eq('sending')
+          { status: 200, body: JSON.generate(id: 'qa-public'), headers: { 'Content-Type' => 'application/json' } }
+        end
+      row = call
+      expect(row.public_reply_state).to eq('accepted')
+      expect(row.encrypted_public_reply_receipt).not_to include('qa-public')
+      expect(call.id).to eq(row.id)
+      expect(request).to have_been_requested.once
+    end
+
+    it 'preserves the invitation after a public timeout and does not retry' do
+      request = stub_request(:post, 'https://graph.instagram.com/v23.0/qa-comment/replies').to_timeout
+      row = call
+      expect(row.state).to eq('awaiting_confirmation')
+      expect(row.public_reply_state).to eq('uncertain')
+      call
+      expect(request).to have_been_requested.once
+    end
+
+    it 'does not announce a Direct when the invitation was refused' do
+      stub_request(:post, "https://graph.instagram.com/v23.0/#{target}/messages").to_return(status: 400, body: '{}')
+      expect(call.public_reply_state).to eq('blocked')
+      expect(WebMock).not_to have_requested(:post, /replies/)
+    end
+  end
+
 end

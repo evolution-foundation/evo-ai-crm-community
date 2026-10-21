@@ -97,3 +97,38 @@ renew through the official Facebook Login flow, verify granted permissions and t
 same account binding, and replace the protected value on both web and worker via
 Portainer. Never overwrite the Instagram Login Direct token. If renewal fails,
 disable only the like gate and preserve the existing invitation/material flow.
+
+## Product navigation and public acknowledgements — 2026-10-21
+
+The Instagram module lives at `/automations/instagram`; `/journeys/instagram-amh`
+redirects there. Its executor remains independent of Evo Flow journeys. The rule
+index returns the operational scope, material, keywords, audience, version and
+whether the draft differs. Account labels come from Graph `username`, with a
+numeric account fallback, never the internal inbox name.
+
+Public acknowledgements are versioned under `reply.publicReplyEnabled` and
+`reply.publicReplyText` (500 bytes maximum, no links). Legacy versions omit these
+fields and retain their existing behaviour. New comments get an independent
+`public_reply_state` reservation only when their immutable version enables it.
+The acknowledgement is sent through Instagram Login `POST /<comment>/replies`
+only after the invitation is accepted. Its receipt is encrypted; a failed,
+uncertain, abandoned or historical action never automatically retries. Public
+reply failure preserves invitation, confirmation, material and like receipts.
+
+Migration `20261021120000` is additive. Historical rows default to
+`not_requested`; there is no backfill or automatic revision of saved flows.
+Commercial activation of a version that enables a public reply also requires a
+controlled accepted public reply and accepted material in that version. A new
+controlled comment and click are necessary to validate this addition in Meta.
+Local mocked transport tests do not prove real provider acceptance.
+
+The deployment inspected on 2026-10-21 has no Evo Flow service and its frontend
+contains `VITE_EVOFLOW_API_URL_PLACEHOLDER`. Journeys now explain missing setup
+instead of offering a broken creation action. When configured, new conventional
+journeys start paused. Provisioning Evo Flow is a separate infrastructure task;
+it is unnecessary for Instagram automation execution.
+
+Content routing currently matches configured account, publication/ad and words.
+It does not infer the topic of arbitrary content or select unconfigured materials
+using AI. The UI must not claim otherwise. Multiple saved automations can route
+different content; overlapping eligible rules remain blocked.

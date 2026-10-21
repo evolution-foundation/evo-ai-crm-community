@@ -58,6 +58,10 @@ class Instagram::AmhVisualEngine
     validate_keyword!(data['keyword'])
     require_valid!(MATERIALS.include?(data['material']['material']), 'Material não permitido')
     reply = data['reply']
+    if reply.key?('publicReplyEnabled')
+      require_valid!([true, false].include?(reply['publicReplyEnabled']), 'Opção de resposta pública inválida')
+      require_valid!(safe_button_text?(reply['publicReplyText'], 500), 'Resposta pública inválida (até 500 bytes, sem links)') if reply['publicReplyEnabled']
+    end
     if reply['confirmationRequired'] == true
       require_valid!(safe_button_text?(reply['openingText'], 1000), 'Convite inválido; não inclua links antes da confirmação')
       require_valid!(safe_button_text?(reply['text'], 640), 'Mensagem inválida; o link será enviado apenas no botão')

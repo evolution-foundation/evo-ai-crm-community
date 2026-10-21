@@ -60,6 +60,10 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
         if audience == 'active' && !Instagram::AmhDelivery.where(proof_id: @proof.id, version_id: version['id'], state: 'accepted').where.not(confirmation_event_id: nil).exists?
           raise Instagram::AmhVisualEngine::Invalid, 'Conclua o teste real desta versão antes de ativar'
         end
+        if audience == 'active' && reply['publicReplyEnabled'] == true &&
+           !Instagram::AmhDelivery.where(proof_id: @proof.id, version_id: version['id'], state: 'accepted', public_reply_state: 'accepted').exists?
+          raise Instagram::AmhVisualEngine::Invalid, 'Conclua também o teste da resposta pública desta versão antes de ativar'
+        end
         if audience == 'test' && ENV.fetch('INSTAGRAM_AMH_TEST_IGSIDS', '').split(',').reject(&:blank?).empty?
           raise Instagram::AmhExecutor::Unavailable
         end
@@ -79,7 +83,8 @@ class Api::V1::InstagramAmhProofsController < Api::V1::BaseController
   end
 
   def index
-    success_response(data: Instagram::AmhVisualProof.order(updated_at: :desc).limit(100).select(:id, :name).as_json(only: %i[id name]))
+    response.headers['Cache-Control'] = 'no-store'
+    success_response(data: Instagram::AmhOperations.rules)
   end
 
   def operations
