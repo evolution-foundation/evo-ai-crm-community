@@ -552,6 +552,10 @@ on:
       - 'app/jobs/scheduled_actions_processor_job.rb'
       - 'app/services/scheduled_actions/notification_service.rb'
       - 'spec/services/scheduled_actions/executor_service_retry_spec.rb'
+      # CRM-829: the permission check must carry the auth's own token. Falling back to
+      # the CRM token gets a 401 from the auth, and every RBAC check then denies.
+      - 'app/services/evo_auth_service.rb'
+      - 'spec/services/evo_auth_service_spec.rb'
 
 permissions:
   contents: read
@@ -788,4 +792,5 @@ jobs:
             spec/services/scheduled_actions/executor_service_create_task_spec.rb \
             spec/services/scheduled_actions/executor_service_spec.rb \
             spec/services/scheduled_actions/executor_service_retry_spec.rb \
+            spec/services/evo_auth_service_spec.rb \
             --format progress
