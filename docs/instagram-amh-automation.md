@@ -165,3 +165,15 @@ user and entrypoint: the deployed likes base runs as root and owns `/app` and
 `/app/log`. Do not impose USER 1000 on that image. A Rails runner-only rehearsal
 misses Rails::Server creating `/app/tmp`; the rehearsal must also boot the actual
 web server and verify HTTP health in the restored isolated environment.
+
+## Invitation first name — 2026-10-22
+
+`reply.openingText` supports `{{primeiro_nome}}`. The executor uses the encrypted
+observed display name when present, otherwise attempts an authenticated Graph
+profile `name` read with a five-second timeout. A handle is never treated as a
+name. Only the first whitespace-separated name is retained, in lowercase with
+its initial capitalized, preserving accents. Missing/invalid names and profile
+errors produce `Oi!` in the standard greeting. No profile is fetched for legacy
+invitations without the token. Profile availability before the first private
+reply must be validated with a controlled real comment; mocked acceptance does
+not establish that Meta will expose the name. Existing versions remain immutable.

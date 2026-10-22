@@ -94,7 +94,8 @@ class Instagram::AmhExecutor
       return delivery
     end
     result = Instagram::AmhPrivateReply.prompt(channel: inbox.channel, comment_id: event.contract['event_id'],
-                                               text: opening, payload: Instagram::AmhConfirmationToken.issue(delivery))
+                                               text: Instagram::AmhInvitation.render(text: opening, contract: event.contract, inbox: inbox),
+                                               payload: Instagram::AmhConfirmationToken.issue(delivery))
     accepted = result.state == 'accepted'
     receipt = result.receipt && Instagram::AmhInboundEvent.encryptor.encrypt_and_sign(result.receipt)
     delivery.update!(state: accepted ? 'awaiting_confirmation' : "prompt_#{result.state}", prompt_state: result.state,
