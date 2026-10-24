@@ -137,8 +137,28 @@ RSpec.describe EvoAuthService do
   describe '#check_user_permission' do
     let(:check_endpoint) { "#{base_url}/api/v1/users/user-1/check_permission" }
 
-    before { ENV['EVOAI_CRM_API_TOKEN'] = 'svc-token' }
-    after  { ENV.delete('EVOAI_CRM_API_TOKEN') }
+    around do |example|
+      originals = %w[EVOAI_AUTH_API_TOKEN EVOAI_CRM_API_TOKEN].index_with { |key| ENV.fetch(key, nil) }
+      ENV['EVOAI_AUTH_API_TOKEN'] = 'svc-token'
+      example.run
+    ensure
+      originals.each { |key, value| ENV[key] = value }
+    end
+
+    it 'never sends the CRM token to the auth' do
+      ENV.delete('EVOAI_AUTH_API_TOKEN')
+      ENV['EVOAI_CRM_API_TOKEN'] = 'crm-token'
+      stub_request(:post, check_endpoint)
+        .to_return(
+          status: 200,
+          body: { data: { has_permission: true } }.to_json,
+          headers: { 'Content-Type' => 'application/json' }
+        )
+
+      service.check_user_permission('user-1', 'conversations.read')
+
+      expect(WebMock).to(have_requested(:post, check_endpoint).with { |req| !req.headers.key?('X-Service-Token') })
+    end
 
     it 'sends a payload without scope_id when none is provided (AC2)' do
       stub_request(:post, check_endpoint)
