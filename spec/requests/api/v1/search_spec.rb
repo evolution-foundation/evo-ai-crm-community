@@ -30,10 +30,12 @@ RSpec.describe 'Api::V1::Search inbox scoping', type: :request do
     ENV['EVOAI_CRM_API_TOKEN'] = original_service_token
   end
 
-  def conversation_in(inbox)
+  def conversation_in(inbox, with_message: true)
     contact = Contact.create!(name: 'Searchable Contact', email: "contact-#{SecureRandom.hex(4)}@example.com")
     contact_inbox = ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(8))
     conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox)
+    return conversation unless with_message
+
     Message.create!(conversation: conversation, inbox: inbox, message_type: :incoming, content: 'hi', sender: contact)
     conversation
   end
@@ -83,6 +85,27 @@ RSpec.describe 'Api::V1::Search inbox scoping', type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(returned_conversation_ids).to contain_exactly(visible_conversation.id)
+    end
+  end
+
+  describe 'a conversation without messages' do
+    let!(:empty_conversation) { conversation_in(visible_inbox, with_message: false) }
+    let(:service_headers) { { 'X-Service-Token' => service_token } }
+
+    it 'is listed by GET /api/v1/search/conversations' do
+      get '/api/v1/search/conversations', params: { q: 'Searchable' }, headers: service_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(returned_conversation_ids).to include(empty_conversation.id)
+      empty = response.parsed_body.dig('payload', 'conversations').find { |c| c['id'] == empty_conversation.id }
+      expect(empty['message']).to be_blank
+    end
+
+    it 'is listed by GET /api/v1/search' do
+      get '/api/v1/search', params: { q: 'Searchable' }, headers: service_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(returned_conversation_ids).to include(empty_conversation.id)
     end
   end
 end
