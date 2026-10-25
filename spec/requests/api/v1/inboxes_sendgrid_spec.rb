@@ -21,6 +21,16 @@ RSpec.describe 'SendGrid channel via /api/v1/inboxes', type: :request do
     }
   end
 
+  # The model refuses to register a relative callback URL, and the test env sets
+  # neither SENDGRID_WEBHOOK_URL nor FRONTEND_URL.
+  around do |example|
+    original_webhook_url = ENV.fetch('SENDGRID_WEBHOOK_URL', nil)
+    ENV['SENDGRID_WEBHOOK_URL'] = 'https://crm.test/webhooks/sendgrid'
+    example.run
+  ensure
+    ENV['SENDGRID_WEBHOOK_URL'] = original_webhook_url
+  end
+
   before do
     ENV['EVOAI_CRM_API_TOKEN'] = service_token
     stub_request(:get, scopes_url).to_return(status: 200, body: '{}')

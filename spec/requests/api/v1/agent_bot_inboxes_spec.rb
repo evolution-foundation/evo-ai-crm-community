@@ -111,6 +111,25 @@ RSpec.describe 'Api::V1 agent bot inboxes', type: :request do
 
       expect(response).to have_http_status(:forbidden)
     end
+
+    context 'when a service calls with X-Service-Token (no user)' do
+      around do |example|
+        original_token = ENV.fetch('EVOAI_CRM_API_TOKEN', nil)
+        ENV['EVOAI_CRM_API_TOKEN'] = 'spec-service-token'
+        example.run
+      ensure
+        ENV['EVOAI_CRM_API_TOKEN'] = original_token
+      end
+
+      before { Current.user = nil }
+
+      it 'lists every binding of the bot' do
+        get "/api/v1/agent_bots/#{bot.id}/inboxes", headers: { 'X-Service-Token' => 'spec-service-token' }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['data'].map { |row| row['inbox_id'] }).to contain_exactly(inbox.id, paused_inbox.id)
+      end
+    end
   end
 
   describe 'PATCH /api/v1/inboxes/:id/agent_bot_inbox' do
