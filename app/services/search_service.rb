@@ -17,7 +17,8 @@ class SearchService
   private
 
   def accessable_inbox_ids
-    @accessable_inbox_ids ||= @current_user.assigned_inboxes.pluck(:id)
+    # A service-token call carries no user and searches every inbox.
+    @accessable_inbox_ids ||= (@current_user&.assigned_inboxes || Inbox.all).pluck(:id)
   end
 
   def search_query

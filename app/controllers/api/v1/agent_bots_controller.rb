@@ -35,10 +35,11 @@ class Api::V1::AgentBotsController < Api::V1::BaseController
   end
 
   # The agent's Channels tab — active and inactive bindings alike,
-  # limited to the inboxes the caller can see.
+  # limited to the inboxes the caller can see (all of them for a service token).
   def inboxes
+    visible_inboxes = current_user&.assigned_inboxes || Inbox.all
     agent_bot_inboxes = @agent_bot.agent_bot_inboxes
-                                  .where(inbox_id: current_user.assigned_inboxes.select(:id))
+                                  .where(inbox_id: visible_inboxes.select(:id))
                                   .includes(inbox: [:channel, { avatar_attachment: [:blob] }])
                                   .order(:created_at)
 
