@@ -249,6 +249,11 @@ on:
       # user.
       - 'app/models/channel/sendgrid.rb'
       - 'spec/requests/api/v1/inboxes_sendgrid_spec.rb'
+      # Search scopes every result to the caller's inboxes, and a service-token call
+      # has no user to scope by. No other lane runs a search.
+      - 'app/controllers/api/v1/search_controller.rb'
+      - 'app/services/search_service.rb'
+      - 'spec/requests/api/v1/search_spec.rb'
       # An unlinked binding keeps its row, inactive, so every Facebook moderation path
       # that asks the inbox for its agent has to read the status, not the row.
       - 'app/controllers/api/v1/facebook_comment_moderations_controller.rb'
@@ -723,6 +728,7 @@ jobs:
             spec/controllers/api/v1/inboxes_controller_spec.rb \
             spec/serializers/inbox_serializer_channel_address_spec.rb \
             spec/requests/api/v1/inboxes_sendgrid_spec.rb \
+            spec/requests/api/v1/search_spec.rb \
             spec/requests/api/v1/facebook_comment_moderations_spec.rb \
             spec/models/facebook_comment_moderation_generate_ai_response_spec.rb \
             spec/requests/webhooks/meta_token_verify_spec.rb \
