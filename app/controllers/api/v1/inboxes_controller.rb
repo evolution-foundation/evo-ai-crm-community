@@ -41,8 +41,9 @@ module Api
         before_action :fetch_agent_bot, only: [:set_agent_bot]
 
         def index
-          @inboxes = current_user.assigned_inboxes.order_by_name
-                                 .includes(:channel, { agent_bot_inbox: :agent_bot }, { avatar_attachment: [:blob] })
+          # A service-token call carries no user and sees every inbox.
+          @inboxes = (current_user&.assigned_inboxes || Inbox.all).order_by_name
+                                                                  .includes(:channel, { agent_bot_inbox: :agent_bot }, { avatar_attachment: [:blob] })
 
           apply_pagination
 
