@@ -246,7 +246,7 @@ on:
       - 'spec/serializers/inbox_serializer_channel_address_spec.rb'
       # The SendGrid channel only reports its webhook active when the callback URL is
       # absolute, and its spec lists inboxes through a service token, which carries no
-      # user. Both broke in this spec while it sat outside every lane.
+      # user.
       - 'app/models/channel/sendgrid.rb'
       - 'spec/requests/api/v1/inboxes_sendgrid_spec.rb'
       # An unlinked binding keeps its row, inactive, so every Facebook moderation path
