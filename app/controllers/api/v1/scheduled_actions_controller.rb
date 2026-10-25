@@ -160,6 +160,9 @@ class Api::V1::ScheduledActionsController < Api::V1::BaseController
     # Filter by conversation
     actions = actions.for_conversation(params[:conversation_id]) if params[:conversation_id].present?
 
+    # Search by contact name
+    actions = search_by_contact_name(actions) if params[:search].present?
+
     # Filter by date range
     if params[:scheduled_from].present?
       actions = actions.where('scheduled_for >= ?', params[:scheduled_from])
@@ -177,6 +180,11 @@ class Api::V1::ScheduledActionsController < Api::V1::BaseController
               end
 
     actions
+  end
+
+  def search_by_contact_name(actions)
+    term = "%#{Contact.sanitize_sql_like(params[:search].to_s.strip)}%"
+    actions.where(contact_id: Contact.where('contacts.name ILIKE ?', term).select(:id))
   end
 
   def scheduled_action_params
