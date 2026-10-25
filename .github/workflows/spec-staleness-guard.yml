@@ -249,8 +249,8 @@ on:
       # user.
       - 'app/models/channel/sendgrid.rb'
       - 'spec/requests/api/v1/inboxes_sendgrid_spec.rb'
-      # Search scopes every result to the caller's inboxes, and a service-token call
-      # has no user to scope by. No other lane runs a search.
+      # Search scopes conversations and messages to the caller's inboxes, and a
+      # service-token call has no user to scope by. No other lane runs a search.
       - 'app/controllers/api/v1/search_controller.rb'
       - 'app/services/search_service.rb'
       - 'spec/requests/api/v1/search_spec.rb'
