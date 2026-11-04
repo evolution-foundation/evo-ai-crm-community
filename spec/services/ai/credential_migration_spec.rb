@@ -287,7 +287,7 @@ RSpec.describe Ai::CredentialMigration do
       expect(Ai::Credential.where.not(imported_from: nil)).to be_empty
     end
 
-    it 'keeps the install migrated after every imported credential is deleted (AC1)' do
+    it 'keeps the install migrated after every imported credential is deleted' do
       with_global_key('sk-global-1111')
       run(apply: true)
 

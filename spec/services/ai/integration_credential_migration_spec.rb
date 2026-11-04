@@ -310,7 +310,7 @@ RSpec.describe Ai::IntegrationCredentialMigration do
         Ai::IntegrationCredential.delete_all
       end
 
-      it 'keeps the install migrated after every imported credential is deleted (AC1)' do
+      it 'keeps the install migrated after every imported credential is deleted' do
         bot = create_bot(provider: 'evo_ai_provider', api_key: 'chave-do-bot-9c1d')
         Ai::IntegrationCredentialMigration.call(apply: true)
 
