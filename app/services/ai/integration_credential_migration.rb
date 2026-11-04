@@ -80,8 +80,8 @@ class Ai::IntegrationCredentialMigration
   # migration that created these tables: missing means "nothing to migrate".
   def build_plan
     scan(AgentBot) { |r| r == :relation ? AgentBot.all : [plan_for_bot(r)] } +
-      scan(Ai::CustomTool) { |r| r == :relation ? Ai::CustomTool.active : plan_for_headers(r, :custom_tool) } +
-      scan(Ai::CustomMcpServer) { |r| r == :relation ? Ai::CustomMcpServer.active : plan_for_headers(r, :custom_mcp_server) } +
+      scan(Ai::CustomTool) { |r| r == :relation ? Ai::CustomTool.all : plan_for_headers(r, :custom_tool) } +
+      scan(Ai::CustomMcpServer) { |r| r == :relation ? Ai::CustomMcpServer.all : plan_for_headers(r, :custom_mcp_server) } +
       scan(Ai::AgentIntegration) { |r| r == :relation ? Ai::AgentIntegration.all : [plan_for_integration(r)] }
   end
 
@@ -301,6 +301,9 @@ class Ai::IntegrationCredentialMigration
       plan.reject { |entry| entry[:skipped] }.each do |entry|
         entry[:bot] ? import_bot(entry) : import_record(entry)
       end
+      # Last, so a failed import never records itself; inside the transaction,
+      # so a failure recording it rolls the whole import back.
+      Ai::IntegrationMigrationState.record_migration! if Ai::IntegrationCredential.where.not(imported_from: nil).exists?
     end
   end
 

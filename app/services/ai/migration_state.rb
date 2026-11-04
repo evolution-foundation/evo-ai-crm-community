@@ -4,20 +4,40 @@
 # is what keeps the legacy fallback from being cut on an install that never
 # migrated — there, AI would go silently "not configured".
 #
-# Migrated means the task ran (a credential carries `imported_from`) OR there is
-# no key in any legacy source, the case for a fresh install.
+# Migrated means the task recorded it ran (the one signal a real delete cannot
+# undo), a credential still carries `imported_from` (installs migrated before the
+# record), or no legacy source holds a key (a fresh install).
 class Ai::MigrationState
+  MIGRATED_FLAG = 'AI_CREDENTIALS_MIGRATED'
+
   class << self
     # `legacy_hook` is the caller's own openai Hook: without it, a consumer
     # holding a hook the global lookup cannot see is judged "migrated" and loses
     # the very key it was about to use.
     def migrated?(legacy_hook: nil)
-      imported_credentials? || legacy_sources_empty?(legacy_hook: legacy_hook)
+      migration_recorded? || imported_credentials? || legacy_sources_empty?(legacy_hook: legacy_hook)
     end
 
     # The fallback stays alive exactly while the guard says we are not migrated.
     def legacy_fallback_active?(legacy_hook: nil)
       !migrated?(legacy_hook: legacy_hook)
+    end
+
+    def migration_recorded?
+      Ai::MigrationRecord.recorded?(MIGRATED_FLAG)
+    end
+
+    def record_migration!
+      Ai::MigrationRecord.record!(MIGRATED_FLAG)
+    end
+
+    # Backfill for installs migrated before the record: records what the imported
+    # rows still prove and imports nothing, so a credential deleted since stays gone.
+    def record_existing_migration!
+      return false unless imported_credentials?
+
+      record_migration!
+      true
     end
 
     def imported_credentials?

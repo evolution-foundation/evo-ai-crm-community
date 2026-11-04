@@ -195,6 +195,9 @@ class Ai::CredentialMigration
     ActiveRecord::Base.transaction do
       import_installation(plan)
       plan[:hooks].each { |entry| import_hook(plan, entry) }
+      # Last, so a failed import never records itself; inside the transaction,
+      # so a failure recording it rolls the whole import back.
+      Ai::MigrationState.record_migration! if Ai::Credential.where.not(imported_from: nil).exists?
     end
   end
 

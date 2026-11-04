@@ -19,7 +19,6 @@ module EvoCoreCustomMcpServersTable
       t.jsonb :credential_refs, null: false, default: {}
       t.integer :timeout, null: false, default: 0
       t.integer :retry_count, null: false, default: 0
-      t.boolean :is_active, default: true
       t.timestamps
     end
 

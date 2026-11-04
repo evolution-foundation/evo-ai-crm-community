@@ -41,7 +41,7 @@ RSpec.describe Ai::IntegrationCredentialMigration do
         name: name, method: 'POST', endpoint: 'https://exemplo.test/api',
         headers: headers.to_json, credential_refs: {},
         path_params: '{}', query_params: '{}', body_params: '{}',
-        error_handling: '{}', values: '{}', is_active: true,
+        error_handling: '{}', values: '{}',
         created_at: Time.current, updated_at: Time.current
       }]
     )
@@ -52,7 +52,7 @@ RSpec.describe Ai::IntegrationCredentialMigration do
     Ai::CustomMcpServer.insert_all!( # rubocop:disable Rails/SkipsModelValidations
       [{
         name: name, url: 'https://mcp.exemplo.test', headers: headers.to_json,
-        credential_refs: {}, timeout: 30, retry_count: 0, is_active: true,
+        credential_refs: {}, timeout: 30, retry_count: 0,
         created_at: Time.current, updated_at: Time.current
       }]
     )
