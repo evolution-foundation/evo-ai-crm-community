@@ -35,6 +35,19 @@ RSpec.describe Api::V1::EvoFlow::JourneysController, type: :controller do
       )
     end
 
+    # A browser that picks its tenant by cookie sends no header.
+    it 'forwards the tenant the request resolved when the caller sent no header' do
+      allow(EvoExtensionPoints::RuntimeContext).to receive(:current_scope_id)
+        .and_return('2c013165-3992-4e6f-ba0d-4b6cb768a5d6')
+      allow(fake_client).to receive(:request).and_return([200, {}])
+
+      get :proxy
+
+      expect(EvoFlow::Client).to have_received(:new).with(
+        extra_headers: { 'X-Evo-Tenant-Id' => '2c013165-3992-4e6f-ba0d-4b6cb768a5d6' }
+      )
+    end
+
     it 'sends no passthrough header when the caller sent none (single-tenant)' do
       allow(fake_client).to receive(:request).and_return([200, {}])
 

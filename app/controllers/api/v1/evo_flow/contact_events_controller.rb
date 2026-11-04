@@ -1,4 +1,6 @@
 class Api::V1::EvoFlow::ContactEventsController < Api::V1::BaseController
+  include EvoFlowTenantPassthrough
+
   # Single source of truth for outbound filters. The whitelist is derived from
   # SNAKE_TO_CAMEL.keys below so the two can never drift apart -- adding a key
   # here automatically adds it to params.permit and to the camelCase output.
@@ -48,7 +50,7 @@ class Api::V1::EvoFlow::ContactEventsController < Api::V1::BaseController
   private
 
   def client
-    @client ||= EvoFlow::Client.new
+    @client ||= EvoFlow::Client.new(extra_headers: evo_flow_passthrough_headers)
   end
 
   def translated_filters

@@ -125,6 +125,23 @@ RSpec.describe 'Api::V1::Inboxes inbox scoping', type: :request do
         ).not_to have_been_made
       end
     end
+
+    context 'when a service calls with X-Service-Token (no user)' do
+      around do |example|
+        original_token = ENV.fetch('EVOAI_CRM_API_TOKEN', nil)
+        ENV['EVOAI_CRM_API_TOKEN'] = 'spec-service-token'
+        example.run
+      ensure
+        ENV['EVOAI_CRM_API_TOKEN'] = original_token
+      end
+
+      it 'returns all inboxes' do
+        get '/api/v1/inboxes', headers: { 'X-Service-Token' => 'spec-service-token' }, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(returned_inbox_ids).to contain_exactly(inbox_a.id, inbox_b.id, inbox_c.id)
+      end
+    end
   end
 
   describe 'GET /api/v1/inboxes/:id (InboxPolicy#show? — T4.3)' do

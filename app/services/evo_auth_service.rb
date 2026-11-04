@@ -90,8 +90,10 @@ class EvoAuthService
   # user gets a SPURIOUS 403 on a permission they actually hold (works again after
   # re-login). The service token is stable AND sets Current.service_authenticated
   # in auth, which bypasses the per-caller `users.read` gate on check_permission.
+  # It is the auth's credential (EVOAI_AUTH_API_TOKEN), never EVOAI_CRM_API_TOKEN,
+  # which is the credential other services use to call the CRM.
   def service_auth_headers
-    token = ENV['EVOAI_CRM_API_TOKEN'].presence
+    token = ENV['EVOAI_AUTH_API_TOKEN'].presence
     token ? { 'X-Service-Token' => token } : {}
   end
 

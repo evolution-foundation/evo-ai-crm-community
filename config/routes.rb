@@ -268,6 +268,12 @@ Rails.application.routes.draw do
         # journey builder hits /api/v1/journeys*; without this it gets 404/405.
         match 'journeys(/*path)', to: 'journeys#proxy',
               via: %i[get post put patch delete], format: false
+
+        # Same passthrough for evo-flow's /campaigns*, so the campaigns screen
+        # reaches evo-flow through the CRM (auth, RBAC and the tenant) like
+        # journeys and segments do.
+        match 'campaigns(/*path)', to: 'campaigns#proxy',
+              via: %i[get post put patch delete], format: false
       end
 
       resources :csat_survey_responses, only: [:index], controller: 'csat_survey_responses' do

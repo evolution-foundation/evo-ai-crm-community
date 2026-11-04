@@ -258,6 +258,16 @@ on:
       - 'spec/requests/api/v1/agent_bot_inboxes_spec.rb'
       - 'spec/controllers/api/v1/inboxes_controller_spec.rb'
       - 'spec/serializers/inbox_serializer_channel_address_spec.rb'
+      # The SendGrid channel only reports its webhook active when the callback URL is
+      # absolute, and its spec lists inboxes through a service token, which carries no
+      # user.
+      - 'app/models/channel/sendgrid.rb'
+      - 'spec/requests/api/v1/inboxes_sendgrid_spec.rb'
+      # Search scopes conversations and messages to the caller's inboxes, and a
+      # service-token call has no user to scope by. No other lane runs a search.
+      - 'app/controllers/api/v1/search_controller.rb'
+      - 'app/services/search_service.rb'
+      - 'spec/requests/api/v1/search_spec.rb'
       # An unlinked binding keeps its row, inactive, so every Facebook moderation path
       # that asks the inbox for its agent has to read the status, not the row.
       - 'app/controllers/api/v1/facebook_comment_moderations_controller.rb'
@@ -441,6 +451,8 @@ on:
       - 'app/listeners/evo_flow/scheduled_action_events_listener.rb'
       - 'spec/models/scheduled_action_spec.rb'
       - 'spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb'
+      - 'app/controllers/api/v1/scheduled_actions_controller.rb'
+      - 'spec/requests/api/v1/scheduled_actions_spec.rb'
       # The advisory lock in ensure_display_id is what keeps two simultaneous
       # creations off the same display_id, and only a real-concurrency spec sees it.
       - 'spec/models/conversation_display_id_concurrency_spec.rb'
@@ -566,6 +578,10 @@ on:
       - 'app/jobs/scheduled_actions_processor_job.rb'
       - 'app/services/scheduled_actions/notification_service.rb'
       - 'spec/services/scheduled_actions/executor_service_retry_spec.rb'
+      # The permission check must carry the auth's own token. Falling back to the
+      # CRM token gets a 401 from the auth, and every RBAC check then denies.
+      - 'app/services/evo_auth_service.rb'
+      - 'spec/services/evo_auth_service_spec.rb'
 
 permissions:
   contents: read
@@ -650,6 +666,7 @@ jobs:
             spec/lib/events/evo_flow_event_names_spec.rb \
             spec/models/scheduled_action_spec.rb \
             spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb \
+            spec/requests/api/v1/scheduled_actions_spec.rb \
             spec/listeners/automation_rule_listener_contact_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_contact_card_spec.rb \
             spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb \
@@ -728,6 +745,8 @@ jobs:
             spec/requests/api/v1/agent_bot_inboxes_spec.rb \
             spec/controllers/api/v1/inboxes_controller_spec.rb \
             spec/serializers/inbox_serializer_channel_address_spec.rb \
+            spec/requests/api/v1/inboxes_sendgrid_spec.rb \
+            spec/requests/api/v1/search_spec.rb \
             spec/requests/api/v1/facebook_comment_moderations_spec.rb \
             spec/models/facebook_comment_moderation_generate_ai_response_spec.rb \
             spec/requests/webhooks/meta_token_verify_spec.rb \
@@ -806,4 +825,5 @@ jobs:
             spec/services/scheduled_actions/executor_service_create_task_spec.rb \
             spec/services/scheduled_actions/executor_service_spec.rb \
             spec/services/scheduled_actions/executor_service_retry_spec.rb \
+            spec/services/evo_auth_service_spec.rb \
             --format progress
