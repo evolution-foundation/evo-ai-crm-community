@@ -40,6 +40,11 @@ class Channel::Whatsapp < ApplicationRecord
   # unrelated snapshot so a QR/Hub event does not erase its evidence.
   CREDENTIAL_PROBE_KEYS = %w[credentials_verified_at credentials_probed_at].freeze
 
+  # provider_config keys holding a provider credential, across every provider.
+  PROVIDER_CREDENTIAL_KEYS = %w[api_key admin_token instance_token token client_token api_token
+                                webhook_verify_token].freeze
+  HUB_CREDENTIAL_KEYS = %w[channel_token].freeze
+
   before_validation :ensure_webhook_verify_token
   before_validation :merge_evolution_go_global_config, if: -> { provider == 'evolution_go' }
 
@@ -159,6 +164,29 @@ class Channel::Whatsapp < ApplicationRecord
 
     assign_attributes(provider_connection: snapshot)
     save!(validate: false)
+  end
+
+  def provider_config_without_credentials
+    config = provider_config
+    return config if config.blank?
+
+    redacted = config.except(*PROVIDER_CREDENTIAL_KEYS)
+    hub = redacted['evolution_hub']
+    redacted['evolution_hub'] = hub.except(*HUB_CREDENTIAL_KEYS) if hub.is_a?(Hash)
+    redacted
+  end
+
+  # A client that was sent the config without credentials sends it back the
+  # same way, so a credential key it leaves out keeps the stored value. A key it
+  # sends, even blank, replaces it.
+  def provider_config_keeping_credentials(incoming)
+    incoming = incoming.to_h.deep_stringify_keys
+    stored = provider_config.to_h
+    keep_missing_keys(incoming, stored, PROVIDER_CREDENTIAL_KEYS)
+    if incoming['evolution_hub'].is_a?(Hash) && stored['evolution_hub'].is_a?(Hash)
+      keep_missing_keys(incoming['evolution_hub'], stored['evolution_hub'], HUB_CREDENTIAL_KEYS)
+    end
+    incoming
   end
 
   def provider_connection_data
@@ -301,5 +329,9 @@ class Channel::Whatsapp < ApplicationRecord
 
   def hub_managed?
     provider_config.is_a?(Hash) && provider_config['evolution_hub'].is_a?(Hash)
+  end
+
+  def keep_missing_keys(incoming, stored, keys)
+    keys.each { |key| incoming[key] = stored[key] if stored.key?(key) && !incoming.key?(key) }
   end
 end

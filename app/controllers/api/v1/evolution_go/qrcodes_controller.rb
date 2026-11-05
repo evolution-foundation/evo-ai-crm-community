@@ -110,7 +110,7 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
 
     return unless whatsapp_channel
 
-    Rails.logger.info "Evolution Go API: Found channel with config: #{whatsapp_channel.provider_config.inspect}"
+    Rails.logger.info "Evolution Go API: Found channel with config keys: #{whatsapp_channel.provider_config.to_h.keys.inspect}"
 
     creds = evolution_go_credentials_for(whatsapp_channel)
     @inbox = whatsapp_channel.inbox

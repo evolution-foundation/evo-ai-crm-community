@@ -751,7 +751,15 @@ module Api
 
         def reauthorize_and_update_channel(channel_attributes)
           @inbox.channel.reauthorized! if @inbox.channel.respond_to?(:reauthorized!)
-          @inbox.channel.update!(permitted_params(channel_attributes)[:channel])
+          @inbox.channel.update!(channel_update_params(channel_attributes))
+        end
+
+        def channel_update_params(channel_attributes)
+          attrs = permitted_params(channel_attributes)[:channel]
+          return attrs unless @inbox.whatsapp? && attrs[:provider_config].present?
+          return attrs if attrs[:provider].present? && attrs[:provider] != @inbox.channel.provider
+
+          attrs.merge(provider_config: @inbox.channel.provider_config_keeping_credentials(attrs[:provider_config]))
         end
 
         def update_channel_feature_flags

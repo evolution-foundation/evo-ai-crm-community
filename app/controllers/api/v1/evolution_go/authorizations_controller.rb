@@ -263,7 +263,7 @@ class Api::V1::EvolutionGo::AuthorizationsController < Api::V1::BaseController
                                         .find { |ch| ch.provider_config['instance_uuid'] == @instance_uuid }
 
     if whatsapp_channel
-      Rails.logger.info "Evolution Go API: Found channel with config: #{whatsapp_channel.provider_config.inspect}"
+      Rails.logger.info "Evolution Go API: Found channel with config keys: #{whatsapp_channel.provider_config.to_h.keys.inspect}"
 
       # Extract configuration from the channel
       @inbox = whatsapp_channel.inbox

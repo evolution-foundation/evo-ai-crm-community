@@ -10,6 +10,14 @@
 module InboxSerializer
   extend self
 
+  # Channel columns, across every channel type, that hold a credential, a
+  # password or a provider payload with one (OAuth tokens, a QR code).
+  CHANNEL_SECRET_COLUMNS = %w[hmac_token api_key_encrypted auth_token api_key_sid bot_token
+                              imap_password smtp_password provider_config provider_connection
+                              access_token user_access_token page_access_token evolution_hub_meta
+                              line_channel_secret line_channel_token
+                              twitter_access_token twitter_access_token_secret].freeze
+
   # Serialize single Inbox with optimized field selection
   #
   # @param inbox [Inbox] Inbox to serialize
@@ -63,7 +71,7 @@ module InboxSerializer
 
       # WhatsApp-specific data required by channel settings screens
       if inbox.whatsapp?
-        result['provider_config'] = inbox.channel.try(:provider_config)
+        result['provider_config'] = whatsapp_provider_config(inbox.channel)
         result['provider_connection'] = inbox.channel.try(:provider_connection_data)
       end
 
@@ -107,14 +115,17 @@ module InboxSerializer
       end
 
       # Include full channel if requested
-      # 🔒 SECURITY: Exclude hmac_token and api_key_encrypted from channel serialization to prevent exposure
+      # 🔒 SECURITY: the channel's secret columns never go out here; hmac_token
+      # only for administrators, a WhatsApp provider_config by the editor rule.
       if include_channel
-        channel_except = [:created_at, :updated_at, :hmac_token]
-        channel_except << :api_key_encrypted if inbox.channel.respond_to?(:api_key_encrypted)
-        channel_data = inbox.channel.as_json(except: channel_except)
+        channel_data = inbox.channel.as_json(except: CHANNEL_SECRET_COLUMNS + %w[created_at updated_at])
         # Only include hmac_token if user is administrator
         if Current.user&.role == 'administrator' && inbox.channel.respond_to?(:hmac_token)
           channel_data['hmac_token'] = inbox.channel.hmac_token
+        end
+        if inbox.whatsapp?
+          channel_data['provider_config'] = whatsapp_provider_config(inbox.channel)
+          channel_data['provider_connection'] = inbox.channel.provider_connection_data
         end
         result['channel'] = channel_data
       end
@@ -165,5 +176,20 @@ module InboxSerializer
     return [] unless inboxes
 
     inboxes.map { |inbox| serialize(inbox, **options) }
+  end
+
+  private
+
+  # The provider credentials only go to whoever may edit the channel: the
+  # settings screen shows them and sends the provider_config back on save.
+  def whatsapp_provider_config(channel)
+    channel_credentials_visible? ? channel.provider_config : channel.provider_config_without_credentials
+  end
+
+  # A service token already passes every permission gate.
+  def channel_credentials_visible?
+    return true if Current.service_authenticated == true
+
+    Current.user.present? && Current.user.has_permission?('inboxes.update')
   end
 end
