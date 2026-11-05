@@ -245,7 +245,14 @@ RSpec.describe Ai::IntegrationCredentialMigration do
   # the row still holds it. Linking a new consumer to a rotated credential would
   # swap the secret on the wire with no DIVERGE anywhere — the exact silent
   # change the gate forbids.
+  # A bot gaining an inline key between runs only happens on an install that
+  # migrated before the record existed: the API no longer writes `api_key`, and
+  # with the record in place the bot would be skipped instead.
   describe 'dedupe against a humanly rotated credential' do
+    def forget_recorded_migration
+      InstallationConfig.where(name: Ai::IntegrationMigrationState::MIGRATED_FLAG).delete_all
+    end
+
     it 'aborts instead of linking a new consumer to a value that no longer matches' do
       create_bot(provider: 'evo_ai_provider', api_key: 'chave-compartilhada-9c1d')
       described_class.call(apply: true)
@@ -257,6 +264,7 @@ RSpec.describe Ai::IntegrationCredentialMigration do
 
       # A NEW consumer still carrying the OLD secret shows up on a later run.
       late_bot = create_bot(provider: 'evo_ai_provider', api_key: 'chave-compartilhada-9c1d')
+      forget_recorded_migration
 
       expect { described_class.call(apply: true) }
         .to raise_error(described_class::AbortedError, /alterada depois da importação/)
@@ -268,6 +276,7 @@ RSpec.describe Ai::IntegrationCredentialMigration do
       described_class.call(apply: true)
 
       late_bot = create_bot(provider: 'evo_ai_provider', api_key: 'chave-compartilhada-9c1d')
+      forget_recorded_migration
       described_class.call(apply: true)
 
       expect(imported_credentials.count).to eq(1)
@@ -338,6 +347,30 @@ RSpec.describe Ai::IntegrationCredentialMigration do
 
         Ai::IntegrationCredentialMigration.call(apply: true)
         expect(recorded?).to be(true)
+      end
+
+      it 'does not relink, on a rerun, a bot the user unlinked after the record' do
+        bot = create_bot(provider: 'evo_ai_provider', api_key: 'chave-do-bot-9c1d')
+        Ai::IntegrationCredentialMigration.call(apply: true)
+        unlink_and_delete_imported(bot)
+
+        rows = Ai::IntegrationCredentialMigration.call(apply: true)
+
+        expect(bot.reload.credential_id).to be_nil
+        expect(Ai::IntegrationCredential.count).to eq(0)
+        expect(AgentBots::CredentialResolution.api_key_for(bot)).to be_nil
+        expect(rows.find { |row| row.subject == "bot #{bot.id}" }).to be_skipped
+      end
+
+      it 'still relinks an unlinked bot on an install without the record' do
+        bot = create_bot(provider: 'evo_ai_provider', api_key: 'chave-do-bot-9c1d')
+        Ai::IntegrationCredentialMigration.call(apply: true)
+        InstallationConfig.where(name: flag).delete_all
+        unlink_and_delete_imported(bot)
+
+        Ai::IntegrationCredentialMigration.call(apply: true)
+
+        expect(bot.reload.credential_id).to eq(imported_credentials.first.id)
       end
 
       it 'is not recorded by a run that had nothing to import' do

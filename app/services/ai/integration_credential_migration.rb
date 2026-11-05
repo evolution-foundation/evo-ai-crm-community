@@ -182,6 +182,12 @@ class Ai::IntegrationCredentialMigration
     return skip(bot, 'provedor não usa credencial') if PROVIDERS_WITHOUT_CREDENTIAL.include?(bot.bot_provider)
     return skip(bot, 'sem chave inline') if bot.api_key.blank?
     return skip(bot, 'já aponta para o cofre') if bot.credential_id.present?
+    # Once recorded, the bot no longer reads its inline key, and `api_key` can no
+    # longer be written: a bot left without a vault reference was unlinked on
+    # purpose, and importing it would bring back the key its owner removed.
+    # Tools, MCP servers and integrations still send their inline secret, so
+    # importing them changes nothing on the wire.
+    return skip(bot, 'migração já registrada: chave inline fora de uso, não é religada') if migration_recorded?
 
     pair = AgentBots::CredentialResolution.inline_pair(bot.api_key)
 
@@ -196,6 +202,12 @@ class Ai::IntegrationCredentialMigration
 
   def skip(bot, reason)
     { bot: bot, skipped: true, reason: reason }
+  end
+
+  def migration_recorded?
+    return @migration_recorded if defined?(@migration_recorded)
+
+    @migration_recorded = Ai::IntegrationMigrationState.migration_recorded?
   end
 
   def composite_envelope(pair)
