@@ -33,8 +33,10 @@ class Api::V1::AssistantInsightsController < Api::V1::BaseController
 
   # GET /api/v1/assistant_insights/waiting_conversations?user_id=&hours=24
   #
-  # Open conversations still waiting for a reply after `hours`, in the inboxes the user can
-  # read. "Waiting" is the inbox's own notion (Conversation.unanswered, archived excluded).
+  # Open conversations still waiting for a reply after `hours` that are the user's to answer:
+  # assigned to them or to nobody, in the inboxes they can read. A colleague's conversation
+  # stays out, so a team sharing an inbox does not all get the same alert. "Waiting" is the
+  # inbox's own notion (Conversation.unanswered, archived excluded).
   def waiting_conversations
     hours = positive_integer_param(:hours, DEFAULT_WAITING_HOURS)
     count = can_read_conversations? ? waiting_conversations_scope(hours.hours.ago).count : 0
@@ -81,7 +83,9 @@ class Api::V1::AssistantInsightsController < Api::V1::BaseController
       @target_user.administrator? || @target_user.has_permission?('conversations.read_all')
 
     Conversations::PermissionFilterService.new(
-      Conversation.unanswered.joins(:contact).where('conversations.waiting_since < ?', cutoff),
+      Conversation.unanswered.joins(:contact)
+                  .where(assignee_id: [@target_user.id, nil])
+                  .where('conversations.waiting_since < ?', cutoff),
       @target_user
     ).perform
   end

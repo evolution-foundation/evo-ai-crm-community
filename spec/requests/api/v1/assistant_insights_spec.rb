@@ -102,12 +102,13 @@ RSpec.describe 'Api::V1::AssistantInsights', type: :request do
 
     before { InboxMember.create!(inbox: member_inbox, user: viewer) }
 
-    # Conversation creation reopens the status and stamps waiting_since, so both are set after.
-    def conversation_in(inbox, waiting_hours:, status: :open, **attrs)
+    # Creation callbacks reopen the status, stamp waiting_since and may assign, so those are set after.
+    def conversation_in(inbox, waiting_hours:, status: :open, assignee: nil, **attrs)
       contact = Contact.create!(name: "Cliente #{SecureRandom.hex(3)}")
       contact_inbox = ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(6))
       conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox, **attrs)
-      conversation.update_columns(status: Conversation.statuses[status], waiting_since: waiting_hours&.hours&.ago)
+      conversation.update_columns(status: Conversation.statuses[status], waiting_since: waiting_hours&.hours&.ago,
+                                  assignee_id: assignee&.id)
       conversation
     end
 
@@ -121,6 +122,14 @@ RSpec.describe 'Api::V1::AssistantInsights', type: :request do
       2.times { conversation_in(member_inbox, waiting_hours: 30) }
       conversation_in(member_inbox, waiting_hours: 2)
       conversation_in(other_inbox, waiting_hours: 30)
+
+      expect(waiting_for(viewer)).to eq(2)
+    end
+
+    it "counts the user's own and the unassigned ones, not a colleague's" do
+      conversation_in(member_inbox, waiting_hours: 30, assignee: viewer)
+      conversation_in(member_inbox, waiting_hours: 30)
+      conversation_in(member_inbox, waiting_hours: 30, assignee: owner)
 
       expect(waiting_for(viewer)).to eq(2)
     end
