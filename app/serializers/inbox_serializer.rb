@@ -10,6 +10,14 @@
 module InboxSerializer
   extend self
 
+  # Provider credentials a WhatsApp channel keeps in provider_config, for every
+  # provider. They only go to whoever may edit the channel: the settings screen
+  # shows them and sends the whole provider_config back on save, and the update
+  # replaces the column, so an editor missing them would wipe them.
+  WHATSAPP_CREDENTIAL_KEYS = %w[api_key admin_token instance_token token client_token api_token
+                                webhook_verify_token].freeze
+  WHATSAPP_HUB_CREDENTIAL_KEYS = %w[channel_token].freeze
+
   # Serialize single Inbox with optimized field selection
   #
   # @param inbox [Inbox] Inbox to serialize
@@ -63,7 +71,7 @@ module InboxSerializer
 
       # WhatsApp-specific data required by channel settings screens
       if inbox.whatsapp?
-        result['provider_config'] = inbox.channel.try(:provider_config)
+        result['provider_config'] = whatsapp_provider_config(inbox.channel)
         result['provider_connection'] = inbox.channel.try(:provider_connection_data)
       end
 
@@ -116,6 +124,7 @@ module InboxSerializer
         if Current.user&.role == 'administrator' && inbox.channel.respond_to?(:hmac_token)
           channel_data['hmac_token'] = inbox.channel.hmac_token
         end
+        channel_data['provider_config'] = whatsapp_provider_config(inbox.channel) if inbox.whatsapp?
         result['channel'] = channel_data
       end
     end
@@ -165,5 +174,24 @@ module InboxSerializer
     return [] unless inboxes
 
     inboxes.map { |inbox| serialize(inbox, **options) }
+  end
+
+  private
+
+  def whatsapp_provider_config(channel)
+    config = channel.try(:provider_config)
+    return config if config.blank? || channel_credentials_visible?
+
+    redacted = config.except(*WHATSAPP_CREDENTIAL_KEYS)
+    hub = redacted['evolution_hub']
+    redacted['evolution_hub'] = hub.except(*WHATSAPP_HUB_CREDENTIAL_KEYS) if hub.is_a?(Hash)
+    redacted
+  end
+
+  # A service token already passes every permission gate.
+  def channel_credentials_visible?
+    return true if Current.service_authenticated == true
+
+    Current.user.present? && Current.user.has_permission?('inboxes.update')
   end
 end
