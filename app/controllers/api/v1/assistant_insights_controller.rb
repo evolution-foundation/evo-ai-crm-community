@@ -2,10 +2,11 @@
 
 # Counts behind the assistant's proactive insights. A backend scheduler calls these with
 # the service token and names the user in `user_id`; the answer is what THAT user can see,
-# not the service token's see-everything scope, so one account's insight never reaches a
-# user who cannot open the funnel it talks about.
+# not the service token's see-everything scope, so an insight never reaches a user who
+# cannot open the funnel or the inbox it talks about.
 class Api::V1::AssistantInsightsController < Api::V1::BaseController
   DEFAULT_STALE_DAYS = 7
+  DEFAULT_WAITING_HOURS = 24
 
   before_action :require_service_token
   before_action :set_target_user
@@ -27,6 +28,20 @@ class Api::V1::AssistantInsightsController < Api::V1::BaseController
                          .sort_by { |row| row[:name].to_s }
       },
       message: 'Stale pipeline items counted successfully'
+    )
+  end
+
+  # GET /api/v1/assistant_insights/waiting_conversations?user_id=&hours=24
+  #
+  # Open conversations still waiting for a reply after `hours`, in the inboxes the user can
+  # read. "Waiting" is the inbox's own notion (Conversation.unanswered, archived excluded).
+  def waiting_conversations
+    hours = positive_integer_param(:hours, DEFAULT_WAITING_HOURS)
+    count = can_read_conversations? ? waiting_conversations_scope(hours.hours.ago).count : 0
+
+    success_response(
+      data: { hours: hours, waiting_count: count },
+      message: 'Waiting conversations counted successfully'
     )
   end
 
@@ -53,6 +68,22 @@ class Api::V1::AssistantInsightsController < Api::V1::BaseController
   # Same gate as PipelinePolicy#show?, evaluated for the target user.
   def can_read_pipelines?
     @target_user.administrator? || @target_user.has_permission?('pipelines.read')
+  end
+
+  def can_read_conversations?
+    @target_user.administrator? || @target_user.has_permission?('conversations.read')
+  end
+
+  # User#assigned_inboxes reads the read_all grant from Current, which a signed-in request
+  # resolves for its own caller; on this path it has to be the target user's.
+  def waiting_conversations_scope(cutoff)
+    Current.evo_can_read_all_inboxes =
+      @target_user.administrator? || @target_user.has_permission?('conversations.read_all')
+
+    Conversations::PermissionFilterService.new(
+      Conversation.unanswered.joins(:contact).where('conversations.waiting_since < ?', cutoff),
+      @target_user
+    ).perform
   end
 
   def stale_item_counts(cutoff)

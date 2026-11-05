@@ -603,6 +603,7 @@ Rails.application.routes.draw do
       post 'pipeline_tasks/for_conversation', to: 'pipeline_tasks#for_conversation'
 
       get 'assistant_insights/stale_pipeline_items', to: 'assistant_insights#stale_pipeline_items'
+      get 'assistant_insights/waiting_conversations', to: 'assistant_insights#waiting_conversations'
 
       resources :pipelines, controller: 'pipelines' do
         collection do

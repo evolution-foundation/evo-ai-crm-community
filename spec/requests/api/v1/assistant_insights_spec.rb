@@ -96,6 +96,71 @@ RSpec.describe 'Api::V1::AssistantInsights', type: :request do
     end
   end
 
+  describe 'GET /api/v1/assistant_insights/waiting_conversations' do
+    let(:member_inbox) { Inbox.create!(name: 'Suporte', channel: Channel::WebWidget.create!(website_url: 'https://a.example.com')) }
+    let(:other_inbox) { Inbox.create!(name: 'Vendas', channel: Channel::WebWidget.create!(website_url: 'https://b.example.com')) }
+
+    before { InboxMember.create!(inbox: member_inbox, user: viewer) }
+
+    # Conversation creation reopens the status and stamps waiting_since, so both are set after.
+    def conversation_in(inbox, waiting_hours:, status: :open, **attrs)
+      contact = Contact.create!(name: "Cliente #{SecureRandom.hex(3)}")
+      contact_inbox = ContactInbox.create!(inbox: inbox, contact: contact, source_id: SecureRandom.hex(6))
+      conversation = Conversation.create!(inbox: inbox, contact: contact, contact_inbox: contact_inbox, **attrs)
+      conversation.update_columns(status: Conversation.statuses[status], waiting_since: waiting_hours&.hours&.ago)
+      conversation
+    end
+
+    def waiting_for(user, **params)
+      get '/api/v1/assistant_insights/waiting_conversations',
+          params: { user_id: user.id, **params }, headers: headers
+      response.parsed_body.dig('data', 'waiting_count')
+    end
+
+    it 'counts open conversations waiting past the threshold in the inboxes the user is in' do
+      2.times { conversation_in(member_inbox, waiting_hours: 30) }
+      conversation_in(member_inbox, waiting_hours: 2)
+      conversation_in(other_inbox, waiting_hours: 30)
+
+      expect(waiting_for(viewer)).to eq(2)
+    end
+
+    it 'leaves out answered, resolved and archived conversations' do
+      conversation_in(member_inbox, waiting_hours: nil)
+      conversation_in(member_inbox, waiting_hours: 30, status: :resolved)
+      conversation_in(member_inbox, waiting_hours: 30, custom_attributes: { 'archived' => true })
+
+      expect(waiting_for(viewer)).to eq(0)
+    end
+
+    it 'honors a custom threshold' do
+      conversation_in(member_inbox, waiting_hours: 5)
+
+      expect(waiting_for(viewer, hours: 4)).to eq(1)
+    end
+
+    context 'when the user holds conversations.read_all' do
+      let(:granted) { %w[conversations.read conversations.read_all] }
+
+      it 'counts every inbox' do
+        conversation_in(member_inbox, waiting_hours: 30)
+        conversation_in(other_inbox, waiting_hours: 30)
+
+        expect(waiting_for(viewer)).to eq(2)
+      end
+    end
+
+    context 'when the user lacks conversations.read' do
+      let(:granted) { [] }
+
+      it 'counts nothing' do
+        conversation_in(member_inbox, waiting_hours: 30)
+
+        expect(waiting_for(viewer)).to eq(0)
+      end
+    end
+  end
+
   describe 'access' do
     it 'refuses a call without the service token' do
       get '/api/v1/assistant_insights/stale_pipeline_items', params: { user_id: owner.id }
