@@ -136,7 +136,7 @@ class Api::V1::Zapi::QrcodesController < Api::V1::BaseController
 
     return unless @whatsapp_channel
 
-    Rails.logger.info "Z-API: Found channel with config: #{@whatsapp_channel.provider_config.inspect}"
+    Rails.logger.info "Z-API: Found channel with config keys: #{@whatsapp_channel.provider_config.to_h.keys.inspect}"
 
     @inbox = @whatsapp_channel.inbox
     @api_url = 'https://api.z-api.io' # Z-API sempre usa a mesma URL base

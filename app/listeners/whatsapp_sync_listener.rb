@@ -49,7 +49,7 @@ class WhatsappSyncListener < BaseListener
                    end
 
     Rails.logger.info "[WHATSAPP_SYNC_LISTENER] Sync enabled check for #{channel.provider}: #{sync_enabled}"
-    Rails.logger.info "[WHATSAPP_SYNC_LISTENER] Provider config: #{provider_config.inspect}"
+    Rails.logger.info "[WHATSAPP_SYNC_LISTENER] Provider config keys: #{provider_config.to_h.keys.inspect}"
 
     sync_enabled
   end

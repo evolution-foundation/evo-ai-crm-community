@@ -232,7 +232,7 @@ class Whatsapp::Providers::ZapiService < Whatsapp::Providers::BaseService
     # Validate by checking required fields are present
     # Similar to Evolution Go, we don't make API calls during validation
     # The actual credentials will be validated when trying to use the channel
-    Rails.logger.info "Z-API: Starting validation. provider_config: #{whatsapp_channel.provider_config.inspect}"
+    Rails.logger.info "Z-API: Starting validation. provider_config keys: #{whatsapp_channel.provider_config.to_h.keys.inspect}"
     Rails.logger.info "Z-API: provider_config class: #{whatsapp_channel.provider_config.class}"
 
     # Handle both string keys and symbol keys
@@ -241,7 +241,7 @@ class Whatsapp::Providers::ZapiService < Whatsapp::Providers::BaseService
     token = provider_config['token'] || provider_config[:token]
     client_token = provider_config['client_token'] || provider_config[:client_token]
 
-    Rails.logger.info "Z-API: Extracted instance_id: #{instance_id.inspect}, token: #{token.inspect}, client_token: #{client_token.present? ? 'present' : 'blank'}"
+    Rails.logger.info "Z-API: Extracted instance_id: #{instance_id.inspect}, token: #{token.present? ? 'present' : 'blank'}, client_token: #{client_token.present? ? 'present' : 'blank'}"
 
     if instance_id.blank?
       Rails.logger.error "Z-API validation error: instance_id is blank. provider_config keys: #{provider_config.keys.inspect}"
