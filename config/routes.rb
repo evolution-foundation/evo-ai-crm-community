@@ -602,6 +602,8 @@ Rails.application.routes.draw do
 
       post 'pipeline_tasks/for_conversation', to: 'pipeline_tasks#for_conversation'
 
+      get 'assistant_insights/stale_pipeline_items', to: 'assistant_insights#stale_pipeline_items'
+
       resources :pipelines, controller: 'pipelines' do
         collection do
           get :stats
