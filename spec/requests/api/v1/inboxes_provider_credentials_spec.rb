@@ -123,5 +123,45 @@ RSpec.describe 'WhatsApp provider credentials in inbox payloads', type: :request
       expect(response).to have_http_status(:ok)
       expect(channel.reload.provider_config).to eq(stored_config.merge('mark_as_read' => false))
     end
+
+    # The screen may hold a payload rendered without credentials, e.g. when the
+    # inboxes.update lookup failed on that read or the grant came afterwards.
+    it 'keeps the stored credentials when the saved provider_config leaves them out' do
+      patch "/api/v1/inboxes/#{inbox.id}",
+            params: { channel: { provider_config: stored_config.except('admin_token').merge('mark_as_read' => false) } },
+            headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(channel.reload.provider_config).to eq(stored_config.merge('mark_as_read' => false))
+    end
+
+    it 'keeps the Hub channel token of a Hub-managed channel saved without it' do
+      hub = { 'channel_id' => 'hub-channel-1', 'channel_token' => 'secret-hub-token', 'status' => 'active' }
+      cloud = Channel::Whatsapp.new(phone_number: '+5511966665555', provider: 'whatsapp_cloud',
+                                    provider_config: { 'api_key' => 'secret-meta-token', 'webhook_verify_token' => 'secret-verify',
+                                                       'phone_number_id' => '1098', 'evolution_hub' => hub },
+                                    provider_connection: {})
+                               .tap { |c| c.save!(validate: false) }
+      cloud_inbox = Inbox.create!(channel: cloud, name: 'WhatsApp Cloud Hub')
+      InboxMember.create!(inbox: cloud_inbox, user: user)
+      stored = cloud.provider_config
+      stub_request(:any, /graph\.facebook\.com/).to_return(status: 200, body: '{}')
+
+      patch "/api/v1/inboxes/#{cloud_inbox.id}",
+            params: { channel: { provider_config: cloud.provider_config_without_credentials.merge('mark_as_read' => false) } },
+            headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(cloud.reload.provider_config).to eq(stored.merge('mark_as_read' => false))
+    end
+
+    it 'replaces a credential the save sends' do
+      patch "/api/v1/inboxes/#{inbox.id}",
+            params: { channel: { provider_config: stored_config.merge('admin_token' => 'secret-rotated-admin') } },
+            headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(channel.reload.provider_config['admin_token']).to eq('secret-rotated-admin')
+    end
   end
 end

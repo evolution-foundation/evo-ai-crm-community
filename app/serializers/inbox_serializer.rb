@@ -10,14 +10,6 @@
 module InboxSerializer
   extend self
 
-  # Provider credentials a WhatsApp channel keeps in provider_config, for every
-  # provider. They only go to whoever may edit the channel: the settings screen
-  # shows them and sends the whole provider_config back on save, and the update
-  # replaces the column, so an editor missing them would wipe them.
-  WHATSAPP_CREDENTIAL_KEYS = %w[api_key admin_token instance_token token client_token api_token
-                                webhook_verify_token].freeze
-  WHATSAPP_HUB_CREDENTIAL_KEYS = %w[channel_token].freeze
-
   # Serialize single Inbox with optimized field selection
   #
   # @param inbox [Inbox] Inbox to serialize
@@ -178,14 +170,10 @@ module InboxSerializer
 
   private
 
+  # The provider credentials only go to whoever may edit the channel: the
+  # settings screen shows them and sends the provider_config back on save.
   def whatsapp_provider_config(channel)
-    config = channel.try(:provider_config)
-    return config if config.blank? || channel_credentials_visible?
-
-    redacted = config.except(*WHATSAPP_CREDENTIAL_KEYS)
-    hub = redacted['evolution_hub']
-    redacted['evolution_hub'] = hub.except(*WHATSAPP_HUB_CREDENTIAL_KEYS) if hub.is_a?(Hash)
-    redacted
+    channel_credentials_visible? ? channel.provider_config : channel.provider_config_without_credentials
   end
 
   # A service token already passes every permission gate.
