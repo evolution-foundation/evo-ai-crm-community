@@ -34,12 +34,12 @@ class Api::V1::BulkActionsController < Api::V1::BaseController
 
   private
 
-  # An unknown contact action falls back to the strictest gate before it is refused.
+  # An unknown contact action is gated as an update, then refused with 422.
   def check_bulk_action_permission!
     permission_key = if params[:type] == 'Conversation'
                        'conversations.update'
                      else
-                       CONTACT_ACTION_PERMISSIONS.fetch(contact_action, 'contacts.delete')
+                       CONTACT_ACTION_PERMISSIONS.fetch(contact_action, 'contacts.update')
                      end
     check_permission!(permission_key, :user)
   end
@@ -48,8 +48,10 @@ class Api::V1::BulkActionsController < Api::V1::BaseController
     ['Conversation', 'Contact'].include?(params[:type])
   end
 
+  # Only an absent action means delete: a blank one is refused, never read as delete.
   def contact_action
-    params.dig(:fields, :action).presence || 'delete'
+    action = params.dig(:fields, :action)
+    action.nil? ? 'delete' : action.to_s
   end
 
   def contact_action_error
@@ -57,12 +59,19 @@ class Api::V1::BulkActionsController < Api::V1::BaseController
     when 'delete'
       nil
     when 'add_labels', 'remove_labels'
-      'fields.labels must list at least one label' if Array(params.dig(:fields, :labels)).compact_blank.empty?
+      'fields.labels must list at least one label' unless contact_labels_given?
     when 'update_custom_attributes'
       'fields.custom_attributes must be a non-empty object' if contact_custom_attributes.blank?
     else
       "Unknown contact action. Must be one of: #{CONTACT_ACTION_PERMISSIONS.keys.join(', ')}"
     end
+  end
+
+  # The permit below only keeps an array of scalars, so anything else would reach
+  # the job as no labels at all.
+  def contact_labels_given?
+    labels = params.dig(:fields, :labels)
+    labels.is_a?(Array) && labels.all?(String) && labels.compact_blank.any?
   end
 
   def contact_custom_attributes

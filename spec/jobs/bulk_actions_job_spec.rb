@@ -81,6 +81,14 @@ RSpec.describe BulkActionsJob do
       expect(other.reload.custom_attributes).to eq('plan' => 'silver', 'origin' => 'bulk')
     end
 
+    it 'resolves label ids to their titles, as the single-contact routes do' do
+      label = Label.create!(title: 'partner', color: '#123456')
+
+      run_contacts(action: 'add_labels', labels: [label.id])
+
+      expect(other.reload.label_list).to contain_exactly('partner')
+    end
+
     it 'still deletes when no action is given' do
       run_contacts({})
 

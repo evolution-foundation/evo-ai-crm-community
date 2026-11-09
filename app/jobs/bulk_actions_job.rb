@@ -26,7 +26,7 @@ class BulkActionsJob < ApplicationJob
 
   def bulk_contact_update
     fields = @params[:fields] || {}
-    action = fields[:action].presence || 'delete'
+    action = fields[:action].nil? ? 'delete' : fields[:action]
 
     if action == 'delete'
       bulk_delete_contacts
@@ -37,9 +37,12 @@ class BulkActionsJob < ApplicationJob
     failed_ids = []
 
     records.each do |contact|
-      apply_contact_action(contact, action, fields)
+      # Locked like the single-contact label routes: a concurrent write would
+      # otherwise be overwritten by the set read here.
+      contact.with_lock { apply_contact_action(contact, action, fields) }
       success_ids << contact.id
-    rescue StandardError
+    rescue StandardError => e
+      Rails.logger.warn("[BulkActionsJob] #{action} failed for contact #{contact.id}: #{e.class}: #{e.message}")
       failed_ids << contact.id
     end
 
@@ -49,9 +52,9 @@ class BulkActionsJob < ApplicationJob
   def apply_contact_action(contact, action, fields)
     case action
     when 'add_labels'
-      contact.add_labels(fields[:labels])
+      contact.add_labels(Labels::TokenResolver.titles_for(fields[:labels]))
     when 'remove_labels'
-      contact.remove_labels(fields[:labels])
+      contact.remove_labels(Labels::TokenResolver.titles_for(fields[:labels]))
     when 'update_custom_attributes'
       attributes = fields[:custom_attributes].to_h.stringify_keys
       contact.update!(custom_attributes: (contact.custom_attributes || {}).merge(attributes))

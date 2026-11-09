@@ -107,12 +107,31 @@ RSpec.describe 'Contact destructive operations RBAC', type: :request do
     end
 
     it 'refuses an unknown contact action instead of reporting success' do
-      grant_permissions('contacts.delete')
+      grant_permissions('contacts.update')
 
       post '/api/v1/bulk_actions', params: { type: 'Contact', ids: [contact.id], fields: { action: 'archive' } }, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(Contact.exists?(contact.id)).to be(true)
+    end
+
+    it 'refuses a blank action instead of deleting' do
+      grant_permissions('contacts.delete', 'contacts.update')
+
+      post '/api/v1/bulk_actions', params: { type: 'Contact', ids: [contact.id], fields: { action: '' } }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(Contact.exists?(contact.id)).to be(true)
+    end
+
+    it 'refuses labels that are not a list' do
+      grant_permissions('contacts.update')
+
+      post '/api/v1/bulk_actions',
+           params: { type: 'Contact', ids: [contact.id], fields: { action: 'add_labels', labels: 'vip' } }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(contact.reload.label_list).to be_empty
     end
 
     it 'refuses a bulk label change without labels' do
