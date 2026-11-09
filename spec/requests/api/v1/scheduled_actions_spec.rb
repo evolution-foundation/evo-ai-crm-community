@@ -126,6 +126,20 @@ RSpec.describe 'Scheduled actions', type: :request do
       expect(json_response['data']).to be_empty
     end
 
+    it 'refuses a card in a pipeline the creator cannot open' do
+      owner = User.create!(email: "owner-#{SecureRandom.hex(4)}@example.com", name: 'Owner')
+      private_pipeline = Pipeline.create!(name: 'Private', pipeline_type: 'sales', created_by: owner, visibility: :private)
+      private_card = PipelineItem.create!(pipeline: private_pipeline, contact: maria_silva,
+                                          pipeline_stage: private_pipeline.pipeline_stages.create!(name: 'New', position: 1))
+
+      action = ScheduledAction.new(deal_id: private_card.id, contact: maria_silva, action_type: 'execute_webhook',
+                                   scheduled_for: 1.hour.from_now, created_by: user.id,
+                                   payload: { 'webhook_url' => 'https://example.com/hook' })
+
+      expect(action).not_to be_valid
+      expect(action.errors[:deal_id]).to be_present
+    end
+
     it 'refuses a deal that does not exist or is not a uuid' do
       [lookalike_id, '3571'].each do |deal_id|
         # The request resets Current, and the service-token create reads its user.

@@ -463,6 +463,7 @@ on:
       # The scheduled-action outcome reaches evo-flow through a model callback and
       # a listener that no other lane runs; a drift drops the event or repeats it.
       - 'app/models/scheduled_action.rb'
+      - 'app/models/concerns/scheduled_action_deal_target.rb'
       - 'app/listeners/evo_flow/scheduled_action_events_listener.rb'
       - 'spec/models/scheduled_action_spec.rb'
       - 'spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb'

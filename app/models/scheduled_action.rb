@@ -46,11 +46,11 @@
 
 class ScheduledAction < ApplicationRecord
   include Wisper::Publisher
+  include ScheduledActionDealTarget
 
   # Associations
   belongs_to :contact, optional: true
   belongs_to :conversation, optional: true
-  belongs_to :deal, class_name: 'PipelineItem', optional: true
   belongs_to :creator, class_name: 'User', foreign_key: :created_by
   belongs_to :notifier, class_name: 'User', foreign_key: :notify_user_id, optional: true
   has_many :execution_logs, class_name: 'ScheduledActionExecutionLog', dependent: :destroy_async
@@ -97,7 +97,6 @@ class ScheduledAction < ApplicationRecord
 
   validate :scheduled_for_cannot_be_in_past, on: :create
   validate :at_least_one_target_present
-  validate :deal_must_exist
 
   # On the status transition, not in mark_as_failed!: an expiry can set
   # `failed` with a direct update.
@@ -241,15 +240,6 @@ class ScheduledAction < ApplicationRecord
     return unless scheduled_for.present? && scheduled_for < Time.current
 
     errors.add(:scheduled_for, 'cannot be in the past')
-  end
-
-  # The uuid column turns a malformed id into nil, so the raw value is what says
-  # a deal was asked for.
-  def deal_must_exist
-    return if deal_id_before_type_cast.blank? || (deal_id.present? && !will_save_change_to_deal_id?)
-    return if deal_id.present? && PipelineItem.exists?(id: deal_id)
-
-    errors.add(:deal_id, 'must be an existing pipeline item')
   end
 
   def at_least_one_target_present
