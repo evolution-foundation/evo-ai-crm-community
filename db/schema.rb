@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_14_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_10_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1144,7 +1144,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_14_120000) do
   end
 
   create_table "scheduled_actions", force: :cascade do |t|
-    t.bigint "deal_id"
+    t.uuid "deal_id"
     t.uuid "contact_id"
     t.uuid "conversation_id"
     t.string "action_type", limit: 50, null: false
