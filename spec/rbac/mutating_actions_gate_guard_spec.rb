@@ -37,7 +37,7 @@ RSpec.describe 'API v1 mutating actions permission guard' do
     'api/v1/oauth/authorization' => %w[create],
     'api/v1/dynamic_oauth' => %w[validate_dynamic_client],
     # Type-aware dynamic gate (check_bulk_action_permission!): Conversation ->
-    # conversations.update, Contact -> contacts.delete.
+    # conversations.update, Contact -> contacts.delete or contacts.update by action.
     'api/v1/bulk_actions' => %w[create],
     # Pundit-gated channel creation (authorize ::Inbox, :create?).
     'api/v1/channels/twilio_channels' => %w[create],
