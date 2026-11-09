@@ -3,10 +3,10 @@
 require 'rails_helper'
 
 # Destructive contact operations must be permission-gated: merging (which
-# destroys the mergee) and contact bulk actions (delete-only today) demand
-# contacts.delete; conversation bulk actions demand conversations.update;
-# notes and label tagging (set, add, remove) demand contacts.update, with
-# contacts.read for reads.
+# destroys the mergee) and contact bulk delete demand contacts.delete; contact
+# bulk label and attribute changes demand contacts.update; conversation bulk
+# actions demand conversations.update; notes and label tagging (set, add,
+# remove) demand contacts.update, with contacts.read for reads.
 RSpec.describe 'Contact destructive operations RBAC', type: :request do
   let(:user) { User.create!(name: 'Perm Probe', email: "probe-#{SecureRandom.hex(4)}@example.com") }
   let(:contact) { Contact.create!(name: "Contact #{SecureRandom.hex(3)}") }
@@ -72,6 +72,56 @@ RSpec.describe 'Contact destructive operations RBAC', type: :request do
 
       expect(response).to have_http_status(:created)
       expect(Contact.exists?(contact.id)).to be(false)
+    end
+
+    it 'adds labels in bulk with contacts.update alone' do
+      grant_permissions('contacts.update')
+
+      post '/api/v1/bulk_actions',
+           params: { type: 'Contact', ids: [contact.id], fields: { action: 'add_labels', labels: ['vip'] } }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(contact.reload.label_list).to contain_exactly('vip')
+    end
+
+    it 'denies a bulk label change without contacts.update' do
+      grant_permissions('contacts.read', 'contacts.delete')
+
+      post '/api/v1/bulk_actions',
+           params: { type: 'Contact', ids: [contact.id], fields: { action: 'add_labels', labels: ['vip'] } }, as: :json
+
+      expect(response).to have_http_status(:forbidden)
+      expect(contact.reload.label_list).to be_empty
+    end
+
+    it 'updates custom attributes in bulk with contacts.update' do
+      grant_permissions('contacts.update')
+
+      post '/api/v1/bulk_actions',
+           params: { type: 'Contact', ids: [contact.id],
+                     fields: { action: 'update_custom_attributes', custom_attributes: { plan: 'gold' } } },
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(contact.reload.custom_attributes).to eq('plan' => 'gold')
+    end
+
+    it 'refuses an unknown contact action instead of reporting success' do
+      grant_permissions('contacts.delete')
+
+      post '/api/v1/bulk_actions', params: { type: 'Contact', ids: [contact.id], fields: { action: 'archive' } }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(Contact.exists?(contact.id)).to be(true)
+    end
+
+    it 'refuses a bulk label change without labels' do
+      grant_permissions('contacts.update')
+
+      post '/api/v1/bulk_actions',
+           params: { type: 'Contact', ids: [contact.id], fields: { action: 'remove_labels', labels: [] } }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
     end
 
     it 'denies a Conversation bulk action without conversations.update' do
