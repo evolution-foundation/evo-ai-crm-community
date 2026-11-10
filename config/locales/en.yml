@@ -340,6 +340,7 @@ en:
       other: '%{count} seconds'
   automation:
     system_name: 'Automation System'
+    clone_name: '%{name} (copy)'
   widget:
     pre_chat_form:
       field_required: '%{field} is required'

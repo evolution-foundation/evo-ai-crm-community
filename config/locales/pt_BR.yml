@@ -362,6 +362,7 @@ pt_BR:
       other: '%{count} segundos'
   automation:
     system_name: 'Sistema de Automação'
+    clone_name: '%{name} (cópia)'
   widget:
     pre_chat_form:
       field_required: '%{field} é obrigatório'
