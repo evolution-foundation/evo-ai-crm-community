@@ -102,6 +102,9 @@ class Api::V1::AutomationRulesController < Api::V1::BaseController
 
   def clone
     new_rule = @automation_rule.dup
+    # An active copy would fire alongside the original on the same event.
+    new_rule.active = false
+    new_rule.name = I18n.t('automation.clone_name', name: @automation_rule.name)
     new_rule.save!
     @automation_rule = new_rule
 

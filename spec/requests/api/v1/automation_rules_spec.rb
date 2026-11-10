@@ -168,6 +168,44 @@ RSpec.describe 'Api::V1::AutomationRules', type: :request do
     end
   end
 
+  describe 'POST /api/v1/automation_rules/:id/clone' do
+    let!(:rule) do
+      AutomationRule.create!(
+        name: 'Etiquetar contato novo', event_name: 'contact_created', active: true, mode: 'simple',
+        conditions: [{ 'attribute_key' => 'name', 'filter_operator' => 'contains',
+                       'query_operator' => '', 'values' => ['Lead'] }],
+        actions: [{ 'action_name' => 'add_label', 'action_params' => [label.id] }]
+      )
+    end
+
+    around do |example|
+      previous = ENV.fetch('DEFAULT_LOCALE', nil)
+      ENV['DEFAULT_LOCALE'] = 'pt_BR'
+      example.run
+    ensure
+      ENV['DEFAULT_LOCALE'] = previous
+    end
+
+    it 'creates an inactive copy with a copy name, so it does not fire alongside the original' do
+      post "/api/v1/automation_rules/#{rule.id}/clone", headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(persisted_rule.id).not_to eq(rule.id)
+      expect(persisted_rule.name).to eq('Etiquetar contato novo (cópia)')
+      expect(persisted_rule.active).to be(false)
+      expect(json_response.dig('data', 'active')).to be(false)
+    end
+
+    it 'copies the trigger, conditions and actions and leaves the original as it was' do
+      post "/api/v1/automation_rules/#{rule.id}/clone", headers: headers, as: :json
+
+      expect(persisted_rule.event_name).to eq('contact_created')
+      expect(persisted_rule.conditions).to eq(rule.conditions)
+      expect(persisted_rule.actions).to eq(rule.actions)
+      expect(rule.reload).to have_attributes(name: 'Etiquetar contato novo', active: true)
+    end
+  end
+
   describe 'an API-created attribute_changed rule fires' do
     let(:channel) { Channel::WebWidget.create!(website_url: 'https://test.example.com') }
     let(:inbox) { Inbox.create!(name: 'Test Inbox', channel: channel) }
