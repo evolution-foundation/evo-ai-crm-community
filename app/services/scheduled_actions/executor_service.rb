@@ -336,7 +336,7 @@ module ScheduledActions
 
     # The card named in the payload, else the card the action was scheduled on.
     def requested_card_id
-      scheduled_action.payload['pipeline_item_id'].presence || scheduled_action.deal_id
+      scheduled_action.payload['pipeline_item_id'].presence || scheduled_action.pipeline_item_id
     end
 
     def missing_task_card_error

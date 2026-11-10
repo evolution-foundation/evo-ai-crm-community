@@ -11,7 +11,7 @@ RSpec.describe 'Scheduled actions', type: :request do
   let(:ana_maria) { Contact.create!(name: 'Ana Maria Souza', email: "ana-#{SecureRandom.hex(4)}@example.com") }
   let(:joao) { Contact.create!(name: 'João Pereira', email: "joao-#{SecureRandom.hex(4)}@example.com") }
   let(:percent) { Contact.create!(name: 'Desconto 100%', email: "pct-#{SecureRandom.hex(4)}@example.com") }
-  let(:pipeline) { Pipeline.create!(name: "Deals #{SecureRandom.hex(3)}", pipeline_type: 'sales', created_by: user) }
+  let(:pipeline) { Pipeline.create!(name: "Cards #{SecureRandom.hex(3)}", pipeline_type: 'sales', created_by: user) }
   let(:stage) { pipeline.pipeline_stages.create!(name: 'New', position: 1) }
 
   before do
@@ -24,7 +24,7 @@ RSpec.describe 'Scheduled actions', type: :request do
     Current.reset
   end
 
-  def create_deal(contact = Contact.create!(name: "Deal #{SecureRandom.hex(3)}"))
+  def create_card(contact = Contact.create!(name: "Card #{SecureRandom.hex(3)}"))
     PipelineItem.create!(pipeline: pipeline, pipeline_stage: stage, contact: contact)
   end
 
@@ -44,7 +44,7 @@ RSpec.describe 'Scheduled actions', type: :request do
     let!(:ana_action) { create_action(contact: ana_maria) }
     let!(:joao_action) { create_action(contact: joao) }
     let!(:percent_action) { create_action(contact: percent) }
-    let!(:action_without_contact) { create_action(deal_id: create_deal.id) }
+    let!(:action_without_contact) { create_action(deal_id: 42) }
 
     it 'lists only the actions whose contact name matches the search, case-insensitively' do
       get '/api/v1/scheduled_actions', params: { search: 'maria' }, headers: headers
@@ -88,42 +88,53 @@ RSpec.describe 'Scheduled actions', type: :request do
     end
   end
 
-  describe 'deal-scoped actions' do
-    let(:deal) { create_deal(maria_silva) }
-    # Same leading digits as the deal: the old bigint column read both as one number.
-    let(:lookalike_id) { "#{deal.id[0, 8]}-0000-4000-8000-000000000000" }
+  describe 'card-scoped actions' do
+    let(:card) { create_card(maria_silva) }
+    # Same leading characters as the card: the legacy bigint column reads both as one number.
+    let(:lookalike_id) { "#{card.id[0, 8]}-0000-4000-8000-000000000000" }
 
-    it 'keeps the whole uuid of the deal the action was created for' do
+    def post_action(**target)
+      Current.user = user
       post '/api/v1/scheduled_actions',
-           params: { scheduled_action: { deal_id: deal.id, contact_id: maria_silva.id, action_type: 'execute_webhook',
+           params: { scheduled_action: { contact_id: maria_silva.id, action_type: 'execute_webhook',
                                          scheduled_for: 1.hour.from_now.iso8601,
-                                         payload: { webhook_url: 'https://example.com/hook' } } },
+                                         payload: { webhook_url: 'https://example.com/hook' }, **target } },
            headers: headers, as: :json
-
-      expect(response).to have_http_status(:created)
-      expect(json_response['data']['deal_id']).to eq(deal.id)
-      expect(ScheduledAction.last.deal_id).to eq(deal.id)
     end
 
-    it 'lists by deal only the actions of that deal' do
-      own = create_action(deal_id: deal.id)
-      create_action(deal_id: create_deal.id)
+    it 'keeps the whole uuid of the card in pipeline_item_id' do
+      post_action(pipeline_item_id: card.id)
 
-      get "/api/v1/scheduled_actions/by_deal/#{deal.id}", headers: headers
+      expect(response).to have_http_status(:created)
+      expect(json_response['data']['pipeline_item_id']).to eq(card.id)
+    end
 
+    it 'still accepts and lists the legacy numeric deal_id' do
+      post_action(deal_id: 42)
+      expect(response).to have_http_status(:created)
+
+      get '/api/v1/scheduled_actions/by_deal/42', headers: headers
+
+      expect(json_response['data'].pluck('deal_id')).to eq([42])
+    end
+
+    it 'lists by the card uuid the actions linked to that card, not to a lookalike' do
+      own = create_action(pipeline_item_id: card.id)
+      create_action(pipeline_item_id: create_card.id)
+
+      get "/api/v1/scheduled_actions/by_deal/#{card.id}", headers: headers
       expect(json_response['data'].pluck('id')).to eq([own.id])
 
       get "/api/v1/scheduled_actions/by_deal/#{lookalike_id}", headers: headers
-
       expect(json_response['data']).to be_empty
     end
 
-    it 'lists nothing for a malformed deal id instead of every action without a deal' do
-      create_action(contact: maria_silva)
+    it 'refuses a card that does not exist or is not a uuid' do
+      [lookalike_id, '3571'].each do |pipeline_item_id|
+        post_action(pipeline_item_id: pipeline_item_id)
 
-      get '/api/v1/scheduled_actions/by_deal/3571', headers: headers
-
-      expect(json_response['data']).to be_empty
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
     end
 
     it 'refuses a card in a pipeline the creator cannot open' do
@@ -132,27 +143,12 @@ RSpec.describe 'Scheduled actions', type: :request do
       private_card = PipelineItem.create!(pipeline: private_pipeline, contact: maria_silva,
                                           pipeline_stage: private_pipeline.pipeline_stages.create!(name: 'New', position: 1))
 
-      action = ScheduledAction.new(deal_id: private_card.id, contact: maria_silva, action_type: 'execute_webhook',
+      action = ScheduledAction.new(pipeline_item_id: private_card.id, contact: maria_silva, action_type: 'execute_webhook',
                                    scheduled_for: 1.hour.from_now, created_by: user.id,
                                    payload: { 'webhook_url' => 'https://example.com/hook' })
 
       expect(action).not_to be_valid
-      expect(action.errors[:deal_id]).to be_present
-    end
-
-    it 'refuses a deal that does not exist or is not a uuid' do
-      [lookalike_id, '3571'].each do |deal_id|
-        # The request resets Current, and the service-token create reads its user.
-        Current.user = user
-        post '/api/v1/scheduled_actions',
-             params: { scheduled_action: { deal_id: deal_id, contact_id: maria_silva.id, action_type: 'execute_webhook',
-                                           scheduled_for: 1.hour.from_now.iso8601,
-                                           payload: { webhook_url: 'https://example.com/hook' } } },
-             headers: headers, as: :json
-
-        expect(response).to have_http_status(:unprocessable_entity)
-      end
-      expect(ScheduledAction.where(contact: maria_silva)).to be_empty
+      expect(action.errors[:pipeline_item_id]).to be_present
     end
   end
 end

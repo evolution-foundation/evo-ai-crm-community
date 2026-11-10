@@ -47,19 +47,19 @@ RSpec.describe ScheduledAction, '#create_next_occurrence' do
                            contact: contact)
     end
 
-    before { action.update!(deal_id: card.id) }
+    before { action.update!(pipeline_item_id: card.id, deal_id: 42) }
 
-    it 'keeps the next run on the card' do
+    it 'keeps the next run on the card and the legacy deal_id as it was' do
       action.mark_as_completed!
 
-      expect(action.create_next_occurrence.deal_id).to eq(card.id)
+      expect(action.create_next_occurrence).to have_attributes(pipeline_item_id: card.id, deal_id: 42)
     end
 
     it 'still books the next run on the contact once the card is gone' do
       action.mark_as_completed!
       card.destroy!
 
-      expect(action.reload.create_next_occurrence).to have_attributes(deal_id: nil, contact_id: contact.id)
+      expect(action.reload.create_next_occurrence).to have_attributes(pipeline_item_id: nil, contact_id: contact.id)
     end
   end
 end

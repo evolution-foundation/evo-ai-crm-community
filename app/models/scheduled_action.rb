@@ -21,8 +21,9 @@
 #  updated_at           :datetime         not null
 #  contact_id           :uuid
 #  conversation_id      :uuid
-#  deal_id              :uuid
+#  deal_id              :bigint
 #  notify_user_id       :uuid
+#  pipeline_item_id     :uuid
 #  template_id          :bigint
 #
 # Indexes
@@ -34,6 +35,7 @@
 #  index_scheduled_actions_on_contact_id       (contact_id)
 #  index_scheduled_actions_on_conversation_id  (conversation_id)
 #  index_scheduled_actions_on_deal_id          (deal_id)
+#  index_scheduled_actions_on_pipeline_item_id  (pipeline_item_id)
 #  index_scheduled_actions_on_notify_user_id   (notify_user_id)
 #  index_scheduled_actions_on_scheduled_for    (scheduled_for)
 #  index_scheduled_actions_on_status           (status)
@@ -46,7 +48,7 @@
 
 class ScheduledAction < ApplicationRecord
   include Wisper::Publisher
-  include ScheduledActionDealTarget
+  include ScheduledActionPipelineItemTarget
 
   # Associations
   belongs_to :contact, optional: true
@@ -103,7 +105,8 @@ class ScheduledAction < ApplicationRecord
   after_update_commit :publish_outcome, if: :outcome_reached?
 
   # Scopes
-  scope :for_deal, ->(deal_id) { where(deal_id: deal_id) }
+  # A card uuid matches pipeline_item_id and, as before, the legacy deal_id.
+  scope :for_deal, ->(deal_id) { where(deal_id: deal_id).or(where(pipeline_item_id: deal_id)) }
   scope :for_contact, ->(contact_id) { where(contact_id: contact_id) }
   scope :for_conversation, ->(conversation_id) { where(conversation_id: conversation_id) }
   scope :by_action_type, ->(type) { where(action_type: type) }
@@ -189,7 +192,8 @@ class ScheduledAction < ApplicationRecord
     return if next_scheduled_time.nil?
 
     ScheduledAction.create!(
-      deal_id: deal&.id,
+      deal_id: deal_id,
+      pipeline_item_id: pipeline_item&.id,
       contact_id: contact_id,
       conversation_id: conversation_id,
       action_type: action_type,
@@ -243,7 +247,7 @@ class ScheduledAction < ApplicationRecord
   end
 
   def at_least_one_target_present
-    return if deal_id.present? || contact_id.present? || conversation_id.present?
+    return if deal_id.present? || pipeline_item_id.present? || contact_id.present? || conversation_id.present?
 
     errors.add(:base, 'must have at least one target (deal, contact, or conversation)')
   end

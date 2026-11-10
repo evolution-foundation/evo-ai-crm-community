@@ -1144,7 +1144,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_120000) do
   end
 
   create_table "scheduled_actions", force: :cascade do |t|
-    t.uuid "deal_id"
+    t.bigint "deal_id"
     t.uuid "contact_id"
     t.uuid "conversation_id"
     t.string "action_type", limit: 50, null: false
@@ -1163,6 +1163,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_120000) do
     t.datetime "updated_at", null: false
     t.uuid "notify_user_id"
     t.datetime "notification_sent_at"
+    t.uuid "pipeline_item_id"
     t.index ["action_type"], name: "index_scheduled_actions_on_action_type"
     t.index ["contact_id", "status"], name: "idx_scheduled_actions_contact_status"
     t.index ["contact_id"], name: "index_scheduled_actions_on_contact_id"
@@ -1170,6 +1171,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_120000) do
     t.index ["deal_id", "status"], name: "idx_scheduled_actions_deal_status"
     t.index ["deal_id"], name: "index_scheduled_actions_on_deal_id"
     t.index ["notify_user_id"], name: "index_scheduled_actions_on_notify_user_id"
+    t.index ["pipeline_item_id"], name: "index_scheduled_actions_on_pipeline_item_id"
     t.index ["scheduled_for"], name: "index_scheduled_actions_on_scheduled_for"
     t.index ["status", "scheduled_for"], name: "idx_scheduled_actions_status_time"
     t.index ["status"], name: "index_scheduled_actions_on_status"
