@@ -137,6 +137,17 @@ RSpec.describe ScheduledActions::ExecutorService, '#create_task' do
     expect(named.tasks.count).to eq(1)
   end
 
+  it 'uses the card the action was scheduled on when the payload names none' do
+    card = contact_card
+    card.update_column(:updated_at, 2.days.ago)
+    contact_card(Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user))
+    scheduled_action.update!(pipeline_item_id: card.id)
+
+    run_task_action
+
+    expect(card.tasks.count).to eq(1)
+  end
+
   it 'fails instead of falling back when the named card is closed' do
     named = contact_card
     contact_card(Pipeline.create!(name: 'Support', pipeline_type: 'sales', created_by: user))

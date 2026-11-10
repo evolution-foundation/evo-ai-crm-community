@@ -83,6 +83,7 @@ class PipelineItem < ApplicationRecord
 
   scope :in_stage, ->(stage) { where(pipeline_stage: stage) }
   scope :active, -> { where(completed_at: nil) }
+  scope :visible_to, ->(user) { where(pipeline_id: Pipeline.accessible_by(user).select(:id)) }
   scope :completed, -> { where.not(completed_at: nil) }
 
   def move_to_stage(new_stage, _moved_by = nil)

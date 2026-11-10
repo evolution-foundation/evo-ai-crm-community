@@ -323,7 +323,7 @@ module ScheduledActions
       contact_items = open_items.where(contact_id: contact.id)
                                 .or(open_items.where(conversation_id: contact.conversations.select(:id)))
 
-      requested_id = scheduled_action.payload['pipeline_item_id']
+      requested_id = requested_card_id
       return contact_items.find_by(id: requested_id) if requested_id.present?
 
       if scheduled_action.conversation_id.present?
@@ -334,8 +334,13 @@ module ScheduledActions
       contact_items.first
     end
 
+    # The card named in the payload, else the card the action was scheduled on.
+    def requested_card_id
+      scheduled_action.payload['pipeline_item_id'].presence || scheduled_action.pipeline_item_id
+    end
+
     def missing_task_card_error
-      if scheduled_action.payload['pipeline_item_id'].present?
+      if requested_card_id.present?
         'Pipeline item of the action is closed or not accessible to its creator'
       else
         'Contact has no open pipeline item to attach the task to'

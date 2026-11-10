@@ -39,4 +39,27 @@ RSpec.describe ScheduledAction, '#create_next_occurrence' do
 
     expect(action.create_next_occurrence.scheduled_for).to eq(action.scheduled_for + 3.days)
   end
+
+  context 'when the action was scheduled on a pipeline card' do
+    let(:pipeline) { Pipeline.create!(name: 'Sales', pipeline_type: 'sales', created_by: user) }
+    let(:card) do
+      PipelineItem.create!(pipeline: pipeline, pipeline_stage: pipeline.pipeline_stages.create!(name: 'New', position: 1),
+                           contact: contact)
+    end
+
+    before { action.update!(pipeline_item_id: card.id, deal_id: 42) }
+
+    it 'keeps the next run on the card and the legacy deal_id as it was' do
+      action.mark_as_completed!
+
+      expect(action.create_next_occurrence).to have_attributes(pipeline_item_id: card.id, deal_id: 42)
+    end
+
+    it 'still books the next run on the contact once the card is gone' do
+      action.mark_as_completed!
+      card.destroy!
+
+      expect(action.reload.create_next_occurrence).to have_attributes(pipeline_item_id: nil, contact_id: contact.id)
+    end
+  end
 end
