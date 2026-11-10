@@ -249,7 +249,7 @@ class ScheduledAction < ApplicationRecord
   def at_least_one_target_present
     return if deal_id.present? || pipeline_item_id.present? || contact_id.present? || conversation_id.present?
 
-    errors.add(:base, 'must have at least one target (deal, contact, or conversation)')
+    errors.add(:base, 'must have at least one target (pipeline item, deal, contact, or conversation)')
   end
 
   # A late run skips the slots it missed: create! rejects a time in the past.

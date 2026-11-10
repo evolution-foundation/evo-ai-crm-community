@@ -1,8 +1,5 @@
-# The pipeline card a scheduled action targets, by its uuid in
-# `pipeline_item_id`. The legacy `deal_id` column (bigint) keeps working as it
-# did and is not checked here. The card must sit in a pipeline the creator can
-# open, the same reach the executor gives them; the service creator (journeys)
-# reaches every card.
+# The card must sit in a pipeline the creator can open, the same reach the
+# executor gives them; the service creator (journeys) reaches every card.
 module ScheduledActionPipelineItemTarget
   extend ActiveSupport::Concern
 
