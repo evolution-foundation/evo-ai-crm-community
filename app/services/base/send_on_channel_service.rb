@@ -34,6 +34,9 @@ class Base::SendOnChannelService
   def contact_inbox
     @contact_inbox ||= begin
       ci = inbox.contact_inboxes.find_by(contact_id: contact.id)
+      if ci.blank? && contact&.phone_number.present?
+        ci = inbox.contact_inboxes.find_by(source_id: phone_source_variants(contact.phone_number))
+      end
       if ci.blank? && conversation.contact_inbox.present?
         begin
           ci = inbox.contact_inboxes.create(
@@ -41,11 +44,25 @@ class Base::SendOnChannelService
             source_id: conversation.contact_inbox.source_id
           )
         rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
-          ci = inbox.contact_inboxes.find_by(contact_id: contact.id)
+          ci = inbox.contact_inboxes.find_by(contact_id: contact.id) ||
+               inbox.contact_inboxes.find_by(source_id: conversation.contact_inbox.source_id)
         end
       end
       ci || conversation.contact_inbox
     end
+  end
+
+  def phone_source_variants(phone)
+    digits = phone.to_s.gsub(/\D/, '')
+    return [phone] if digits.blank?
+
+    variants = [phone, digits, "+#{digits}"]
+    if digits.start_with?('55')
+      with_nine = digits.length == 12 ? "55#{digits[2, 2]}9#{digits[4, 8]}" : digits
+      without_nine = (digits.length == 13 && digits[4] == '9') ? "55#{digits[2, 2]}#{digits[5, 8]}" : digits
+      variants.concat([with_nine, "+#{with_nine}", without_nine, "+#{without_nine}"])
+    end
+    variants.uniq
   end
 
   def channel_class

@@ -193,6 +193,12 @@ class ContactInboxWithContactBuilder
     normalized = Whatsapp::PhoneNumberNormalizer.to_e164(phone_number)
     return if normalized.blank?
 
-    Contact.find_by(phone_number: normalized)
+    contact = Contact.find_by(phone_number: normalized)
+    return contact if contact
+
+    # Fallback for legacy Brazilian mobile contacts stored with the 9th digit (+55DD9XXXXXXXX)
+    if (match = /\A\+55(\d{2})([7-9]\d{7})\z/.match(normalized))
+      Contact.find_by(phone_number: "+55#{match[1]}9#{match[2]}")
+    end
   end
 end

@@ -259,24 +259,41 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
   end
 
   describe '#set_conversation (Cross-Inbox single thread)' do
-    let(:contact) { instance_double(Contact, id: 42) }
-    let(:contact_inbox) { instance_double(ContactInbox, id: 99, conversations: double('ConversationsRelation', last: nil)) }
-    let(:open_conversation) { instance_double(Conversation, id: 101, additional_attributes: {}) }
+    let(:contact) { instance_double(Contact, id: 42, phone_number: '+556291730552') }
+    let(:active_relation) { double('ActiveConversationsRelation', last: nil) }
+    let(:conversations_relation) { double('ConversationsRelation', last: nil) }
+    let(:contact_inbox) { instance_double(ContactInbox, id: 99, conversations: conversations_relation) }
+    let(:open_conversation) { instance_double(Conversation, id: 101, contact_id: 42, contact: contact, additional_attributes: {}) }
 
     before do
       allow(inbox).to receive(:account_id).and_return(1)
       allow(inbox).to receive(:id).and_return(55)
       allow(inbox).to receive(:name).and_return('WhatsApp Vendas')
       allow(inbox).to receive(:lock_to_single_conversation).and_return(false)
-      allow(contact_inbox.conversations).to receive(:where).with(no_args).and_return(contact_inbox.conversations)
-      allow(contact_inbox.conversations).to receive(:not).with(status: :resolved).and_return(contact_inbox.conversations)
+      allow(conversations_relation).to receive(:where).with(no_args).and_return(conversations_relation)
+      allow(conversations_relation).to receive(:not).with(status: :resolved).and_return(active_relation)
 
       service.instance_variable_set(:@contact, contact)
       service.instance_variable_set(:@contact_inbox, contact_inbox)
     end
 
     it 'reuses active conversation from another WhatsApp channel of the same contact' do
-      allow(service).to receive(:find_cross_inbox_conversation).and_return(open_conversation)
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(open_conversation)
+      expect(open_conversation).to receive(:update_column).with(
+        :additional_attributes,
+        hash_including('last_inbox_id' => 55, 'last_inbox_name' => 'WhatsApp Vendas')
+      )
+
+      service.send(:set_conversation)
+      expect(service.instance_variable_get(:@conversation)).to eq(open_conversation)
+    end
+
+    it 'prioritizes an active cross-inbox conversation over a resolved conversation in a locked inbox' do
+      allow(inbox).to receive(:lock_to_single_conversation).and_return(true)
+      resolved_local_conv = instance_double(Conversation, id: 100, contact_id: 42, contact: contact, additional_attributes: {})
+      allow(conversations_relation).to receive(:last).and_return(resolved_local_conv)
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(open_conversation)
+
       expect(open_conversation).to receive(:update_column).with(
         :additional_attributes,
         hash_including('last_inbox_id' => 55, 'last_inbox_name' => 'WhatsApp Vendas')
@@ -287,9 +304,9 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
     end
 
     it 'creates a new conversation and sets last_inbox_id when no active conversation exists' do
-      allow(service).to receive(:find_cross_inbox_conversation).and_return(nil)
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(nil)
       allow(service).to receive(:conversation_params).and_return({ inbox_id: 55, contact_id: 42, contact_inbox_id: 99 })
-      new_conv = instance_double(Conversation, id: 102, additional_attributes: {})
+      new_conv = instance_double(Conversation, id: 102, contact_id: 42, contact: contact, additional_attributes: {})
       expect(Conversation).to receive(:find_or_create_by!).with(hash_including(inbox_id: 55)).and_return(new_conv)
       expect(new_conv).to receive(:update_column).with(
         :additional_attributes,

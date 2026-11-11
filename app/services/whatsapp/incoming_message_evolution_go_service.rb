@@ -65,11 +65,16 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
   # Outbound replies compute their target from the contact (identifier/phone),
   # so answering a conversation attached to another ContactInbox is safe.
   def set_conversation
-    contact_conversations = ::Conversation.where(inbox_id: @inbox.id, contact_id: @contact_inbox.contact_id)
-    contact_conversations = contact_conversations.where.not(status: :resolved) unless @inbox.lock_to_single_conversation
+    contact_ids = related_contact_ids.presence || [@contact_inbox.contact_id]
+    contact_conversations = ::Conversation.where(inbox_id: @inbox.id, contact_id: contact_ids)
 
-    @conversation = contact_conversations.order(:created_at).last
-    @conversation ||= find_cross_inbox_conversation
+    @conversation = contact_conversations.where.not(status: :resolved).order(:created_at).last
+    @conversation ||= find_cross_inbox_conversation(only_active: true)
+
+    if @conversation.nil? && @inbox.lock_to_single_conversation
+      @conversation = contact_conversations.order(:created_at).last || find_cross_inbox_conversation(only_active: false)
+    end
+
     if @conversation
       update_last_inbox_on_conversation
       return
