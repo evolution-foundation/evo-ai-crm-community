@@ -27,7 +27,10 @@ development:
 
 test:
   <<: *default
-  database: "<%= ENV.fetch('POSTGRES_DATABASE', 'evolution_test') %>"
+  # Sempre um banco proprio, nunca o mesmo de dev/staging/production: POSTGRES_DATABASE
+  # e' compartilhado pelos outros ambientes via docker-compose, e reaproveita-lo aqui faz
+  # `rspec`/`db:test:prepare` rodar DROP/purge contra o banco com dados reais.
+  database: "<%= ENV.fetch('POSTGRES_DATABASE', 'evolution') %>_test"
   username: "<%= ENV.fetch('POSTGRES_USERNAME', 'postgres') %>"
   password: "<%= ENV.fetch('POSTGRES_PASSWORD', '') %>"
 

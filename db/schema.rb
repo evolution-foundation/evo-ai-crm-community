@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_16_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -92,6 +92,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.boolean "auto_approve_responses", default: false, null: false
     t.boolean "auto_reject_explicit_words", default: false, null: false
     t.boolean "auto_reject_offensive_sentiment", default: false, null: false
+    t.boolean "group_mention_required", default: true, null: false
     t.index ["allowed_conversation_statuses"], name: "index_agent_bot_inboxes_on_allowed_conversation_statuses", using: :gin
     t.index ["allowed_label_ids"], name: "index_agent_bot_inboxes_on_allowed_label_ids", using: :gin
     t.index ["auto_reject_explicit_words"], name: "index_agent_bot_inboxes_on_auto_reject_explicit_words"
@@ -564,6 +565,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.integer "processed_records"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+    t.string "label"
   end
 
   create_table "data_privacy_consents", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1013,6 +1015,51 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.index ["name"], name: "index_pipelines_on_name", unique: true
   end
 
+  create_table "procedure_targets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "procedure_id", null: false
+    t.string "target_type", null: false
+    t.uuid "target_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["procedure_id", "target_type", "target_id"], name: "idx_procedure_targets_unique_target", unique: true
+    t.index ["procedure_id"], name: "index_procedure_targets_on_procedure_id"
+    t.index ["target_type", "target_id"], name: "index_procedure_targets_on_target_type_and_target_id"
+  end
+
+  create_table "procedure_visibilities", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "procedure_id", null: false
+    t.string "scope_type", null: false
+    t.uuid "scope_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["procedure_id", "scope_type", "scope_id"], name: "idx_procedure_visibilities_unique_scope", unique: true
+    t.index ["procedure_id", "scope_type"], name: "idx_procedure_visibilities_unique_global_scope", unique: true, where: "(scope_id IS NULL)"
+    t.index ["procedure_id"], name: "index_procedure_visibilities_on_procedure_id"
+    t.index ["scope_type", "scope_id"], name: "index_procedure_visibilities_on_scope_type_and_scope_id"
+  end
+
+  create_table "procedures", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "title", null: false
+    t.text "description"
+    t.string "category"
+    t.jsonb "tags", default: [], null: false
+    t.integer "status", default: 0, null: false
+    t.integer "usage_mode", default: 0, null: false
+    t.jsonb "content_blocks", default: [], null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.string "public_token"
+    t.uuid "created_by_id"
+    t.uuid "updated_by_id"
+    t.datetime "published_at"
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_procedures_on_category"
+    t.index ["public_token"], name: "index_procedures_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
+    t.index ["status"], name: "index_procedures_on_status"
+    t.index ["usage_mode"], name: "index_procedures_on_usage_mode"
+  end
+
   create_table "product_variants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "product_id", null: false
     t.string "name", limit: 255, null: false
@@ -1376,6 +1423,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.boolean "open_all_day", default: false
+    t.integer "open_hour_2"
+    t.integer "open_minutes_2"
+    t.integer "close_hour_2"
+    t.integer "close_minutes_2"
     t.index ["inbox_id"], name: "index_working_hours_on_inbox_id"
   end
 
@@ -1409,6 +1460,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_120000) do
   add_foreign_key "pipeline_tasks", "pipeline_tasks", column: "parent_task_id"
   add_foreign_key "pipeline_teams", "pipelines"
   add_foreign_key "pipeline_teams", "teams"
+  add_foreign_key "procedure_targets", "procedures"
+  add_foreign_key "procedure_visibilities", "procedures"
   add_foreign_key "product_variants", "products", on_delete: :cascade
   add_foreign_key "role_permissions_actions", "roles"
   add_foreign_key "scheduled_action_execution_logs", "scheduled_actions"

@@ -93,6 +93,9 @@ class DataImportJob < ApplicationJob
     # Processar vínculos entre pessoas e empresas
     process_company_linkages(person_rows)
 
+    # Aplicar a tag escolhida (se houver) a todo o lote importado
+    apply_batch_label(person_rows + company_rows)
+
     total_imported = company_rows.length + person_rows.length
     Rails.logger.info "📊 DataImportJob: Total to import: #{total_imported} (persons: #{person_rows.length}, companies: #{company_rows.length})"
     update_data_import_status(total_imported, rejected_contacts.length)
@@ -112,12 +115,12 @@ class DataImportJob < ApplicationJob
     # Ensure that the data is valid UTF-8, preserving valid characters
     clean_data = utf8_data.valid_encoding? ? utf8_data : utf8_data.encode('UTF-16le', invalid: :replace, replace: '').encode('UTF-8')
 
-    csv = CSV.parse(clean_data, headers: true)
+    csv = CSV.parse(clean_data, headers: true, col_sep: detect_csv_col_sep(clean_data))
     Rails.logger.info "📊 DataImportJob: Parsed CSV, total rows: #{csv.count}"
 
     csv.each_with_index do |row, index|
       params = row.to_h.with_indifferent_access
-      tipo = params[:tipo] || params[:type] || 'person'
+      tipo = params[:tipo].presence || params[:type].presence || 'person'
 
       Rails.logger.debug "📊 DataImportJob: Row #{index + 1} - tipo=#{tipo}, name=#{params[:nome] || params[:name]}, phone=#{params[:telefone] || params[:phone_number]}"
 
@@ -143,6 +146,15 @@ class DataImportJob < ApplicationJob
     end
 
     [person_rows, company_rows, rejected_contacts]
+  end
+
+  # Excel salva CSV com ";" quando o locale usa "," como separador decimal
+  # (pt-BR e outros). Sem isso, um arquivo ponto-e-vírgula vira uma unica
+  # coluna gigante, todo mundo fica com name/phone_number em branco, e o
+  # import cria contatos fantasma silenciosamente em vez de rejeitar a linha.
+  def detect_csv_col_sep(data)
+    header_line = data.each_line.first.to_s
+    header_line.count(';') > header_line.count(',') ? ';' : ','
   end
 
   def append_rejected_contact(row, contact, rejected_contacts)
@@ -181,6 +193,32 @@ class DataImportJob < ApplicationJob
 
     result.failed_instances.each do |failed|
       Rails.logger.warn "📊 DataImportJob: Failed person - #{failed.name} - errors: #{failed.errors.full_messages.join(', ')}"
+    end
+  end
+
+  # Tags every contact in this import batch with @data_import.label, if one
+  # was chosen. Uses the label_list= setter and a normal #update! per
+  # contact — Contact#publish_label_changes only dirty-tracks (and so only
+  # publishes the contact.label.added event evo-flow's campaign audience
+  # tag-resolution depends on) via `saved_change_to_label_list?`, which the
+  # setter path hits and in-place `label_list.add` mutation does not. The
+  # bulk `Contact.import(...)` call above skips AR callbacks entirely, so
+  # this has to happen as a separate pass, after ids are back on `contact`
+  # via `synchronize:`.
+  def apply_batch_label(row_data)
+    label = @data_import.label
+    return if label.blank?
+
+    Rails.logger.info "📊 DataImportJob: Applying label '#{label}' to #{row_data.length} imported contacts"
+
+    row_data.each do |data|
+      contact = data[:contact]
+      next unless contact&.persisted?
+      next if contact.label_list.include?(label)
+
+      contact.update!(label_list: (contact.label_list + [label]).uniq)
+    rescue StandardError => e
+      Rails.logger.warn "📊 DataImportJob: Failed to apply label to contact #{contact&.id}: #{e.message}"
     end
   end
 

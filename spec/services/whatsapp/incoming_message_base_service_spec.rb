@@ -198,4 +198,123 @@ RSpec.describe Whatsapp::IncomingMessageBaseService do
       service.send(:update_bsuid_fields, contact_inbox, 'abc123', nil)
     end
   end
+
+  # Regression coverage for the "contact card shows no name" bug: attach_contact
+  # built the Attachment without a `meta[:display_name]`, so channels that share
+  # this base implementation (WhatsApp Cloud API, Baileys, Evolution Go) rendered
+  # a generic "shared contact" fallback in the frontend instead of the real name,
+  # even though the vCard carried a name.formatted_name field all along.
+  describe '#attach_contact' do
+    let(:attachments_relation) { instance_double('AttachmentsRelation') }
+    let(:contact_message) { instance_double(Message, attachments: attachments_relation) }
+
+    before do
+      service.processed_params = { messages: [{ type: 'contacts' }] }
+      service.instance_variable_set(:@message, contact_message)
+    end
+
+    it 'builds one attachment with display_name from the vCard name and the phone as fallback_title' do
+      contact = { name: { formatted_name: 'Fernanda Martins' }, phones: [{ phone: '+55 11 99999-8888' }] }
+
+      expect(attachments_relation).to receive(:new).with(
+        file_type: :contact,
+        fallback_title: '+55 11 99999-8888',
+        meta: { display_name: 'Fernanda Martins' }
+      )
+
+      service.send(:attach_contact, contact)
+    end
+
+    it 'creates one attachment per phone for a contact with multiple numbers' do
+      contact = {
+        name: { formatted_name: 'Multi Phone' },
+        phones: [{ phone: '+5511111111111' }, { phone: '+5511222222222' }]
+      }
+
+      expect(attachments_relation).to receive(:new).with(hash_including(fallback_title: '+5511111111111'))
+      expect(attachments_relation).to receive(:new).with(hash_including(fallback_title: '+5511222222222'))
+
+      service.send(:attach_contact, contact)
+    end
+
+    it 'falls back to the placeholder phone when the vCard has no phones' do
+      contact = { name: { formatted_name: 'No Phone' }, phones: [] }
+
+      expect(attachments_relation).to receive(:new).with(
+        file_type: :contact,
+        fallback_title: 'Phone number is not available',
+        meta: { display_name: 'No Phone' }
+      )
+
+      service.send(:attach_contact, contact)
+    end
+
+    it 'leaves display_name nil when the vCard has no name field' do
+      contact = { phones: [{ phone: '+5511333333333' }] }
+
+      expect(attachments_relation).to receive(:new).with(hash_including(meta: { display_name: nil }))
+
+      service.send(:attach_contact, contact)
+    end
+  end
+
+  describe '#set_conversation (Cross-Inbox single thread)' do
+    let(:contact) { instance_double(Contact, id: 42, phone_number: '+556291730552') }
+    let(:active_relation) { double('ActiveConversationsRelation', last: nil) }
+    let(:conversations_relation) { double('ConversationsRelation', last: nil) }
+    let(:contact_inbox) { instance_double(ContactInbox, id: 99, conversations: conversations_relation) }
+    let(:open_conversation) { instance_double(Conversation, id: 101, contact_id: 42, contact: contact, additional_attributes: {}) }
+
+    before do
+      allow(inbox).to receive(:account_id).and_return(1)
+      allow(inbox).to receive(:id).and_return(55)
+      allow(inbox).to receive(:name).and_return('WhatsApp Vendas')
+      allow(inbox).to receive(:lock_to_single_conversation).and_return(false)
+      allow(conversations_relation).to receive(:where).with(no_args).and_return(conversations_relation)
+      allow(conversations_relation).to receive(:not).with(status: :resolved).and_return(active_relation)
+
+      service.instance_variable_set(:@contact, contact)
+      service.instance_variable_set(:@contact_inbox, contact_inbox)
+    end
+
+    it 'reuses active conversation from another WhatsApp channel of the same contact' do
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(open_conversation)
+      expect(open_conversation).to receive(:update_column).with(
+        :additional_attributes,
+        hash_including('last_inbox_id' => 55, 'last_inbox_name' => 'WhatsApp Vendas')
+      )
+
+      service.send(:set_conversation)
+      expect(service.instance_variable_get(:@conversation)).to eq(open_conversation)
+    end
+
+    it 'prioritizes an active cross-inbox conversation over a resolved conversation in a locked inbox' do
+      allow(inbox).to receive(:lock_to_single_conversation).and_return(true)
+      resolved_local_conv = instance_double(Conversation, id: 100, contact_id: 42, contact: contact, additional_attributes: {})
+      allow(conversations_relation).to receive(:last).and_return(resolved_local_conv)
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(open_conversation)
+
+      expect(open_conversation).to receive(:update_column).with(
+        :additional_attributes,
+        hash_including('last_inbox_id' => 55, 'last_inbox_name' => 'WhatsApp Vendas')
+      )
+
+      service.send(:set_conversation)
+      expect(service.instance_variable_get(:@conversation)).to eq(open_conversation)
+    end
+
+    it 'creates a new conversation and sets last_inbox_id when no active conversation exists' do
+      allow(service).to receive(:find_cross_inbox_conversation).with(only_active: true).and_return(nil)
+      allow(service).to receive(:conversation_params).and_return({ inbox_id: 55, contact_id: 42, contact_inbox_id: 99 })
+      new_conv = instance_double(Conversation, id: 102, contact_id: 42, contact: contact, additional_attributes: {})
+      expect(Conversation).to receive(:find_or_create_by!).with(hash_including(inbox_id: 55)).and_return(new_conv)
+      expect(new_conv).to receive(:update_column).with(
+        :additional_attributes,
+        hash_including('last_inbox_id' => 55, 'last_inbox_name' => 'WhatsApp Vendas')
+      )
+
+      service.send(:set_conversation)
+      expect(service.instance_variable_get(:@conversation)).to eq(new_conv)
+    end
+  end
 end

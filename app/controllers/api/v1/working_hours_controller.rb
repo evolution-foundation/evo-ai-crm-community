@@ -26,7 +26,8 @@ class Api::V1::WorkingHoursController < Api::V1::BaseController
   private
 
   def working_hour_params
-    params.require(:working_hour).permit(:inbox_id, :open_hour, :open_minutes, :close_hour, :close_minutes, :closed_all_day)
+    params.require(:working_hour).permit(:inbox_id, :open_hour, :open_minutes, :close_hour, :close_minutes, :closed_all_day,
+                                         :open_hour_2, :open_minutes_2, :close_hour_2, :close_minutes_2)
   end
 
   def fetch_working_hour

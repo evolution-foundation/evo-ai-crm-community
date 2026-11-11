@@ -3,7 +3,7 @@
 # Table name: users
 #
 #  id                     :uuid             not null, primary key
-#  availability           :integer          default(0)
+#  availability           :integer          default("online")
 #  confirmation_sent_at   :datetime
 #  confirmation_token     :string
 #  confirmed_at           :datetime
@@ -53,6 +53,8 @@
 #  index_users_on_uid_and_provider        (uid,provider) UNIQUE
 #
 class User < ApplicationRecord
+  enum availability: { online: 0, offline: 1, busy: 2 }
+
   # Evolution Reference Model - managed by evo-auth-service
   # This model serves only as a reference to sync data from evo-auth-service
   

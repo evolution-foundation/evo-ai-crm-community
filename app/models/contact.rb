@@ -30,6 +30,7 @@
 #  idx_contacts_name_type_resolved                       (name,type,id) WHERE (((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))
 #  idx_contacts_with_identity                            (id) WHERE (((email)::text <> ''::text) OR ((phone_number)::text <> ''::text) OR ((identifier)::text <> ''::text))
 #  index_contacts_on_blocked                             (blocked)
+#  index_contacts_on_custom_attributes                   (custom_attributes) USING gin
 #  index_contacts_on_last_activity_at                    (last_activity_at)
 #  index_contacts_on_name_email_phone_number_identifier  (name,email,phone_number,identifier) USING gin
 #  index_contacts_on_phone_number                        (phone_number)
@@ -209,12 +210,16 @@ class Contact < ApplicationRecord
 
   def self.resolved_contacts
     # Include contacts that have email, phone_number, or identifier
-    # Also include contacts that have contact_inboxes (have at least one conversation)
-    # This uses LEFT JOIN for better performance
-    joins(
-      "LEFT JOIN contact_inboxes ON contact_inboxes.contact_id = contacts.id"
-    ).where(
-      "contacts.email <> '' OR contacts.phone_number <> '' OR contacts.identifier <> '' OR contact_inboxes.id IS NOT NULL"
+    # Also include contacts that have contact_inboxes (have at least one conversation).
+    # EXISTS (rather than a LEFT JOIN) avoids returning one row per contact_inbox for
+    # contacts matched by more than one inbox/source_id, which showed up as duplicate
+    # rows in the contacts list/search. It also keeps this scope .or()-compatible
+    # (listable_contacts combines it with another relation via #or, which requires
+    # both sides to be structurally identical - a joined+distinct relation isn't).
+    where(
+      "contacts.email <> '' OR contacts.phone_number <> '' OR contacts.identifier <> '' OR EXISTS (
+        SELECT 1 FROM contact_inboxes WHERE contact_inboxes.contact_id = contacts.id
+      )"
     )
   end
 

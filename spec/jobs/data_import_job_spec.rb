@@ -64,4 +64,95 @@ RSpec.describe DataImportJob, type: :job do
     described_class.new.perform(data_import)
     expect(data_import.reload.status).to eq('failed')
   end
+
+  describe 'contacts import — batch label (import.label)' do
+    let(:contacts_csv) do
+      [
+        'tipo,nome,email,telefone',
+        'person,Joana Lima,joana.lima@example.com,+5511977776666',
+        'person,Pedro Alves,pedro.alves@example.com,+5511988885555'
+      ].join("\n")
+    end
+
+    it 'tags every contact in the batch when import.label is set' do
+      data_import = DataImport.create!(data_type: 'contacts', label: 'suporte')
+      data_import.import_file.attach(io: StringIO.new(contacts_csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      described_class.new.perform(data_import)
+
+      joana = Contact.find_by(email: 'joana.lima@example.com')
+      pedro = Contact.find_by(email: 'pedro.alves@example.com')
+      expect(joana.label_list).to include('suporte')
+      expect(pedro.label_list).to include('suporte')
+    end
+
+    it 'leaves contacts untagged when no import.label is set (backward compatible)' do
+      data_import = DataImport.create!(data_type: 'contacts')
+      data_import.import_file.attach(io: StringIO.new(contacts_csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      described_class.new.perform(data_import)
+
+      joana = Contact.find_by(email: 'joana.lima@example.com')
+      expect(joana.label_list).to be_empty
+    end
+
+    it 'adds the batch label to an existing contact matched by identity, without clobbering its current labels' do
+      existing = Contact.create!(name: 'Joana Lima', email: 'joana.lima@example.com', label_list: 'vip')
+
+      data_import = DataImport.create!(data_type: 'contacts', label: 'suporte')
+      data_import.import_file.attach(io: StringIO.new(contacts_csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      described_class.new.perform(data_import)
+
+      expect(existing.reload.label_list).to contain_exactly('vip', 'suporte')
+    end
+
+    it 'publishes contact.label.added (evo-flow event) via the label_list= setter path' do
+      data_import = DataImport.create!(data_type: 'contacts', label: 'suporte')
+      data_import.import_file.attach(io: StringIO.new(contacts_csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      events = []
+      allow_any_instance_of(Contact).to receive(:publish_label_added) { |_, name| events << name }
+
+      described_class.new.perform(data_import)
+
+      expect(events).to eq(%w[suporte suporte])
+    end
+  end
+
+  describe 'contacts import — semicolon-delimited CSV (Excel pt-BR export)' do
+    it 'parses name/phone correctly instead of collapsing the row into one blank column' do
+      csv = [
+        'tipo;nome;primeiro_nome;sobrenome;email;telefone',
+        ';Vanderlene do Nascimento Carlos;;;;5593991640367'
+      ].join("\n")
+      data_import = DataImport.create!(data_type: 'contacts')
+      data_import.import_file.attach(io: StringIO.new(csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      described_class.new.perform(data_import)
+
+      # DDD 93 (AP) strips the nono digito per Whatsapp::PhoneNumberNormalizer's
+      # BR rules (Contact#prepare_phone_number_attribute normalizes on save).
+      contact = Contact.find_by(phone_number: '+559391640367')
+      expect(contact).to be_present
+      expect(contact.name).to eq('Vanderlene do Nascimento Carlos')
+    end
+
+    it 'matches an existing contact whose stored phone was already nono-digito-normalized, instead of duplicating it' do
+      existing = Contact.create!(name: 'Vanderlene', phone_number: '+5593991640367')
+      expect(existing.reload.phone_number).to eq('+559391640367')
+
+      csv = [
+        'tipo;nome;primeiro_nome;sobrenome;email;telefone',
+        ';Vanderlene do Nascimento Carlos;;;;5593991640367'
+      ].join("\n")
+      data_import = DataImport.create!(data_type: 'contacts')
+      data_import.import_file.attach(io: StringIO.new(csv), filename: 'contacts.csv', content_type: 'text/csv')
+
+      described_class.new.perform(data_import)
+
+      expect(Contact.where(phone_number: '+559391640367').count).to eq(1)
+      expect(existing.reload.name).to eq('Vanderlene do Nascimento Carlos')
+    end
+  end
 end

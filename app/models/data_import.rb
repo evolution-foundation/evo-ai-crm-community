@@ -4,6 +4,7 @@
 #
 #  id                :uuid             not null, primary key
 #  data_type         :string           not null
+#  label             :string
 #  processed_records :integer
 #  processing_errors :text
 #  status            :integer          default("pending"), not null

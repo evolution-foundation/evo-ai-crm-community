@@ -127,6 +127,9 @@ Rails.application.routes.draw do
           member do
             post :retry
           end
+          collection do
+            get :resolve
+          end
         end
         resources :assignments, only: [:create], controller: 'conversations/assignments'
         resources :labels, only: [:create, :index], controller: 'conversations/labels'
@@ -170,6 +173,13 @@ Rails.application.routes.draw do
       end
 
       resources :canned_responses, only: [:index, :show, :create, :update, :destroy], controller: 'canned_responses'
+
+      get 'procedures/public/:token', to: 'procedures#public_show'
+      resources :procedures, only: [:index, :show, :create, :update, :destroy], controller: 'procedures' do
+        post :publish, on: :member
+        post :archive, on: :member
+        post :send_to_conversation, on: :member
+      end
 
       # Dedicated, account-scoped message templates CRUD (global + channel-bound).
       # Channel-bound ops pass inbox_id; Meta sync stays on the inbox routes. (EVO-1716)

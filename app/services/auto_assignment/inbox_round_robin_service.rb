@@ -49,7 +49,7 @@ class AutoAssignment::InboxRoundRobinService
   end
 
   def validate_queue?
-    true if inbox.inbox_members.map(&:user_id).sort == queue.map(&:to_i).sort
+    true if inbox.inbox_members.map(&:user_id).map(&:to_s).sort == queue.map(&:to_s).sort
   end
 
   def queue

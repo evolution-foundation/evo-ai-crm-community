@@ -92,4 +92,70 @@ RSpec.describe Api::V1::EvolutionGo::QrcodesController, type: :controller do
       controller_instance.create
     end
   end
+
+  # Regression coverage: /instance/connect kicks off pairing asynchronously on
+  # the Evolution Go side, so /instance/qr called right after can 400 with
+  # "no QR code available. Please wait a moment and try again" even though the
+  # instance is about to succeed. Before this fix, #show surfaced that 400 as
+  # "Erro ao gerar QR Code" on the very first attempt instead of retrying.
+  describe '#fetch_qrcode_with_retry' do
+    let(:controller_instance) { described_class.new }
+    let(:http) { instance_double(Net::HTTP) }
+    let(:request) { instance_double(Net::HTTP::Get) }
+    let(:not_ready_response) do
+      instance_double(Net::HTTPBadRequest,
+                       code: '400',
+                       body: '{"error":"no QR code available. Please wait a moment and try again"}')
+    end
+
+    before do
+      allow(controller_instance).to receive(:sleep)
+    end
+
+    it 'returns immediately on the first successful response' do
+      success_response = instance_double(Net::HTTPOK, code: '200', body: '{"data":{}}')
+      allow(http).to receive(:request).with(request).and_return(success_response)
+
+      result = controller_instance.send(:fetch_qrcode_with_retry, http, request)
+
+      expect(result).to eq(success_response)
+      expect(http).to have_received(:request).once
+      expect(controller_instance).not_to have_received(:sleep)
+    end
+
+    it 'retries when the QR code is not ready yet, then returns the successful response' do
+      success_response = instance_double(Net::HTTPOK, code: '200', body: '{"data":{}}')
+      call_count = 0
+      allow(http).to receive(:request).with(request) do
+        call_count += 1
+        call_count == 1 ? not_ready_response : success_response
+      end
+
+      result = controller_instance.send(:fetch_qrcode_with_retry, http, request)
+
+      expect(result).to eq(success_response)
+      expect(http).to have_received(:request).twice
+      expect(controller_instance).to have_received(:sleep).with(described_class::QRCODE_NOT_READY_RETRY_DELAY).once
+    end
+
+    it 'gives up after the retry budget and returns the last not-ready response' do
+      allow(http).to receive(:request).with(request).and_return(not_ready_response)
+
+      result = controller_instance.send(:fetch_qrcode_with_retry, http, request)
+
+      expect(result).to eq(not_ready_response)
+      expect(http).to have_received(:request).exactly(described_class::QRCODE_NOT_READY_RETRY_COUNT + 1).times
+    end
+
+    it 'does not retry on a different error' do
+      other_error_response = instance_double(Net::HTTPInternalServerError, code: '500', body: '{"error":"boom"}')
+      allow(http).to receive(:request).with(request).and_return(other_error_response)
+
+      result = controller_instance.send(:fetch_qrcode_with_retry, http, request)
+
+      expect(result).to eq(other_error_response)
+      expect(http).to have_received(:request).once
+      expect(controller_instance).not_to have_received(:sleep)
+    end
+  end
 end

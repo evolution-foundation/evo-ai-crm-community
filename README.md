@@ -384,6 +384,35 @@ WHERE message_id LIKE 'backfill|%'
 - Notes are not portable (kept in the CRM panel — out of scope).
 - Without the evo-flow `IdempotencyService`, reruns duplicate events. The cursor survives crashes and is partitioned by the `from_date` window (`backfill:cursor:<yyyy-mm-dd>:message` / `…:reporting_event` in Redis::Alfred), so changing `FROM_DATE` does not silently skip records.
 
+### Backfill EvoFlow contact labels
+
+`EvoFlow::BackfillContactLabelsWorker` forwards existing contact labels (`taggings`, `context: 'labels'`) to evo-flow via `/events/identify`, so the local `taggings` table evo-flow uses to resolve tag-filtered campaign audiences is populated for labels applied before `EVO_FLOW_ENABLED` was turned on. The live listener (`ContactEventsListener#contact_label_added`) only forwards label changes going forward — there is no retroactive sync, so any tag applied while the integration was disabled is invisible to tag-filtered campaigns until this backfill runs.
+
+**1. Dry-run (default — counts and logs a single sample payload, no enqueue):**
+
+```bash
+bundle exec rake evo_flow:backfill_labels
+```
+
+Watch the Sidekiq worker log for lines prefixed `[EvoFlow][BackfillLabels]`:
+
+- `would_backfill account=ALL count=<n>`
+- `sample_payload=...` (exactly one, payload of the first item)
+
+**2. Real publish (dev / staging):**
+
+```bash
+DRY_RUN=false bundle exec rake evo_flow:backfill_labels
+```
+
+**3. Real publish (production — requires CONFIRM):**
+
+```bash
+DRY_RUN=false CONFIRM=I_KNOW_WHAT_IM_DOING bundle exec rake evo_flow:backfill_labels
+```
+
+Each row enqueues one `EvoFlow::PublishEventWorker` job (same `contact.label.added` event the live path emits), so retry/redaction/error handling for the HTTP call itself is unchanged from the live integration — this task only needs to enumerate. The cursor (`backfill:cursor:labels:ALL` in Redis::Alfred) survives crashes and reruns resume from the last processed tagging id.
+
 ---
 
 ## Contributing

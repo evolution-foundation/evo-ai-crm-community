@@ -14,6 +14,7 @@
 #  sender_type               :string
 #  sentiment                 :integer          default(0), not null
 #  sentiment_score           :float            default(0.0)
+#  source                    :integer          default("live"), not null
 #  status                    :integer          default("sent")
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
@@ -297,6 +298,11 @@ class Message < ApplicationRecord
       ]
     )
     # rubocop:enable Rails/SkipsModelValidations
+
+    # Update in-memory association so that pushed/serialized event data gets the fresh timestamp
+    new_activity_at = conversation.last_activity_at.nil? ? candidate_time : [conversation.last_activity_at, candidate_time].max
+    conversation.last_activity_at = new_activity_at
+    conversation.updated_at = Time.current
   end
 
   private
@@ -434,11 +440,11 @@ class Message < ApplicationRecord
       has_active_bot = conversation.inbox.active_bot?
       Rails.logger.info "[Message] reopen_conversation - conversation.pending?: true, inbox.active_bot?: #{has_active_bot}, inbox_id: #{conversation.inbox_id}"
 
-      unless has_active_bot
-        Rails.logger.info "[Message] reopen_conversation - Changing conversation #{conversation.id} from pending to open (no active bot)"
+      unless has_active_bot || conversation.inbox.default_conversation_status == 'pending'
+        Rails.logger.info "[Message] reopen_conversation - Changing conversation #{conversation.id} from pending to open (no active bot and default status is not pending)"
         conversation.open!
       else
-        Rails.logger.info "[Message] reopen_conversation - Keeping conversation #{conversation.id} as pending (active bot present)"
+        Rails.logger.info "[Message] reopen_conversation - Keeping conversation #{conversation.id} as pending (active bot or default pending status present)"
       end
     end
 
@@ -449,11 +455,18 @@ class Message < ApplicationRecord
     # mark resolved bot conversation as pending to be reopened by bot processor service
     if conversation.inbox.active_bot?
       conversation.pending!
-    elsif conversation.inbox.api?
-      Current.executed_by = sender if reopened_by_contact?
-      conversation.open!
     else
-      conversation.open!
+      if conversation.inbox.api?
+        Current.executed_by = sender if reopened_by_contact?
+      end
+
+      status_to_set = conversation.inbox.default_conversation_status_value
+      Rails.logger.info "[Message] reopen_resolved_conversation - conversation_id: #{conversation.id}, inbox_default: #{status_to_set}"
+      if status_to_set == :pending
+        conversation.pending!
+      else
+        conversation.open!
+      end
     end
   end
 

@@ -15,6 +15,7 @@ class Api::V1::BaseController < Api::BaseController
       @teams
       @team_members
       @canned_responses
+      @procedures
       @webhooks
       @macros
       @agent_bots

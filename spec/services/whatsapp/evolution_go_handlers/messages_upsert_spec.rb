@@ -142,4 +142,54 @@ RSpec.describe Whatsapp::EvolutionGoHandlers::MessagesUpsert do
       expect(service.send(:audio_voice_note?)).to be(false)
     end
   end
+
+  describe '#message_content_attributes mentions' do
+    let(:info) { { IsGroup: true, Timestamp: '2026-10-16T10:00:00Z' } }
+
+    context 'with mentionedJID in extendedTextMessage.contextInfo' do
+      let(:evo_message) do
+        { extendedTextMessage: { text: '@5571991589983 qual o preço?',
+                                 contextInfo: { mentionedJID: ['5571991589983@s.whatsapp.net'] } } }
+      end
+
+      it 'stores the mentioned JIDs' do
+        expect(service.send(:message_content_attributes)[:mentioned_jids]).to eq(['5571991589983@s.whatsapp.net'])
+      end
+    end
+
+    context 'with lowercase mentionedJid on a media caption' do
+      let(:evo_message) { { imageMessage: { contextInfo: { mentionedJid: ['123@lid', '123@lid'] } } } }
+
+      it 'stores the unique mentioned JIDs' do
+        expect(service.send(:message_content_attributes)[:mentioned_jids]).to eq(['123@lid'])
+      end
+    end
+
+    context 'with the mention inside a wrapped (ephemeral) message' do
+      let(:evo_message) do
+        { ephemeralMessage: { message: { extendedTextMessage: { contextInfo: { mentionedJID: ['5571991589983@s.whatsapp.net'] } } } } }
+      end
+
+      it 'stores the mentioned JIDs' do
+        expect(service.send(:message_content_attributes)[:mentioned_jids]).to eq(['5571991589983@s.whatsapp.net'])
+      end
+    end
+
+    context 'without mentions' do
+      let(:evo_message) { { conversation: 'bom dia' } }
+
+      it 'omits mentioned_jids' do
+        expect(service.send(:message_content_attributes)).not_to have_key(:mentioned_jids)
+      end
+    end
+
+    context 'when the chat is not a group' do
+      let(:info) { { IsGroup: false, Timestamp: '2026-10-16T10:00:00Z' } }
+      let(:evo_message) { { extendedTextMessage: { contextInfo: { mentionedJID: ['5571991589983@s.whatsapp.net'] } } } }
+
+      it 'omits mentioned_jids' do
+        expect(service.send(:message_content_attributes)).not_to have_key(:mentioned_jids)
+      end
+    end
+  end
 end

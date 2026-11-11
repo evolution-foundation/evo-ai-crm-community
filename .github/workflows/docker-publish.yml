@@ -30,7 +30,9 @@ jobs:
   build-pr:
     # Só PR interna (mesmo repo): PR de fork não tem os secrets DOCKERHUB_* e
     # não deve buildar/pushar código não-confiável com nossas credenciais.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    # Também restrito ao repo upstream: forks pessoais não têm (e não devem ter)
+    # as credenciais DOCKERHUB_* usadas para publicar a imagem oficial.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.repository == 'evolution-foundation/evo-ai-crm-community'
     name: Build PR image (amd64)
     runs-on: ubuntu-latest
     steps:
@@ -78,7 +80,9 @@ jobs:
   # manifest and pushed to the promoted tags (:develop, :latest, :vX.Y.Z).
   # ---------------------------------------------------------------------------
   build:
-    if: github.event_name != 'pull_request'
+    # Restrito ao repo upstream: forks pessoais não têm (e não devem ter) as
+    # credenciais DOCKERHUB_* usadas para publicar a imagem oficial.
+    if: github.event_name != 'pull_request' && github.repository == 'evolution-foundation/evo-ai-crm-community'
     name: Build ${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -133,7 +137,8 @@ jobs:
           retention-days: 1
 
   merge:
-    if: github.event_name != 'pull_request'
+    # Restrito ao repo upstream — ver comentário no job `build`.
+    if: github.event_name != 'pull_request' && github.repository == 'evolution-foundation/evo-ai-crm-community'
     name: Merge Manifests & Tag
     needs: build
     runs-on: ubuntu-latest

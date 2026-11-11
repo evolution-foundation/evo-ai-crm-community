@@ -1,11 +1,14 @@
 class AutoAssignment::AgentAssignmentService
   # Allowed agent ids: array
   # This is the list of agents from which an agent can be assigned to this conversation
-  # examples: Agents with assignment capacity, Agents who are members of a team etc
+  # The round robin distributes among ALL selected collaborators (inbox members),
+  # regardless of their online/offline status. Online status is intentionally ignored
+  # to ensure every selected agent receives conversations even when marked as offline or unknown.
   pattr_initialize [:conversation!, :allowed_agent_ids!]
 
   def find_assignee
-    round_robin_manage_service.available_agent(allowed_agent_ids: allowed_online_agent_ids)
+    # Distributes to all selected inbox members (allowed_agent_ids), ignoring online status
+    round_robin_manage_service.available_agent(allowed_agent_ids: allowed_agent_ids&.map(&:to_s))
   end
 
   def perform
@@ -14,19 +17,6 @@ class AutoAssignment::AgentAssignmentService
   end
 
   private
-
-  def online_agent_ids
-    online_agents = OnlineStatusTracker.get_available_users
-    online_agents.select { |_key, value| value.eql?('online') }.keys if online_agents.present?
-  end
-
-  def allowed_online_agent_ids
-    # We want to perform roundrobin only over online agents
-    # Hence taking an intersection of online agents and allowed member ids
-
-    # the online user ids are string, since its from redis, allowed member ids are integer, since its from active record
-    @allowed_online_agent_ids ||= online_agent_ids & allowed_agent_ids&.map(&:to_s)
-  end
 
   def round_robin_manage_service
     @round_robin_manage_service ||= AutoAssignment::InboxRoundRobinService.new(inbox: conversation.inbox)

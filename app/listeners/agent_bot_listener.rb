@@ -167,6 +167,7 @@ class AgentBotListener < BaseListener
     else
       # For non-Facebook conversations, check status and labels (includes ignored labels check)
       return if skip_for_gate?(agent_bot_inbox, conversation)
+      return if skip_for_group_mention?(agent_bot_inbox, message)
     end
 
     method_name = __method__.to_s
@@ -313,6 +314,7 @@ class AgentBotListener < BaseListener
     else
       # For non-Facebook conversations, check status and labels (includes ignored labels check)
       return if skip_for_gate?(agent_bot_inbox, conversation)
+      return if skip_for_group_mention?(agent_bot_inbox, message)
     end
 
     method_name = __method__.to_s
@@ -376,6 +378,18 @@ class AgentBotListener < BaseListener
   # CRM-212: the status/label gate silently decided whether the bot was reached.
   # Logging the reason here is what turns "the AI stopped answering" into a
   # question an operator can answer from the log alone.
+  # Evolution Go groups answer only when the inbox number is @-mentioned (see
+  # AgentBotInbox#group_mention_block_reason). The message is still saved.
+  def skip_for_group_mention?(agent_bot_inbox, message)
+    return false if agent_bot_inbox.blank?
+
+    skip_reason = agent_bot_inbox.group_mention_block_reason(message)
+    return false if skip_reason.nil?
+
+    Rails.logger.info "[AgentBot Listener] Skipping message #{message.id} - conv #{message.conversation&.id}: #{skip_reason}"
+    true
+  end
+
   def skip_for_gate?(agent_bot_inbox, conversation, label: 'message')
     return false if agent_bot_inbox.blank?
 

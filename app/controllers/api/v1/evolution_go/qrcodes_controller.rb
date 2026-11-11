@@ -120,6 +120,15 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
     @instance_name = creds[:instance_name]
   end
 
+  # Evolution Go's own error message tells callers to retry ("no QR code
+  # available. Please wait a moment and try again") — /instance/connect
+  # kicks off pairing asynchronously on the Go side, so the QR image isn't
+  # ready the instant connect returns. Poll a few times before giving up
+  # instead of failing on the very first attempt (EVO-2xxx: "Erro ao gerar
+  # QR Code" even though the instance would succeed moments later).
+  QRCODE_NOT_READY_RETRY_COUNT = 5
+  QRCODE_NOT_READY_RETRY_DELAY = 1 # seconds
+
   def get_qrcode_go(api_url, instance_token)
     # Evolution Go API endpoint: GET /instance/qr
     qrcode_url = "#{api_url.chomp('/')}/instance/qr"
@@ -136,7 +145,7 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
     request['apikey'] = instance_token # header com apikey da instancia
     request['Content-Type'] = 'application/json'
 
-    response = http.request(request)
+    response = fetch_qrcode_with_retry(http, request)
     Rails.logger.info "Evolution Go API: QR code response code: #{response.code}"
     Rails.logger.info "Evolution Go API: QR code response body: #{response.body}"
 
@@ -153,20 +162,13 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
     #   "message": "success"
     # }
 
-    if parsed_response['data']
-      {
-        base64: parsed_response['data']['Qrcode'],
-        code: parsed_response['data']['Code'],
-        connected: false
-      }
-    else
-      # Fallback se estrutura for diferente
-      {
-        base64: parsed_response['Qrcode'],
-        code: parsed_response['Code'],
-        connected: false
-      }
-    end
+    # Evolution Go versions differ in key casing ("Qrcode"/"Code" vs "qrcode"/"code").
+    payload = parsed_response['data'].is_a?(Hash) ? parsed_response['data'] : parsed_response
+    {
+      base64: payload['Qrcode'] || payload['qrcode'],
+      code: payload['Code'] || payload['code'],
+      connected: false
+    }
 
   rescue JSON::ParserError => e
     Rails.logger.error "Evolution Go API: QR code JSON parse error: #{e.message}, Body: #{response&.body}"
@@ -174,5 +176,26 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
   rescue StandardError => e
     Rails.logger.error "Evolution Go API: QR code connection error: #{e.class} - #{e.message}"
     raise "Failed to get QR code: #{e.message}"
+  end
+
+  def qrcode_not_ready?(response)
+    response.code == '400' && response.body.to_s.include?('no QR code available')
+  end
+
+  def fetch_qrcode_with_retry(http, request)
+    response = http.request(request)
+
+    QRCODE_NOT_READY_RETRY_COUNT.times do |attempt|
+      break unless qrcode_not_ready?(response)
+
+      Rails.logger.info(
+        "Evolution Go API: QR not ready (attempt #{attempt + 1}/#{QRCODE_NOT_READY_RETRY_COUNT}), " \
+        "retrying in #{QRCODE_NOT_READY_RETRY_DELAY}s"
+      )
+      sleep QRCODE_NOT_READY_RETRY_DELAY
+      response = http.request(request)
+    end
+
+    response
   end
 end

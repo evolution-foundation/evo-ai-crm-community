@@ -25,6 +25,11 @@
 #  index_crm_forms_on_routing_rules  (routing_rules) USING gin
 #  index_crm_forms_on_slug           (slug) UNIQUE
 #
+# Foreign Keys
+#
+#  fk_rails_...  (default_pipeline_id => pipelines.id)
+#  fk_rails_...  (default_stage_id => pipeline_stages.id)
+#
 # A lead-capture form (B14.01). Generic and single-tenant in Community; the
 # per-tenant isolation (tenant_id + RLS) is layered on top in Enterprise.
 #

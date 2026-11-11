@@ -90,6 +90,16 @@ RSpec.describe Api::V1::ContactsController, type: :controller do
       expect(listable_contact_ids).to include(resolved_contact.id, name_only_contact.id)
       expect(listable_contact_ids).not_to include(blank_name_contact.id)
     end
+
+    it 'lists a contact once even when it has more than one contact_inbox' do
+      channel = Channel::Api.create!
+      inbox_a = Inbox.create!(name: 'Inbox A', channel: channel)
+      inbox_b = Inbox.create!(name: 'Inbox B', channel: Channel::Api.create!)
+      ContactInbox.create!(contact: resolved_contact, inbox: inbox_a, source_id: SecureRandom.hex(8))
+      ContactInbox.create!(contact: resolved_contact, inbox: inbox_b, source_id: SecureRandom.hex(8))
+
+      expect(listable_contact_ids.count { |id| id == resolved_contact.id }).to eq(1)
+    end
   end
 
   describe '#invalid_contact_labels_payload?' do

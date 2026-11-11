@@ -31,12 +31,32 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   private
 
   def process_single_entry(entry)
+    if comment_event?(entry)
+      process_comments(entry)
+      return
+    end
+
     if test_event?(entry)
       process_test_event(entry)
       return
     end
 
     process_messages(entry)
+  end
+
+  # Comments arrive as entry[].changes[] with field 'comments' (not in messaging[]).
+  def comment_event?(entry)
+    Array(entry[:changes]).any? { |change| change.with_indifferent_access[:field] == 'comments' }
+  end
+
+  def process_comments(entry)
+    Array(entry[:changes]).each do |change|
+      change = change.with_indifferent_access
+      next unless change[:field] == 'comments'
+
+      Rails.logger.info("Instagram Events Job: Processing comment #{change.dig(:value, :id)} for ig_account #{entry[:id]}")
+      ::Instagram::CommentCreator.new(ig_account_id: entry[:id], value: change[:value]).perform
+    end
   end
 
   def process_messages(entry)

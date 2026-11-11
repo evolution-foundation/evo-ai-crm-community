@@ -12,6 +12,7 @@
 #  facebook_allowed_post_ids        :jsonb            not null
 #  facebook_comment_replies_enabled :boolean          default(FALSE), not null
 #  facebook_interaction_type        :string           default("both"), not null
+#  group_mention_required           :boolean          default(TRUE), not null
 #  ignored_label_ids                :jsonb            not null
 #  moderation_enabled               :boolean          default(FALSE), not null
 #  sentiment_analysis_enabled       :boolean          default(FALSE), not null
@@ -125,6 +126,18 @@ class AgentBotInbox < ApplicationRecord
     nil
   end
 
+  # Evolution Go groups: with group_mention_required the bot only answers a group
+  # message that @-mentions the inbox number. Nil means the message may proceed.
+  def group_mention_block_reason(message)
+    return nil unless group_mention_applies?(message)
+
+    mentions = Array(message.content_attributes&.[]('mentioned_jids'))
+    return nil if Whatsapp::EvolutionGoBotMentionMatcher.new(message.inbox.channel).mentioned?(mentions)
+
+    # Count only: the JIDs are third-party phone numbers (LGPD) and this logs per group message.
+    "group message without mention to the inbox number (group_mention_required=true, mentions=#{mentions.size})"
+  end
+
   # Get the appropriate agent bot for a conversation
   # For Facebook post conversations, check if comment replies are enabled
   # and if a specific agent bot is configured for comments
@@ -187,6 +200,13 @@ class AgentBotInbox < ApplicationRecord
   end
 
   private
+
+  # Only Evolution Go group conversations with the option on are gated.
+  def group_mention_applies?(message)
+    group_mention_required? &&
+      message.conversation&.contact&.group? &&
+      message.inbox&.channel.try(:provider) == 'evolution_go'
+  end
 
   UUID_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 

@@ -29,6 +29,40 @@ module Whatsapp::EvolutionHandlers::ContentHandlers
         vcard: contact[:vcard]
       }
     end
+
+    contacts.each { |contact| attach_contact(contact) }
+  end
+
+  # Evolution API (baileys) only sends the raw vCard string, unlike Z-API/Cloud API
+  # which already provide structured phone arrays — so we parse TEL lines ourselves.
+  # One Attachment (file_type: :contact) is created per phone, matching the pattern
+  # used by Whatsapp::IncomingMessageBaseService#attach_contact and
+  # Whatsapp::IncomingMessageZapiService#attach_contact.
+  def attach_contact(contact)
+    display_name = contact[:displayName] || vcard_field(contact[:vcard], 'FN')
+    phones = vcard_phone_numbers(contact[:vcard])
+    phones = ['Phone number is not available'] if phones.blank?
+
+    phones.each do |phone|
+      @message.attachments.build(
+        file_type: file_content_type.to_s,
+        fallback_title: phone,
+        meta: { display_name: display_name }
+      )
+    end
+  end
+
+  def vcard_phone_numbers(vcard)
+    return [] if vcard.blank?
+
+    vcard.to_s.each_line.filter_map do |line|
+      match = line.match(/^TEL[^:]*:(.+)$/i)
+      match && match[1].strip.presence
+    end
+  end
+
+  def vcard_field(vcard, field)
+    vcard.to_s.match(/#{field}:(.+)/i)&.[](1)&.strip
   end
 
   def message_content_attributes

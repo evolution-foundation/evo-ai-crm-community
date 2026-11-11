@@ -69,7 +69,11 @@ class Messages::Instagram::BaseMessageBuilder < Messages::Messenger::MessageBuil
   end
 
   def find_conversation_scope
+    # Comment conversations are a separate thread (public/private reply routing):
+    # a DM must never be appended to one.
     Conversation.where(conversation_params)
+                .where("additional_attributes->>'conversation_type' IS NULL OR additional_attributes->>'conversation_type' != ?",
+                       Instagram::CommentCreator::CONVERSATION_TYPE)
   end
 
   def find_or_build_for_multiple_conversations

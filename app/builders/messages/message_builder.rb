@@ -77,6 +77,11 @@ class Messages::MessageBuilder
                              else
                                file_type(uploaded_attachment&.content_type)
                              end
+      # attachment.file already has the original filename at this point (Rails pulls it
+      # from the multipart upload's original_filename, or from the referenced blob when
+      # uploaded_attachment is a direct-upload signed ID) — fallback_title is what the
+      # chat UI shows instead of a generic "Arquivo" label.
+      attachment.fallback_title = attachment.file.filename.to_s if attachment.file.attached?
     end
   end
 
@@ -308,13 +313,27 @@ class Messages::MessageBuilder
     AgentBot.find_by(id: @params[:sender_id])
   end
 
+  def target_inbox_id
+    return @params[:inbox_id] if @params[:inbox_id].present?
+
+    if @in_reply_to.present?
+      replied_msg = @conversation.messages.find_by(id: @in_reply_to)
+      return replied_msg.inbox_id if replied_msg&.inbox_id.present?
+    end
+
+    last_inbox = @conversation.additional_attributes&.dig('last_inbox_id')
+    return last_inbox if last_inbox.present?
+
+    @conversation.inbox_id
+  end
+
   def message_params
     # If using template, content will be set by process_template_content
     # Otherwise, use the content from params
     content_value = @params[:content] || ''
 
     {
-      inbox_id: @conversation.inbox_id,
+      inbox_id: target_inbox_id,
       message_type: message_type,
       content: content_value,
       private: @private,

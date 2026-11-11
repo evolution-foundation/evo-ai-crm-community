@@ -14,6 +14,7 @@
 #  last_activity_at       :datetime         not null
 #  priority               :integer
 #  snoozed_until          :datetime
+#  source                 :integer          default("live"), not null
 #  status                 :integer          default("open"), not null
 #  uuid                   :uuid             not null
 #  waiting_since          :datetime
@@ -376,6 +377,13 @@ class Conversation < ApplicationRecord
 
   def conversation_status_changed_to_open?
     return false unless open?
+
+    # saved_change_to_status? method only works in case of update
+    true if previous_changes.key?(:id) || saved_change_to_status?
+  end
+
+  def conversation_status_changed_to_pending?
+    return false unless pending?
 
     # saved_change_to_status? method only works in case of update
     true if previous_changes.key?(:id) || saved_change_to_status?

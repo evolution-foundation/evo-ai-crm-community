@@ -63,4 +63,38 @@ RSpec.describe Messages::MessageBuilder do
       expect(message.additional_attributes['template_params']['id']).to eq(template.id)
     end
   end
+
+  # Regression: the chat UI shows a generic "Arquivo" label instead of the real
+  # filename for agent-sent attachments because fallback_title was never set on
+  # this (outbound) path — only the inbound WhatsApp-received path set it.
+  describe '#perform with attachments' do
+    def uploaded_file(filename, content_type: 'application/pdf')
+      tempfile = Tempfile.new(['upload', File.extname(filename)])
+      tempfile.binmode
+      tempfile.write('fake file content')
+      tempfile.rewind
+      ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: filename, type: content_type)
+    end
+
+    it 'stores the original filename as fallback_title for a direct multipart upload' do
+      params = { message_type: 'outgoing', attachments: [uploaded_file('pedido_39083.pdf')] }
+
+      message = described_class.new(nil, conversation, params).perform
+
+      expect(message.attachments.first.fallback_title).to eq('pedido_39083.pdf')
+    end
+
+    it 'stores the original filename as fallback_title for a direct-upload signed ID' do
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: StringIO.new('fake file content'),
+        filename: 'pedido_39127.pdf',
+        content_type: 'application/pdf'
+      )
+
+      params = { message_type: 'outgoing', attachments: [blob.signed_id] }
+      message = described_class.new(nil, conversation, params).perform
+
+      expect(message.attachments.first.fallback_title).to eq('pedido_39127.pdf')
+    end
+  end
 end

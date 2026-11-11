@@ -7,10 +7,12 @@ RSpec.describe Message do
 
   describe '#refresh_conversation_activity!' do
     it 'uses current time when requested even if created_at is older' do
-      conversation = double('Conversation', id: 'conv_1', class: Conversation)
+      conversation = double('Conversation', id: 'conv_1', class: Conversation, last_activity_at: nil)
       relation = double('Relation')
       message = described_class.new(created_at: 2.days.ago)
       allow(message).to receive(:conversation).and_return(conversation)
+      allow(conversation).to receive(:last_activity_at=)
+      allow(conversation).to receive(:updated_at=)
 
       travel_to(Time.zone.parse('2026-02-12 10:00:00')) do
         allow(Conversation).to receive(:where).with(id: 'conv_1').and_return(relation)
@@ -24,15 +26,24 @@ RSpec.describe Message do
         )
 
         message.refresh_conversation_activity!(message.created_at, use_current_time: true)
+
+        # In-memory sync (d1a49997): the already-loaded conversation object must
+        # reflect the fresh timestamp too, not just the DB row -- anything
+        # serializing/pushing that same request cycle (e.g. the websocket event)
+        # would otherwise see the stale in-memory value.
+        expect(conversation).to have_received(:last_activity_at=).with(Time.current)
+        expect(conversation).to have_received(:updated_at=).with(Time.current)
       end
     end
 
     it 'uses only provided timestamp when use_current_time is false' do
       older_time = Time.zone.parse('2026-02-10 10:00:00')
-      conversation = double('Conversation', id: 'conv_2', class: Conversation)
+      conversation = double('Conversation', id: 'conv_2', class: Conversation, last_activity_at: nil)
       relation = double('Relation')
       message = described_class.new(created_at: older_time)
       allow(message).to receive(:conversation).and_return(conversation)
+      allow(conversation).to receive(:last_activity_at=)
+      allow(conversation).to receive(:updated_at=)
 
       travel_to(Time.zone.parse('2026-02-12 11:00:00')) do
         allow(Conversation).to receive(:where).with(id: 'conv_2').and_return(relation)
@@ -46,6 +57,9 @@ RSpec.describe Message do
         )
 
         message.refresh_conversation_activity!(message.created_at, use_current_time: false)
+
+        expect(conversation).to have_received(:last_activity_at=).with(older_time)
+        expect(conversation).to have_received(:updated_at=).with(Time.current)
       end
     end
   end

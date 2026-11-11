@@ -12,8 +12,15 @@ class DataImport::ContactManager
     contact = find_existing_contact(params)
     contact_params = params.slice(:email, :identifier, :phone_number)
     contact_params[:phone_number] = format_phone_number(contact_params[:phone_number]) if contact_params[:phone_number].present?
-    contact_params[:type] = params[:tipo] || params[:type] || 'person'
-    contact ||= Contact.new(contact_params)
+    contact_params[:type] = params[:tipo].presence || params[:type].presence || 'person'
+    # Setting id explicitly (instead of relying on the DB's gen_random_uuid()
+    # default) matters here because Contact.import bulk-inserts every row of
+    # a batch with the same column list. If this batch also contains an
+    # already-persisted contact (matched by identity in find_existing_contact),
+    # its non-nil id forces the id column into that shared list, and any new
+    # contact left with a nil id would then be inserted with an explicit
+    # NULL instead of falling back to the default — a NOT NULL violation.
+    contact ||= Contact.new(contact_params.merge(id: SecureRandom.uuid))
     contact
   end
 
@@ -40,9 +47,10 @@ class DataImport::ContactManager
   end
 
   def find_contact_by_phone_number(params)
-    return unless params[:phone_number]
+    raw = params[:telefone] || params[:phone_number]
+    return unless raw
 
-    Contact.find_by(phone_number: format_phone_number(params[:phone_number]))
+    Contact.find_by(phone_number: format_phone_number(raw))
   end
 
   def find_contact_by_tax_id(params)
@@ -52,11 +60,15 @@ class DataImport::ContactManager
     Contact.find_by(tax_id: tax_id)
   end
 
+  # Delegates to the same normalizer Contact#prepare_phone_number_attribute uses
+  # before persisting. Using a different format here (e.g. a naive digit-strip)
+  # means find_contact_by_phone_number can miss an existing row whose phone was
+  # already normalized on a previous save (e.g. BR's nono digito), creating a
+  # duplicate contact instead of matching/merging into the existing one.
   def format_phone_number(phone_number)
     return unless phone_number.present?
 
-    cleaned = phone_number.to_s.gsub(/\D/, '')
-    cleaned.start_with?('+') ? cleaned : "+#{cleaned}"
+    Whatsapp::PhoneNumberNormalizer.to_e164(phone_number)
   end
 
   def sanitize_tax_id(tax_id)
@@ -75,7 +87,7 @@ class DataImport::ContactManager
 
   def update_contact_attributes(params, contact)
     # Tipo de contato
-    contact.type = params[:tipo] || params[:type] || 'person'
+    contact.type = params[:tipo].presence || params[:type].presence || 'person'
 
     # Campos base
     contact.name = build_name(params)
@@ -104,8 +116,10 @@ class DataImport::ContactManager
   end
 
   def build_name(params)
+    tipo = params[:tipo].presence || params[:type].presence || 'person'
+
     # Para pessoa física: primeiro_nome
-    if params[:tipo] == 'person' || params[:type] == 'person'
+    if tipo == 'person'
       first_name = params[:primeiro_nome] || params[:first_name] || params[:nome] || params[:name]
       last_name = params[:sobrenome] || params[:last_name]
       return "#{first_name} #{last_name}".strip if first_name.present?

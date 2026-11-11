@@ -87,7 +87,7 @@ class Api::V1::ContactsController < Api::V1::BaseController
     end
 
     ActiveRecord::Base.transaction do
-      import = DataImport.all.create!(data_type: 'contacts')
+      import = DataImport.all.create!(data_type: 'contacts', label: params[:label].presence)
       import.import_file.attach(params[:import_file])
     end
 
@@ -375,6 +375,10 @@ class Api::V1::ContactsController < Api::V1::BaseController
 
   private
 
+  def apply_pagination
+    # no-op: paginação já é aplicada dentro de fetch_contacts para evitar carregamento completo
+  end
+
   # Cache key for contacts count, varies by query parameters that affect listable contacts
   def cache_key_for_contacts_count
     # Build a deterministic string based on filters that influence the count
@@ -422,19 +426,34 @@ class Api::V1::ContactsController < Api::V1::BaseController
   end
 
   def fetch_contacts(contacts)
-    # Eager load conversations and pipeline items to avoid N+1 queries
+    # Padrão: obter os parâmetros de paginação e aplicar logo no início,
+    # evitando que carreguemos e instanciemos toda a base de contatos em memória
+    page = params[:page]&.to_i || 1
+    page_size = params[:pageSize]&.to_i || params[:page_size]&.to_i || params[:per_page]&.to_i || 20
+    page_size = [page_size.to_i, 1].max
+
+    # Eager-load spec built once, up front. Appending `.includes(...)` onto an
+    # already-*loaded* relation (as this used to do below, conditionally, after
+    # `.map(&:id)` had already forced execution) doesn't extend that load — it
+    # returns a fresh, unexecuted relation, so the whole heavy join (avatar,
+    # conversations -> pipeline_items, labels, companies) silently re-ran a
+    # second time whenever @include_contact_inboxes was true (the default).
+    # Building the full list first keeps this to a single query.
+    includes_spec = [
+      { avatar_attachment: [:blob] },
+      { conversations: { pipeline_items: [:pipeline, :pipeline_stage] } }
+    ]
+    includes_spec << { contact_inboxes: [:inbox] } if @include_contact_inboxes
+
     contacts_with_associations = filtrate(contacts)
-                                   .includes([
-                                               { avatar_attachment: [:blob] },
-                                               { conversations: { pipeline_items: [:pipeline, :pipeline_stage] } }
-                                             ])
+                                   .page(page)
+                                   .per(page_size)
+                                   .includes(includes_spec)
                                    .preload(:labels, :companies, :contact_companies, :company_contacts)
 
-    # Also preload pipeline items directly associated with contacts
+    # Also preload pipeline items directly associated with contacts (only for the current page subset)
     contact_ids = contacts_with_associations.map(&:id)
     PipelineItem.where(contact_id: contact_ids).includes(:pipeline, :pipeline_stage).load
-
-    return contacts_with_associations.includes([{ contact_inboxes: [:inbox] }]) if @include_contact_inboxes
 
     contacts_with_associations
   end

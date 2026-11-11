@@ -70,6 +70,15 @@ module InboxSerializer
         result['hmac_token'] = inbox.channel.hmac_token if Current.user&.role == 'administrator'
       end
 
+      # Email channel specific fields (IMAP/SMTP and OAuth providers like Google/Microsoft).
+      # Without this, the frontend never receives the connected mailbox address at the
+      # top level — it only shows up nested under `channel` when include_channel is
+      # requested, so screens that render `inbox.email` (settings title, OAuth
+      # reconnect flow) silently break.
+      if inbox.email?
+        result['email'] = inbox.channel.email
+      end
+
       # SendGrid specific fields
       # 🔒 SECURITY: never expose api_key / api_key_encrypted; only signal presence
       if inbox.sendgrid?

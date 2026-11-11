@@ -161,18 +161,78 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def set_conversation
-    # Primeiro: busca conversation existente
-    @conversation = if @inbox.lock_to_single_conversation
-                      @contact_inbox.conversations.last
-                    else
-                      @contact_inbox.conversations
-                                    .where.not(status: :resolved).last
-                    end
-    return if @conversation  # ← Se encontrou, retorna
+    # Primeiro: busca conversa ATIVA (não resolvida) no mesmo inbox
+    @conversation = @contact_inbox.conversations.where.not(status: :resolved).last
 
-    # Segundo: se não encontrou, cria nova usando operação atômica
-    # find_or_create_by é mais seguro que create! para evitar race conditions
+    # Segundo: busca conversa ATIVA do mesmo contato (incluindo variações do 9º dígito BR) em qualquer outro canal WhatsApp
+    @conversation ||= find_cross_inbox_conversation(only_active: true)
+
+    # Terceiro: se não há nenhuma conversa ativa em nenhum canal e o inbox trava em conversa única, reaproveita a última (mesmo resolvida)
+    if @conversation.nil? && @inbox.lock_to_single_conversation
+      @conversation = @contact_inbox.conversations.last || find_cross_inbox_conversation(only_active: false)
+    end
+
+    if @conversation
+      update_last_inbox_on_conversation
+      return
+    end
+
+    # Quarto: se não encontrou em nenhum canal, cria nova usando operação atômica
     @conversation = ::Conversation.find_or_create_by!(conversation_params)
+    update_last_inbox_on_conversation
+  end
+
+  def find_cross_inbox_conversation(only_active: true)
+    return unless @contact
+
+    scope = ::Conversation.joins(:inbox)
+                          .where(contact_id: related_contact_ids)
+                          .where(inboxes: { channel_type: 'Channel::Whatsapp' })
+    scope = scope.where.not(status: :resolved) if only_active
+    scope.order(last_activity_at: :desc).first
+  end
+
+  def related_contact_ids
+    return [] unless @contact
+
+    ids = [@contact.id]
+    phone = @contact.try(:phone_number)
+    if phone.present? && !@contact.try(:group?)
+      variants = br_phone_variants(phone)
+      ids.concat(::Contact.where(phone_number: variants).pluck(:id))
+    end
+    ids.uniq
+  end
+
+  def br_phone_variants(phone)
+    digits = phone.to_s.gsub(/\D/, '')
+    return [phone] if digits.blank?
+
+    variants = [phone, "+#{digits}"]
+    e164 = Whatsapp::PhoneNumberNormalizer.to_e164(phone)
+    variants << e164 if e164.present?
+    if brazil_phone_number?(digits)
+      with_nine = normalised_brazil_mobile_number(digits)
+      variants << "+#{with_nine}"
+      if digits.length == 13 && digits[4] == '9'
+        without_nine = "55#{digits[2, 2]}#{digits[5, 8]}"
+        variants << "+#{without_nine}"
+      end
+    end
+    variants.compact.uniq
+  end
+
+  def update_last_inbox_on_conversation
+    return unless @conversation
+
+    @contact = @conversation.contact if @conversation.try(:contact).present? && @conversation.contact_id != @contact&.id
+
+    attrs = (@conversation.additional_attributes || {}).dup
+    if attrs['last_inbox_id'] != @inbox.id
+      attrs['last_inbox_id'] = @inbox.id
+      attrs['last_inbox_name'] = @inbox.name
+      @conversation.update_column(:additional_attributes, attrs)
+    end
   end
 
   def attach_files
@@ -224,7 +284,8 @@ class Whatsapp::IncomingMessageBaseService
     phones.each do |phone|
       @message.attachments.new(
         file_type: file_content_type(message_type),
-        fallback_title: phone[:phone].to_s
+        fallback_title: phone[:phone].to_s,
+        meta: { display_name: contact.dig(:name, :formatted_name) }
       )
     end
   end

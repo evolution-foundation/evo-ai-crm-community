@@ -1,6 +1,7 @@
 class Api::V1::Conversations::MessagesController < Api::V1::Conversations::BaseController
   require_permissions({
     index: 'conversations.read',
+    resolve: 'conversations.read',
     create: 'conversations.update',
     update: 'conversations.update',
     destroy: 'conversations.update',
@@ -15,6 +16,33 @@ class Api::V1::Conversations::MessagesController < Api::V1::Conversations::BaseC
     success_response(
       data: MessageSerializer.serialize_collection(@messages, include_attachments: true, include_sender: true),
       message: 'Messages retrieved successfully'
+    )
+  end
+
+  # Lets a client resolve a single message it doesn't have loaded (e.g. a
+  # reply preview pointing at a message outside the currently paginated
+  # window) without paging through the whole conversation to find it.
+  #
+  # ?ref= accepts either our internal UUID or the provider's source_id: an
+  # inbound WhatsApp reply quotes the OTHER party's WhatsApp message id
+  # (content_attributes.in_reply_to_external_id), which is never our
+  # internal message id. A query param (not a :id path segment) on purpose -
+  # WhatsApp message ids are base64-ish and can contain "/", which a path
+  # segment can't carry safely (nginx/Rails routing treats it as a
+  # separator even percent-encoded), where a query string value is fine.
+  def resolve
+    @message = find_by_id_or_source_id(params[:ref])
+    raise ActiveRecord::RecordNotFound unless @message
+
+    success_response(
+      data: MessageSerializer.serialize(@message, include_attachments: true, include_sender: true),
+      message: 'Message retrieved successfully'
+    )
+  rescue ActiveRecord::RecordNotFound
+    error_response(
+      ApiErrorCodes::RESOURCE_NOT_FOUND,
+      'Message not found',
+      status: :not_found
     )
   end
 
@@ -128,6 +156,17 @@ class Api::V1::Conversations::MessagesController < Api::V1::Conversations::BaseC
 
   def message
     @message ||= @conversation.messages.find(permitted_params[:id])
+  end
+
+  UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+
+  # #resolve only: id/source_id can't be OR'd in one query - the id column is
+  # `uuid` typed, and Postgres raises (not "no match") when it's compared
+  # against a non-UUID string like a WhatsApp source_id ("wamid.HBg...").
+  def find_by_id_or_source_id(id)
+    return @conversation.messages.find_by(id: id) if id.to_s.match?(UUID_FORMAT)
+
+    @conversation.messages.find_by(source_id: id)
   end
 
   def message_finder

@@ -35,4 +35,31 @@ namespace :evo_flow do
     puts "[evo_flow:backfill] enqueued: account_id=#{args[:account_id] || 'ALL'} " \
          "dry_run=#{dry_run} from_date=#{from_date.iso8601}"
   end
+
+  # Backfill existing contact labels (taggings, context: 'labels') to
+  # evo-flow's local taggings table, so tag-filtered campaign audiences
+  # resolve correctly for labels applied before EVO_FLOW_ENABLED was turned
+  # on — the live listener only forwards label add/remove events going
+  # forward, there is no retroactive sync for pre-existing tags.
+  #
+  # Usage:
+  #   bundle exec rake evo_flow:backfill_labels              # ALL, dry-run (default)
+  #   DRY_RUN=false bundle exec rake evo_flow:backfill_labels  # real publish
+  #   # Production hard-stop: CONFIRM is required for any non-dry-run.
+  #   DRY_RUN=false CONFIRM=I_KNOW_WHAT_IM_DOING bundle exec rake evo_flow:backfill_labels
+  desc 'Backfill existing contact labels to evo-flow (DRY_RUN=true default; CONFIRM gates prod).'
+  task :backfill_labels, [:account_id] => :environment do |_, args|
+    dry_run = ENV.fetch('DRY_RUN', 'true').to_s.casecmp('true').zero?
+
+    if Rails.env.production? && !dry_run && ENV['CONFIRM'] != 'I_KNOW_WHAT_IM_DOING'
+      raise 'Refusing to run real backfill in production without CONFIRM=I_KNOW_WHAT_IM_DOING'
+    end
+
+    EvoFlow::BackfillContactLabelsWorker.perform_async(
+      args[:account_id]&.to_s,
+      'dry_run' => dry_run
+    )
+
+    puts "[evo_flow:backfill_labels] enqueued: account_id=#{args[:account_id] || 'ALL'} dry_run=#{dry_run}"
+  end
 end

@@ -453,6 +453,10 @@ module Whatsapp::EvolutionGoHandlers::MessagesUpsert
     attrs = { external_created_at: message_timestamp }
     attrs[:sender_name] = participant_push_name if group_message? && participant_push_name.present?
     attrs[:media_type] = evolution_go_media_type if evolution_go_media_type.present?
+    if group_message?
+      mentions = mentioned_jids
+      attrs[:mentioned_jids] = mentions if mentions.any?
+    end
     attrs
   end
 

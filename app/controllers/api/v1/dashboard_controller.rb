@@ -19,6 +19,11 @@ class Api::V1::DashboardController < Api::V1::BaseController
   private
 
   def dashboard_params
-    params.permit(:pipeline_id, :team_id, :inbox_id, :user_id, :since, :until)
+    permitted = params.permit(:pipeline_id, :team_id, :inbox_id, :user_id, :since, :until)
+    
+    # Enforce agent data isolation: Agents can only see their own dashboard data
+    permitted[:user_id] = current_user.id unless current_user.administrator?
+    
+    permitted
   end
 end

@@ -114,6 +114,8 @@ class Attachment < ApplicationRecord
       extension: extension,
       data_url: widget_data_url,
       thumb_url: thumb_url,
+      file_name: file.attached? ? file.filename.to_s : fallback_title,
+      content_type: file.attached? ? file.content_type : nil,
       file_size: file.byte_size,
       width: file.metadata[:width],
       height: file.metadata[:height],

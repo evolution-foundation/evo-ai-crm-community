@@ -33,9 +33,14 @@ class Conversations::FilterService < FilterService
                               :team,
                               :contact_inbox,
                               :taggings,
-                              messages: { attachments: { file_attachment: :blob } },
                               pipeline_items: [:pipeline, :pipeline_stage, :stage_movements]
                             )
+                            # NOTE: no `messages:` preload here on purpose. The controller renders
+                            # this list with `include_messages: false` and gets the last-message
+                            # preview from `last_non_activity_messages_map` (a self-contained LATERAL
+                            # SQL query, independent of any association preload) — so eager-loading
+                            # every message (+ attachments + file blobs) of every matched conversation
+                            # was pure waste, and the dominant cost on conversations with long history.
 
     Conversations::PermissionFilterService.new(
       conversations,
