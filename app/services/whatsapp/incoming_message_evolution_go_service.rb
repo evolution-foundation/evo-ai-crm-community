@@ -69,9 +69,14 @@ class Whatsapp::IncomingMessageEvolutionGoService < Whatsapp::IncomingMessageBas
     contact_conversations = contact_conversations.where.not(status: :resolved) unless @inbox.lock_to_single_conversation
 
     @conversation = contact_conversations.order(:created_at).last
-    return if @conversation
+    @conversation ||= find_cross_inbox_conversation
+    if @conversation
+      update_last_inbox_on_conversation
+      return
+    end
 
     @conversation = ::Conversation.find_or_create_by!(conversation_params)
+    update_last_inbox_on_conversation
   end
 
   def incoming?

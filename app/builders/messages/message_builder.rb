@@ -313,13 +313,27 @@ class Messages::MessageBuilder
     AgentBot.find_by(id: @params[:sender_id])
   end
 
+  def target_inbox_id
+    return @params[:inbox_id] if @params[:inbox_id].present?
+
+    if @in_reply_to.present?
+      replied_msg = @conversation.messages.find_by(id: @in_reply_to)
+      return replied_msg.inbox_id if replied_msg&.inbox_id.present?
+    end
+
+    last_inbox = @conversation.additional_attributes&.dig('last_inbox_id')
+    return last_inbox if last_inbox.present?
+
+    @conversation.inbox_id
+  end
+
   def message_params
     # If using template, content will be set by process_template_content
     # Otherwise, use the content from params
     content_value = @params[:content] || ''
 
     {
-      inbox_id: @conversation.inbox_id,
+      inbox_id: target_inbox_id,
       message_type: message_type,
       content: content_value,
       private: @private,

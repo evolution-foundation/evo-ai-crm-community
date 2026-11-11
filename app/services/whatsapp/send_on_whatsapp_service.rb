@@ -123,7 +123,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     # Use contact identifier if available (for Evolution Go SenderAlt), otherwise fallback to source_id
     target_number = determine_target_number_for_sending
 
-    Rails.logger.info "WhatsApp Send: Using number #{target_number} for contact #{message.conversation.contact.id} (identifier: #{message.conversation.contact.identifier}, source_id: #{message.conversation.contact_inbox.source_id})"
+    Rails.logger.info "WhatsApp Send: Using number #{target_number} for contact #{contact.id} (identifier: #{contact.identifier}, source_id: #{contact_inbox.source_id})"
 
     provider = channel.provider_service
     message_id = provider.send_message(target_number, message)
@@ -164,8 +164,8 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def determine_target_number_for_sending
-    contact = message.conversation.contact
-    contact_inbox = message.conversation.contact_inbox
+    contact = self.contact
+    contact_inbox = self.contact_inbox
 
     Rails.logger.info "WhatsApp Send: Determining target number for contact #{contact.id} (identifier: #{contact.identifier}, phone: #{contact.phone_number}, source_id: #{contact_inbox.source_id})"
 

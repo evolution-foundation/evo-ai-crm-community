@@ -21,8 +21,32 @@ class Base::SendOnChannelService
   private
 
   delegate :conversation, to: :message
-  delegate :contact, :contact_inbox, :inbox, to: :conversation
-  delegate :channel, to: :inbox
+  delegate :contact, to: :conversation
+
+  def inbox
+    message.inbox || conversation.inbox
+  end
+
+  def channel
+    inbox.channel
+  end
+
+  def contact_inbox
+    @contact_inbox ||= begin
+      ci = inbox.contact_inboxes.find_by(contact_id: contact.id)
+      if ci.blank? && conversation.contact_inbox.present?
+        begin
+          ci = inbox.contact_inboxes.create(
+            contact_id: contact.id,
+            source_id: conversation.contact_inbox.source_id
+          )
+        rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
+          ci = inbox.contact_inboxes.find_by(contact_id: contact.id)
+        end
+      end
+      ci || conversation.contact_inbox
+    end
+  end
 
   def channel_class
     raise 'Overwrite this method in child class'

@@ -162,20 +162,13 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
     #   "message": "success"
     # }
 
-    if parsed_response['data']
-      {
-        base64: parsed_response['data']['Qrcode'],
-        code: parsed_response['data']['Code'],
-        connected: false
-      }
-    else
-      # Fallback se estrutura for diferente
-      {
-        base64: parsed_response['Qrcode'],
-        code: parsed_response['Code'],
-        connected: false
-      }
-    end
+    # Evolution Go versions differ in key casing ("Qrcode"/"Code" vs "qrcode"/"code").
+    payload = parsed_response['data'].is_a?(Hash) ? parsed_response['data'] : parsed_response
+    {
+      base64: payload['Qrcode'] || payload['qrcode'],
+      code: payload['Code'] || payload['code'],
+      connected: false
+    }
 
   rescue JSON::ParserError => e
     Rails.logger.error "Evolution Go API: QR code JSON parse error: #{e.message}, Body: #{response&.body}"

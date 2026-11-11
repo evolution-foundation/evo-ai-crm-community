@@ -161,18 +161,46 @@ class Whatsapp::IncomingMessageBaseService
   end
 
   def set_conversation
-    # Primeiro: busca conversation existente
+    # Primeiro: busca conversation existente no mesmo inbox
     @conversation = if @inbox.lock_to_single_conversation
                       @contact_inbox.conversations.last
                     else
                       @contact_inbox.conversations
                                     .where.not(status: :resolved).last
                     end
-    return if @conversation  # ← Se encontrou, retorna
 
-    # Segundo: se não encontrou, cria nova usando operação atômica
-    # find_or_create_by é mais seguro que create! para evitar race conditions
+    # Segundo: busca conversa ativa do mesmo contato em qualquer outro canal WhatsApp da conta (Cross-Inbox)
+    @conversation ||= find_cross_inbox_conversation
+
+    if @conversation
+      update_last_inbox_on_conversation
+      return
+    end
+
+    # Terceiro: se não encontrou em nenhum canal, cria nova usando operação atômica
     @conversation = ::Conversation.find_or_create_by!(conversation_params)
+    update_last_inbox_on_conversation
+  end
+
+  def find_cross_inbox_conversation
+    return unless @contact
+
+    scope = @contact.conversations
+                    .joins(:inbox)
+                    .where(inboxes: { channel_type: 'Channel::Whatsapp' })
+    scope = scope.where.not(status: :resolved) unless @inbox.lock_to_single_conversation
+    scope.order(last_activity_at: :desc).first
+  end
+
+  def update_last_inbox_on_conversation
+    return unless @conversation
+
+    attrs = (@conversation.additional_attributes || {}).dup
+    if attrs['last_inbox_id'] != @inbox.id
+      attrs['last_inbox_id'] = @inbox.id
+      attrs['last_inbox_name'] = @inbox.name
+      @conversation.update_column(:additional_attributes, attrs)
+    end
   end
 
   def attach_files

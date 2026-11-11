@@ -4,7 +4,8 @@ class SendReplyJob < ApplicationJob
   def perform(message_id)
     message = Message.find(message_id)
     conversation = message.conversation
-    channel_name = conversation.inbox.channel.class.to_s
+    inbox = message.inbox || conversation.inbox
+    channel_name = inbox.channel.class.to_s
 
     services = {
       'Channel::TwitterProfile' => ::Twitter::SendOnTwitterService,
