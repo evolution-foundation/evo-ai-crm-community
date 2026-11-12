@@ -142,6 +142,7 @@ on:
       - 'app/serializers/conversation_serializer.rb'
       - 'app/serializers/contact_serializer.rb'
       - 'app/controllers/api/v1/conversations_controller.rb'
+      - 'spec/requests/api/v1/conversations/custom_attributes_spec.rb'
       - 'app/controllers/concerns/label_concern.rb'
       - 'spec/serializers/label_resolution_parity_spec.rb'
       - 'spec/serializers/contact_serializer_spec.rb'
@@ -825,6 +826,7 @@ jobs:
             spec/migrations/20260914120000_drop_mentions_table_spec.rb \
             spec/finders/message_finder_spec.rb \
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
+            spec/requests/api/v1/conversations/custom_attributes_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
             spec/services/auto_assignment/inbox_round_robin_service_spec.rb \
             spec/models/label_validation_spec.rb \
