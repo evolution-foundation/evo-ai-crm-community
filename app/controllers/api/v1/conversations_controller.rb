@@ -460,6 +460,29 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     update_custom_attribute('archived', false, 'Conversation unarchived successfully')
   end
 
+  def custom_attributes
+    @conversation.custom_attributes = params.permit(custom_attributes: {})[:custom_attributes]
+    @conversation.save!
+    
+    success_response(
+      data: ConversationSerializer.serialize(
+        @conversation,
+        include_messages: false,
+        include_labels: true,
+        labels_by_title: labels_by_title,
+        labels_by_id: labels_by_id
+      ),
+      message: 'Conversation custom attributes updated successfully'
+    )
+  rescue StandardError => e
+    error_response(
+      ApiErrorCodes::VALIDATION_ERROR,
+      'Failed to update custom attributes',
+      details: e.message,
+      status: :unprocessable_entity
+    )
+  end
+
   private
 
   # Service-token requests reach this action with no Current.user (the permission
@@ -531,29 +554,6 @@ class Api::V1::ConversationsController < Api::V1::BaseController
       has_next_page: current_page < total_pages,
       has_previous_page: current_page > 1
     }
-  end
-
-  def custom_attributes
-    @conversation.custom_attributes = params.permit(custom_attributes: {})[:custom_attributes]
-    @conversation.save!
-    
-    success_response(
-      data: ConversationSerializer.serialize(
-        @conversation,
-        include_messages: false,
-        include_labels: true,
-        labels_by_title: labels_by_title,
-        labels_by_id: labels_by_id
-      ),
-      message: 'Conversation custom attributes updated successfully'
-    )
-  rescue StandardError => e
-    error_response(
-      ApiErrorCodes::VALIDATION_ERROR,
-      'Failed to update custom attributes',
-      details: e.message,
-      status: :unprocessable_entity
-    )
   end
 
   public
