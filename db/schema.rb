@@ -31,11 +31,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_120000) do
     t.datetime "created_at", default: -> { "now()" }, null: false
     t.datetime "updated_at", default: -> { "now()" }, null: false
     t.uuid "issued_id"
-    t.string "token_digest"
     t.index ["issued_id"], name: "index_access_tokens_on_issued_id"
     t.index ["owner_type", "owner_id"], name: "index_access_tokens_on_owner_type_and_owner_id"
     t.index ["token"], name: "index_access_tokens_on_token", unique: true
-    t.index ["token_digest"], name: "index_access_tokens_on_token_digest", unique: true
   end
 
   create_table "action_mailbox_inbound_emails", force: :cascade do |t|
