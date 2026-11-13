@@ -57,13 +57,13 @@ module EvoAuthConcern
   end
 
   # Resolve the granular `conversations.read_all` permission once per request and
-  # cache it in Current. Admin short-circuits BEFORE any remote call, unless an
-  # API token narrows the request. Non-admins resolve via the remote evo-auth check
+  # cache it in Current. Admin short-circuits BEFORE any remote call (an API token
+  # that narrows the request is not admin, see UserAttributeHelpers). Non-admins resolve via the remote evo-auth check
   # (cached per request by the concern). The model/policy/finder read this flag
   # (mirroring how `administrator?` reads `Current.evo_role_key`) — they never call
   # the CRM `User#has_permission?` stub.
   def can_read_all_inboxes?(user)
-    return true if user.administrator? && Current.api_token_scopes.nil?
+    return true if user.administrator?
 
     has_user_permission?(user.id, 'conversations.read_all')
   end
@@ -78,7 +78,7 @@ module EvoAuthConcern
     scopes = token['scopes'].to_s.split(/[,\s]+/).reject(&:blank?)
     return nil if scopes.empty? || scopes.include?(AccessToken::UNRESTRICTED_SCOPE)
 
-    Array(token['effective_scopes']).presence || scopes
+    token.key?('effective_scopes') ? Array(token['effective_scopes']) : scopes
   end
 
   def find_local_user(user_data)

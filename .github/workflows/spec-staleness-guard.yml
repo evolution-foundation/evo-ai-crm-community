@@ -602,6 +602,8 @@ on:
       # An API access token is bounded by its scopes, which the auth sends with
       # the validation, and is looked up by its digest.
       - 'app/models/access_token.rb'
+      - 'app/models/concerns/api_token_scope.rb'
+      - 'app/models/concerns/user_attribute_helpers.rb'
       - 'app/controllers/concerns/evo_auth_concern.rb'
       - 'app/controllers/concerns/evo_permission_concern.rb'
       - 'app/controllers/concerns/access_token_auth_helper.rb'

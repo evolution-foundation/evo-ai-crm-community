@@ -24,6 +24,10 @@ module UserAttributeHelpers
     # bootstrap user loses the admin bypass on inbox / conversation visibility
     # and the conversations list goes empty until they're explicitly added as
     # an inbox member.
+    #
+    # A scoped API token narrows the user to its scopes, admin bypasses included.
+    return false if ApiTokenScope.narrows?(id)
+
     Current.evo_role_key.in?(%w[super_admin account_owner administrator admin])
   end
 
@@ -40,6 +44,8 @@ module UserAttributeHelpers
   # cache namespace with EvoPermissionConcern so a verdict is fetched once per
   # (user, scope, permission). Fail-closed on errors.
   def has_permission?(permission)
+    return false unless ApiTokenScope.allows?(id, permission)
+
     scope_id = EvoExtensionPoints::RuntimeContext.current_scope_id
     cache = (Current.evo_permission_cache ||= {})
     cache_key = "user:#{id}:#{scope_id}:#{permission}"

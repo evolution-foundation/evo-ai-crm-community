@@ -38,7 +38,9 @@ class AccessToken < ApplicationRecord
 
   validates :token_digest, presence: true, uniqueness: true
 
-  before_validation :generate_token, on: :create
+  # As before the digest: generated on create, after validation, so a token
+  # created without a digest (AgentBot's after_create) is still not saved.
+  before_create :generate_token
 
   def self.digest(raw_token)
     Digest::SHA256.hexdigest(raw_token.to_s)
@@ -47,7 +49,9 @@ class AccessToken < ApplicationRecord
   def self.for_token(raw_token)
     return nil if raw_token.blank?
 
-    find_by(token_digest: digest(raw_token))
+    find_by(token_digest: digest(raw_token)) ||
+      # Written by an auth of the previous release during a rolling deploy.
+      where(token_digest: nil).find_by('token = ?', raw_token.to_s)
   end
 
   def regenerate_token

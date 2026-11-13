@@ -36,6 +36,7 @@ RSpec.describe EvoPermissionConcern do
     authenticate_with({ 'scopes' => 'labels.read', 'effective_scopes' => %w[labels.read dashboard.read] })
 
     expect(harness.send(:has_user_permission?, 'u1', 'labels.read')).to be(true)
+    expect(harness.send(:has_user_permission?, 'u1', 'dashboard.read')).to be(true)
     expect(harness.send(:has_user_permission?, 'u1', 'contacts.read')).to be(false)
     expect(harness.send(:has_user_permission?, 'u1', 'labels.create')).to be(false)
   end
@@ -47,22 +48,58 @@ RSpec.describe EvoPermissionConcern do
     expect(harness.send(:has_user_permission?, 'u1', 'labels.read')).to be(false)
   end
 
-  it 'leaves a default-scoped token bounded by the user alone' do
-    authenticate_with({ 'scopes' => 'default' })
+  it 'does not fall back to the listed scopes when the auth resolved none' do
+    authenticate_with({ 'scopes' => 'labels.read', 'effective_scopes' => [] })
 
-    expect(Current.api_token_scopes).to be_nil
-    expect(harness.send(:has_user_permission?, 'u1', 'contacts.read')).to be(true)
+    expect(harness.send(:has_user_permission?, 'u1', 'labels.read')).to be(false)
   end
 
-  it 'does not touch bearer sessions' do
-    authenticate_with({ 'scopes' => 'labels.read' }, method: 'bearer')
+  # Outside the bound the verdict is the user's own: a resolver that denies
+  # must still deny, so these paths cannot grant on their own.
+  context 'when the token does not bound the check' do
+    before { EvoExtensionPoints.replace(:permission_resolver) { |permission_key:, **| permission_key != 'contacts.read' } }
 
-    expect(harness.send(:has_user_permission?, 'u1', 'contacts.read')).to be(true)
+    it 'leaves a default-scoped token bounded by the user alone' do
+      authenticate_with({ 'scopes' => 'default' })
+
+      expect(Current.api_token_scopes).to be_nil
+      expect(harness.send(:has_user_permission?, 'u1', 'labels.read')).to be(true)
+      expect(harness.send(:has_user_permission?, 'u1', 'contacts.read')).to be(false)
+    end
+
+    it 'does not touch bearer sessions' do
+      authenticate_with({ 'scopes' => 'labels.read' }, method: 'bearer')
+
+      expect(harness.send(:has_user_permission?, 'u1', 'inboxes.read')).to be(true)
+      expect(harness.send(:has_user_permission?, 'u1', 'contacts.read')).to be(false)
+    end
+
+    it 'does not bound permission checks about another user' do
+      authenticate_with({ 'scopes' => 'labels.read', 'effective_scopes' => %w[labels.read] })
+
+      expect(harness.send(:has_user_permission?, 'u2', 'inboxes.read')).to be(true)
+      expect(harness.send(:has_user_permission?, 'u2', 'contacts.read')).to be(false)
+    end
   end
 
-  it 'does not bound permission checks about another user' do
-    authenticate_with({ 'scopes' => 'labels.read', 'effective_scopes' => %w[labels.read] })
+  # Policies and models ask the user directly, and admins skip them altogether.
+  describe 'User' do
+    let(:user) { User.create!(email: "scoped-#{SecureRandom.hex(4)}@example.com", name: 'Scoped') }
 
-    expect(harness.send(:has_user_permission?, 'u2', 'contacts.read')).to be(true)
+    before { Current.evo_role_key = 'super_admin' }
+
+    it 'is no admin and holds only the scoped permissions under a scoped token' do
+      authenticate_with({ 'scopes' => 'labels.read', 'effective_scopes' => %w[labels.read] })
+
+      expect(user.administrator?).to be(false)
+      expect(user.has_permission?('labels.read')).to be(true)
+      expect(user.has_permission?('contacts.read')).to be(false)
+    end
+
+    it 'stays admin under a session' do
+      authenticate_with({}, method: 'bearer')
+
+      expect(user.administrator?).to be(true)
+    end
   end
 end
