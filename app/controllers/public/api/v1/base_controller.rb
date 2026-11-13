@@ -19,7 +19,7 @@ class Public::Api::V1::BaseController < PublicController
       return
     end
 
-    @access_token = AccessToken.find_by(token: api_key)
+    @access_token = AccessToken.for_token(api_key)
 
     if @access_token.blank?
       render_unauthorized('Invalid API key')

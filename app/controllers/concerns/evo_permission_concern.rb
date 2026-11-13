@@ -78,6 +78,8 @@ module EvoPermissionConcern
   # in community) and is part of the cache key, so two accounts touched in one
   # process are never served each other's verdict.
   def has_user_permission?(user_id, permission)
+    return false unless ApiTokenScope.allows?(user_id, permission)
+
     Current.evo_permission_cache ||= {}
     scope_id = EvoExtensionPoints::RuntimeContext.current_scope_id
     cache_key = "user:#{user_id}:#{scope_id}:#{permission}"

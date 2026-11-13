@@ -7,7 +7,7 @@ module AccessTokenAuthHelper
 
   def ensure_access_token
     token = request.headers[:api_access_token] || request.headers[:HTTP_API_ACCESS_TOKEN]
-    @access_token = AccessToken.find_by(token: token) if token.present?
+    @access_token = AccessToken.for_token(token) if token.present?
   end
 
   def authenticate_access_token!
