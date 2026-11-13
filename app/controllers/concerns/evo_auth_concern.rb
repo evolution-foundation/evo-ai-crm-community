@@ -37,23 +37,14 @@ module EvoAuthConcern
     # Set current user
     Current.user = user
     @current_user = user
+    Current.api_token_scopes = api_token_scopes_from(user_data, token_type)
     Current.authentication_method = token_type
 
     # Store role key from evo-auth for permission checks
     role_key = user_data.dig('user', 'role', 'key') || user_data.dig('role', 'key')
     Current.evo_role_key = role_key
 
-    # Resolve the granular `conversations.read_all` permission once per request and
-    # cache it in Current. Admin short-circuits BEFORE any remote call. Non-admins
-    # resolve via the remote evo-auth check (cached per request by the concern). The
-    # model/policy/finder read this flag (mirroring how `administrator?` reads
-    # `Current.evo_role_key`) — they never call the CRM `User#has_permission?` stub.
-    Current.evo_can_read_all_inboxes =
-      if user.administrator?
-        true
-      else
-        has_user_permission?(user.id, 'conversations.read_all')
-      end
+    Current.evo_can_read_all_inboxes = can_read_all_inboxes?(user)
 
     Current.account ||= RuntimeConfig.account
 
@@ -63,6 +54,31 @@ module EvoAuthConcern
     elsif token_type == 'api_access_token'
       Current.api_access_token = token
     end
+  end
+
+  # Resolve the granular `conversations.read_all` permission once per request and
+  # cache it in Current. Admin short-circuits BEFORE any remote call, unless an
+  # API token narrows the request. Non-admins resolve via the remote evo-auth check
+  # (cached per request by the concern). The model/policy/finder read this flag
+  # (mirroring how `administrator?` reads `Current.evo_role_key`) — they never call
+  # the CRM `User#has_permission?` stub.
+  def can_read_all_inboxes?(user)
+    return true if user.administrator? && Current.api_token_scopes.nil?
+
+    has_user_permission?(user.id, 'conversations.read_all')
+  end
+
+  # The permission keys an API access token may exercise, as the auth resolved
+  # them. nil leaves the request bounded by the user alone: a session, a legacy
+  # "default" token, or an auth that sends no scopes.
+  def api_token_scopes_from(user_data, token_type)
+    return nil unless token_type == 'api_access_token'
+
+    token = user_data['token'] || {}
+    scopes = token['scopes'].to_s.split(/[,\s]+/).reject(&:blank?)
+    return nil if scopes.empty? || scopes.include?(AccessToken::UNRESTRICTED_SCOPE)
+
+    Array(token['effective_scopes']).presence || scopes
   end
 
   def find_local_user(user_data)

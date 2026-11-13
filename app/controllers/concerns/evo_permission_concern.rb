@@ -78,6 +78,8 @@ module EvoPermissionConcern
   # in community) and is part of the cache key, so two accounts touched in one
   # process are never served each other's verdict.
   def has_user_permission?(user_id, permission)
+    return false unless api_token_scope_allows?(user_id, permission)
+
     Current.evo_permission_cache ||= {}
     scope_id = EvoExtensionPoints::RuntimeContext.current_scope_id
     cache_key = "user:#{user_id}:#{scope_id}:#{permission}"
@@ -94,6 +96,17 @@ module EvoPermissionConcern
 
     # Em caso de erro, negar acesso por seguranca
     false
+  end
+
+  # A request authenticated by an API access token is also bounded by the
+  # token's scopes. Checks about another user are not.
+  def api_token_scope_allows?(user_id, permission)
+    scopes = Current.api_token_scopes
+    return true if scopes.nil?
+    return true unless Current.authentication_method == 'api_access_token'
+    return true unless user_id.to_s == Current.user&.id.to_s
+
+    scopes.include?(permission)
   end
 
   def render_permission_denied

@@ -599,6 +599,17 @@ on:
       # CRM token gets a 401 from the auth, and every RBAC check then denies.
       - 'app/services/evo_auth_service.rb'
       - 'spec/services/evo_auth_service_spec.rb'
+      # An API access token is bounded by its scopes, which the auth sends with
+      # the validation, and is looked up by its digest.
+      - 'app/models/access_token.rb'
+      - 'app/controllers/concerns/evo_auth_concern.rb'
+      - 'app/controllers/concerns/evo_permission_concern.rb'
+      - 'app/controllers/concerns/access_token_auth_helper.rb'
+      - 'app/controllers/public/api/v1/base_controller.rb'
+      - 'lib/current.rb'
+      - 'spec/models/access_token_spec.rb'
+      - 'spec/lib/evo_permission_concern_api_token_scope_spec.rb'
+      - 'spec/requests/api/v1/api_access_token_scopes_spec.rb'
 
 permissions:
   contents: read
@@ -848,4 +859,7 @@ jobs:
             spec/services/scheduled_actions/executor_service_spec.rb \
             spec/services/scheduled_actions/executor_service_retry_spec.rb \
             spec/services/evo_auth_service_spec.rb \
+            spec/models/access_token_spec.rb \
+            spec/lib/evo_permission_concern_api_token_scope_spec.rb \
+            spec/requests/api/v1/api_access_token_scopes_spec.rb \
             --format progress
