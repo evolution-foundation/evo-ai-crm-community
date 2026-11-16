@@ -47,6 +47,7 @@ on:
       # The presence cleanup cron enqueues the job that does the work; a mismatched call fails only at runtime.
       - 'app/jobs/internal/remove_stale_redis_keys_job.rb'
       - 'app/jobs/internal/process_stale_redis_keys_job.rb'
+      - 'app/services/internal/remove_stale_redis_keys_service.rb'
       - 'spec/jobs/internal/remove_stale_redis_keys_job_spec.rb'
       # Applying a label guarantees its catalog entry; the label services and the
       # automation rules have their own globs elsewhere in this list.

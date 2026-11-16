@@ -12,7 +12,7 @@ RSpec.describe Internal::RemoveStaleRedisKeysJob do
   end
 
   it 'removes stale contact presence and keeps the fresh one' do
-    Redis::Alfred.zadd(key, 1.hour.ago.to_i, 'stale-contact')
+    Redis::Alfred.zadd(key, (OnlineStatusTracker::PRESENCE_DURATION + 1.minute).ago.to_i, 'stale-contact')
     Redis::Alfred.zadd(key, Time.zone.now.to_i, 'fresh-contact')
 
     perform_enqueued_jobs { described_class.perform_now }
