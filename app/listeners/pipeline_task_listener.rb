@@ -90,9 +90,17 @@ class PipelineTaskListener < BaseListener
       completed_at: task.completed_at
     }
 
-    WebhookJob.perform_later(nil, event_name, payload)
+    deliver_to_account_webhooks(event_name, payload)
   rescue StandardError => e
     Rails.logger.error "[PipelineTaskListener] Error dispatching webhook: #{e.message}"
     Sentry.capture_exception(e) if defined?(Sentry)
+  end
+
+  def deliver_to_account_webhooks(event_name, payload)
+    Webhook.account_type.each do |webhook|
+      next unless webhook.subscriptions.include?(event_name)
+
+      WebhookJob.perform_later(webhook.url, payload)
+    end
   end
 end
