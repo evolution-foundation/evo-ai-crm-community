@@ -38,6 +38,11 @@ class AdministratorNotifications::AccountNotificationMailer < AdministratorNotif
     send_notification(subject, to: email_to, action_url: file_url)
   end
 
+  def contact_export_complete_with_data(csv_data, email_to)
+    attachments["contacts-#{Time.zone.today.iso8601}.csv"] = { mime_type: 'text/csv', content: csv_data }
+    send_notification('Your contact export is ready.', to: email_to)
+  end
+
   def automation_rule_disabled(rule)
     subject = 'Automation rule disabled due to validation errors.'
     action_url = settings_url('automation/list')
