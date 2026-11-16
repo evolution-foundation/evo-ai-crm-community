@@ -25,6 +25,7 @@ RSpec.describe TeamNotifications::AutomationNotificationMailer do
     mail = described_class.with({}).conversation_creation(conversation, team, 'Mensagem da automação').deliver_now
 
     expect(mail.to).to eq([agent.email])
-    expect(mail.body.encoded).to include("/conversations/#{conversation.id}")
+    link = "#{ENV.fetch('FRONTEND_URL', 'http://localhost:5173').chomp('/')}/conversations/#{conversation.id}"
+    expect(mail.body.encoded).to include(link)
   end
 end
