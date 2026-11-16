@@ -117,7 +117,7 @@ class Pipelines::StageInactivityActionsService
     conversation = @pipeline_item.conversation
     return nil if conversation.nil?
 
-    conversation.messages.incoming.order(created_at: :desc).limit(1).pick(:created_at)
+    conversation.messages.incoming.reorder(created_at: :desc).limit(1).pick(:created_at)
   end
 
   # --- idempotency key ------------------------------------------------------

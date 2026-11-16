@@ -93,6 +93,23 @@ RSpec.describe Pipelines::StageInactivityActionsService do
         expect { svc.process }.not_to change(StageInactivityExecution, :count)
       end
     end
+
+    context 'when no_customer_reply counts from the latest customer message' do
+      before do
+        set_rule(minutes: 5, base: 'no_customer_reply')
+        conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'primeira', created_at: 30.minutes.ago)
+      end
+
+      it 'does NOT fire when the customer replied after the first message' do
+        conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'resposta', created_at: 1.minute.ago)
+        expect { service.process }.not_to change(StageInactivityExecution, :count)
+      end
+
+      it 'fires once the latest reply is older than the threshold' do
+        conversation.messages.create!(inbox: inbox, message_type: :incoming, content: 'resposta', created_at: 6.minutes.ago)
+        expect { service.process }.to change(StageInactivityExecution, :count).by(1)
+      end
+    end
   end
 
   describe 'reset semantics' do
