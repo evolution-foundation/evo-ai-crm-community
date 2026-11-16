@@ -7,6 +7,6 @@ class Internal::RemoveStaleRedisKeysJob < ApplicationJob
 
   def perform
     Rails.logger.info "Enqueuing ProcessStaleRedisKeysJob"
-    Internal::ProcessStaleRedisKeysJob.perform_later(nil)
+    Internal::ProcessStaleRedisKeysJob.perform_later
   end
 end
