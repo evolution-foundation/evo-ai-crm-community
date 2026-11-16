@@ -31,6 +31,11 @@ on:
       - 'spec/listeners/automation_rule_listener_pipeline_stage_updated_contact_card_spec.rb'
       - 'spec/listeners/automation_rule_listener_pipeline_stage_updated_e2e_spec.rb'
       - 'spec/listeners/pipeline_stage_automation_listener_spec.rb'
+      # ContactCompanyListener is subscribed by the sync dispatcher only; a second global subscription multiplied every broadcast.
+      - 'app/listeners/contact_company_listener.rb'
+      - 'app/dispatchers/**'
+      - 'config/initializers/contact_company_listeners.rb'
+      - 'spec/listeners/contact_company_listener_broadcast_spec.rb'
       - 'spec/listeners/action_cable_listener_conversation_update_spec.rb'
       - 'spec/jobs/action_cable_broadcast_job_spec.rb'
       - 'spec/models/conversation_label_dispatch_spec.rb'
@@ -838,6 +843,7 @@ jobs:
             spec/helpers/message_format_helper_spec.rb \
             spec/migrations/20260914120000_drop_mentions_table_spec.rb \
             spec/finders/message_finder_spec.rb \
+            spec/listeners/contact_company_listener_broadcast_spec.rb \
             spec/requests/api/v1/conversations/messages_pagination_spec.rb \
             spec/requests/api/v1/conversations/custom_attributes_spec.rb \
             spec/requests/api/v1/widget/configs_spec.rb \
