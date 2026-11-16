@@ -4,16 +4,15 @@ class PipelineTaskListener < BaseListener
 
     return unless task
 
-    # Send assignment notification
-    if task.assigned_to.present?
-      PipelineTasks::NotificationService.new(
-        task: task,
-        notification_type: :pipeline_task_assigned
-      ).perform
-    end
-
-    # Dispatch webhook event
+    # Webhook first: a failing notification must not hold the event back.
     dispatch_webhook_event('pipeline_task.created', task)
+
+    return if task.assigned_to.blank?
+
+    PipelineTasks::NotificationService.new(
+      task: task,
+      notification_type: :pipeline_task_assigned
+    ).perform
   end
 
   def pipeline_task_completed(event)
@@ -90,9 +89,18 @@ class PipelineTaskListener < BaseListener
       completed_at: task.completed_at
     }
 
-    WebhookJob.perform_later(nil, event_name, payload)
+    deliver_to_account_webhooks(event_name, payload, task.pipeline_item&.conversation&.inbox_id)
   rescue StandardError => e
     Rails.logger.error "[PipelineTaskListener] Error dispatching webhook: #{e.message}"
     Sentry.capture_exception(e) if defined?(Sentry)
+  end
+
+  def deliver_to_account_webhooks(event_name, payload, inbox_id)
+    Webhook.account_type.each do |webhook|
+      next unless webhook.subscriptions.include?(event_name)
+      next if inbox_id.present? && webhook.inbox_id.present? && webhook.inbox_id != inbox_id
+
+      WebhookJob.perform_later(webhook.url, payload)
+    end
   end
 end
