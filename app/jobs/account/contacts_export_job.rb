@@ -1,6 +1,12 @@
 class Account::ContactsExportJob < ApplicationJob
   queue_as :low
 
+  PII_MASKERS = {
+    'email' => :mask_email, 'phone_number' => :mask_phone, 'identifier' => :mask_identifier, 'name' => :mask_phone_like_name
+  }.freeze
+  # A cell a spreadsheet would run as a formula; a leading + or - followed only by phone characters is data.
+  FORMULA_START = /\A(?:[=@\t\r]|[+-](?![\d\s().*-]*\z))/
+
   def perform(user_id, column_names, params)
     @params = params
     @user = User.find(user_id)
@@ -13,12 +19,24 @@ class Account::ContactsExportJob < ApplicationJob
   private
 
   def generate_csv(headers)
+    mask = mask_pii?
     CSV.generate do |csv|
       csv << headers
       contacts.each do |contact|
-        csv << headers.map { |header| contact.send(header) }
+        csv << headers.map { |header| csv_cell(contact, header, mask) }
       end
     end
+  end
+
+  def csv_cell(contact, header, mask)
+    value = contact.send(header)
+    value = ContactPiiMasker.public_send(PII_MASKERS[header], value) if mask && PII_MASKERS.key?(header)
+    value.is_a?(String) && value.match?(FORMULA_START) ? "'#{value}" : value
+  end
+
+  # Same rule as the API serializers: with the account flag on, only admins see raw contact PII.
+  def mask_pii?
+    ContactPiiMasker.account_flag_enabled? && !@user.administrator?
   end
 
   def contacts
@@ -40,7 +58,7 @@ class Account::ContactsExportJob < ApplicationJob
     return if csv_data.blank?
 
     mailer = AdministratorNotifications::AccountNotificationMailer.with({})
-    mailer.contact_export_complete_with_data(csv_data, @user.email)&.deliver_later
+    mailer.contact_export_complete_with_data(csv_data, @user.email)&.deliver_now
   end
 
   def default_columns
