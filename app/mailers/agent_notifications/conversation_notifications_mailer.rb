@@ -1,4 +1,6 @@
 class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
+  include FrontendUrlsHelper
+
   def conversation_creation(conversation, agent, _user)
     return unless smtp_config_set_or_development?
 
@@ -6,7 +8,7 @@ class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
     @conversation = conversation
     inbox_name = @conversation.inbox&.sanitized_name
     subject = "#{@agent.available_name}, A new conversation [ID - #{@conversation.display_id}] has been created in #{inbox_name}."
-    @action_url = app_conversation_url(id: @conversation.display_id)
+    @action_url = frontend_url("conversations/#{@conversation.id}")
     send_mail_with_liquid(to: @agent.email, subject: subject) and return
   end
 
@@ -16,7 +18,7 @@ class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
     @agent = agent
     @conversation = conversation
     subject = "#{@agent.available_name}, A new conversation [ID - #{@conversation.display_id}] has been assigned to you."
-    @action_url = app_conversation_url(id: @conversation.display_id)
+    @action_url = frontend_url("conversations/#{@conversation.id}")
     send_mail_with_liquid(to: @agent.email, subject: subject) and return
   end
 
@@ -28,7 +30,7 @@ class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
     @agent = agent
     @conversation = conversation
     subject = "#{@agent.available_name}, New message in your assigned conversation [ID - #{@conversation.display_id}]."
-    @action_url = app_conversation_url(id: @conversation.display_id)
+    @action_url = frontend_url("conversations/#{@conversation.id}")
     send_mail_with_liquid(to: @agent.email, subject: subject) and return
   end
 
@@ -40,7 +42,7 @@ class AgentNotifications::ConversationNotificationsMailer < ApplicationMailer
     @agent = agent
     @conversation = conversation
     subject = "#{@agent.available_name}, New message in your participating conversation [ID - #{@conversation.display_id}]."
-    @action_url = app_conversation_url(id: @conversation.display_id)
+    @action_url = frontend_url("conversations/#{@conversation.id}")
     send_mail_with_liquid(to: @agent.email, subject: subject) and return
   end
 
