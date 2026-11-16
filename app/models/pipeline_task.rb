@@ -164,6 +164,18 @@ class PipelineTask < ApplicationRecord
     )
   end
 
+  def push_event_data
+    {
+      id: id,
+      title: title,
+      status: status,
+      priority: priority,
+      due_date: due_date,
+      pipeline_item_id: pipeline_item_id,
+      assigned_to_id: assigned_to_id
+    }
+  end
+
   def mark_as_overdue
     return unless overdue? && !status_overdue?
 
