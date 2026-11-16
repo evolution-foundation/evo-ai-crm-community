@@ -44,6 +44,10 @@ on:
       - 'app/controllers/api/v1/contacts_controller.rb'
       - 'app/jobs/delete_object_job.rb'
       - 'spec/jobs/delete_object_job_spec.rb'
+      # The presence cleanup cron enqueues the job that does the work; a mismatched call fails only at runtime.
+      - 'app/jobs/internal/remove_stale_redis_keys_job.rb'
+      - 'app/jobs/internal/process_stale_redis_keys_job.rb'
+      - 'spec/jobs/internal/remove_stale_redis_keys_job_spec.rb'
       # Applying a label guarantees its catalog entry; the label services and the
       # automation rules have their own globs elsewhere in this list.
       - 'app/models/label.rb'
@@ -856,6 +860,7 @@ jobs:
             spec/requests/api/v1/pundit_gated_creates_rbac_spec.rb \
             spec/requests/api/v1/pipeline_visibility_authz_spec.rb \
             spec/requests/api/v1/inboxes_spec.rb \
+            spec/jobs/internal/remove_stale_redis_keys_job_spec.rb \
             spec/requests/api/v1/team_members_spec.rb \
             spec/services/scheduled_actions/executor_service_create_task_spec.rb \
             spec/services/scheduled_actions/executor_service_spec.rb \
