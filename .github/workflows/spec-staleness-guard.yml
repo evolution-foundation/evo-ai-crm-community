@@ -13,6 +13,9 @@ on:
       - 'app/models/pipeline_stage.rb'
       - 'app/models/conversation.rb'
       - 'app/models/contact.rb'
+      # The stale-contact cleanup deletes with delete_all, so its scope must skip every row a foreign key still points to.
+      - 'app/services/internal/remove_stale_contacts_service.rb'
+      - 'spec/services/internal/remove_stale_contacts_service_spec.rb'
       - 'app/models/role.rb'
       - 'app/services/automation_rules/**'
       # The automation evaluator inherits from FilterService and both read the
@@ -703,6 +706,7 @@ jobs:
             spec/requests/api/v1/automation_rules_spec.rb \
             spec/requests/api/v1/webhooks/purchases_spec.rb \
             spec/models/contact_phone_number_spec.rb \
+            spec/services/internal/remove_stale_contacts_service_spec.rb \
             spec/services/whatsapp/phone_number_normalizer_spec.rb \
             spec/builders/contact_inbox_with_contact_builder_phone_lookup_spec.rb \
             spec/builders/contact_inbox_builder_spec.rb \

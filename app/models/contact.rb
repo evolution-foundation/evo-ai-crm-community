@@ -157,14 +157,14 @@ class Contact < ApplicationRecord
 
   # Find contacts that:
   # 1. Have no identification (email, phone_number, and identifier are NULL or empty string)
-  # 2. Have no conversations
+  # 2. Have no conversations, pipeline items or company links
   # 3. Are older than the specified time period
   scope :stale_without_conversations, lambda { |time_period|
     where('contacts.email IS NULL OR contacts.email = ?', '')
       .where('contacts.phone_number IS NULL OR contacts.phone_number = ?', '')
       .where('contacts.identifier IS NULL OR contacts.identifier = ?', '')
       .where('contacts.created_at < ?', time_period)
-      .where.missing(:conversations)
+      .where.missing(:conversations, :pipeline_items, :contact_companies, :company_contacts)
   }
 
   def get_source_id(inbox_id)

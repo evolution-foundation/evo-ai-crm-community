@@ -1,7 +1,7 @@
 # housekeeping
 # remove contacts that:
 # - have no identification (email, phone_number, and identifier are NULL)
-# - have no conversations
+# - have no conversations, pipeline items or company links
 # - are older than 30 days
 
 class Internal::RemoveStaleContactsJob < ApplicationJob
