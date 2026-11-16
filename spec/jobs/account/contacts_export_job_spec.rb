@@ -1,27 +1,41 @@
 # frozen_string_literal: true
 
 require 'rails_helper'
+require 'webmock/rspec'
 
-RSpec.describe Account::ContactsExportJob, type: :job do
-  let!(:user) { User.create!(name: 'Export Test User', email: "export-test-#{SecureRandom.hex(4)}@example.com") }
+RSpec.describe Account::ContactsExportJob do
+  include ActiveJob::TestHelper
 
-  describe '#perform' do
-    it 'generates CSV and sends mail' do
-      mailer_instance = instance_double(AdministratorNotifications::AccountNotificationMailer)
-      mail_message = instance_double(ActionMailer::MessageDelivery)
+  let(:user) { User.create!(name: 'Exportador', email: %w[exportador example.com].join('@')) }
 
-      allow(AdministratorNotifications::AccountNotificationMailer)
-        .to receive(:with).with({}).and_return(mailer_instance)
-      allow(mailer_instance)
-        .to receive(:contact_export_complete_with_data).and_return(mail_message)
-      allow(mail_message).to receive(:deliver_later)
+  around do |example|
+    original = ActionMailer::Base.delivery_method
+    ActionMailer::Base.delivery_method = :test
+    example.run
+  ensure
+    ActionMailer::Base.delivery_method = original
+  end
 
-      described_class.perform_now(nil, user.id, %w[id name email], {})
+  before do
+    allow_any_instance_of(AdministratorNotifications::AccountNotificationMailer)
+      .to receive(:smtp_config_set_or_development?).and_return(true)
+    ActionMailer::Base.deliveries.clear
+  end
 
-      expect(mailer_instance).to have_received(:contact_export_complete_with_data) do |csv_data, email|
-        expect(csv_data).to include('id,name,email')
-        expect(email).to eq(user.email)
-      end
+  it 'emails the CSV with the contacts to whoever asked for the export' do
+    Contact.create!(name: 'Ana Export', email: %w[ana-export example.com].join('@'))
+    Contact.create!(name: 'Bruno Export', phone_number: '+5511999990000')
+
+    perform_enqueued_jobs(only: ActionMailer::MailDeliveryJob) do
+      described_class.perform_now(user.id, %w[name email phone_number], {})
     end
+
+    mail = ActionMailer::Base.deliveries.last
+    expect(mail.to).to eq([user.email])
+    csv = mail.attachments.find { |a| a.filename.end_with?('.csv') }
+    expect(csv).to be_present
+    rows = CSV.parse(csv.decoded)
+    expect(rows.first).to eq(%w[name email phone_number])
+    expect(rows.map(&:first)).to include('Ana Export', 'Bruno Export')
   end
 end

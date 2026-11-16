@@ -38,6 +38,10 @@ on:
       - 'spec/models/pipeline_spec.rb'
       - 'spec/models/role_spec.rb'
       - 'spec/requests/api/v1/contacts_spec.rb'
+      # The contact export job delivers through a mailer method; a stubbed mailer hid that the method did not exist.
+      - 'app/jobs/account/contacts_export_job.rb'
+      - 'app/mailers/administrator_notifications/account_notification_mailer.rb'
+      - 'spec/jobs/account/contacts_export_job_spec.rb'
       - 'spec/channels/room_channel_spec.rb'
       # EVO-2186: the contact/conversation delete paths clean FK dependencies by
       # hand, so the code that does it must trigger the specs that cover it.
@@ -845,6 +849,7 @@ jobs:
             spec/models/label_validation_spec.rb \
             spec/models/custom_attribute_definition_validation_spec.rb \
             spec/requests/api/v1/labels_spec.rb \
+            spec/jobs/account/contacts_export_job_spec.rb \
             spec/requests/api/v1/canned_responses_validation_spec.rb \
             spec/requests/api/v1/custom_attribute_definitions_validation_spec.rb \
             spec/controllers/api/base_controller_validation_codes_spec.rb \
