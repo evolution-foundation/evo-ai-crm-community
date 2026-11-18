@@ -6,9 +6,10 @@ require 'webmock/rspec'
 # DTO-shape and symbol/string-key regressions the over-mocked unit specs miss.
 RSpec.describe 'EvoFlow publish integration', type: :job do
   let(:message_id) { EvoFlow::PayloadBuilder.message_id_for('contact.created', 42, 'evt-uuid') }
+  let(:properties) { { id: '0b9f0c3e-6a3e-4f43-9a52-2f1d4f8f1a10', source: 'system' } }
   let(:payload) do
     EvoFlow::PayloadBuilder.build_track(
-      event_name: 'contact.created', contact_id: 42, properties: { plan: 'pro' },
+      event_name: 'contact.created', contact_id: 42, properties: properties,
       occurred_at: Time.zone.parse('2026-05-19T12:00:00Z'), message_id: message_id
     )
   end
@@ -25,8 +26,8 @@ RSpec.describe 'EvoFlow publish integration', type: :job do
   def real_track_dto?(request)
     body = JSON.parse(request.body)
     body['messageId'] == message_id && body['contactId'] == '42' &&
-      body['event'] == 'contact.created' && body['properties'] == { 'plan' => 'pro' } &&
-      body['timestamp'] == '2026-05-19T12:00:00Z' &&
+      body['event'] == 'contact.created' && body['properties'] == properties.stringify_keys &&
+      body['timestamp'] == '2026-05-19T12:00:00.000Z' &&
       !body.key?('accountId') && !body.key?('eventType')
   end
 

@@ -23,7 +23,7 @@ RSpec.describe EvoFlow::PayloadBuilder do
         contactId: '42',
         event: 'custom',
         properties: { a: 1 },
-        timestamp: occurred_at.utc.iso8601
+        timestamp: '2026-05-19T12:00:00.000Z'
       )
     end
 
@@ -93,7 +93,7 @@ RSpec.describe EvoFlow::PayloadBuilder do
         contactId: '42',
         eventName: 'custom',
         traits: { email: 'x' },
-        timestamp: occurred_at.utc.iso8601
+        timestamp: '2026-05-19T12:00:00.000Z'
       )
     end
 
@@ -147,8 +147,9 @@ RSpec.describe EvoFlow::PayloadBuilder do
 
   describe '.iso8601' do
     it 'normalises a valid string to UTC ISO-8601' do
-      expect(described_class.iso8601('2026-05-19T09:00:00-03:00')).to eq('2026-05-19T12:00:00Z')
-      expect(described_class.iso8601('2026-05-19T12:00:00Z')).to eq('2026-05-19T12:00:00Z')
+      expect(described_class.iso8601('2026-05-19T09:00:00-03:00')).to eq('2026-05-19T12:00:00.000Z')
+      expect(described_class.iso8601('2026-05-19T12:00:00Z')).to eq('2026-05-19T12:00:00.000Z')
+      expect(described_class.iso8601('2026-05-19T12:00:00.250Z')).to eq('2026-05-19T12:00:00.250Z')
     end
 
     it 'fails fast on an unparseable string (no silent bad data) (F11)' do
@@ -156,7 +157,15 @@ RSpec.describe EvoFlow::PayloadBuilder do
     end
 
     it 'formats Time as UTC' do
-      expect(described_class.iso8601(occurred_at)).to eq(occurred_at.utc.iso8601)
+      expect(described_class.iso8601(occurred_at)).to eq('2026-05-19T12:00:00.000Z')
+    end
+
+    it 'keeps the milliseconds, so two events in the same second stay ordered' do
+      first = Time.zone.parse('2026-11-09T22:23:22.120Z')
+      second = Time.zone.parse('2026-11-09T22:23:22.420Z')
+
+      expect(described_class.iso8601(first)).to eq('2026-11-09T22:23:22.120Z')
+      expect(described_class.iso8601(second)).to eq('2026-11-09T22:23:22.420Z')
     end
 
     it 'raises ArgumentError on nil — no implicit Time.current fallback (L3)' do
