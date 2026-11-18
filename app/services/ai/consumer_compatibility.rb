@@ -2,9 +2,9 @@
 
 # Which providers each AI feature can actually talk to (FR18).
 #
-# AI Agents reach every provider through the core service. The others build a
-# `POST /chat/completions` call, so a non-OpenAI provider there is not a
-# misconfiguration but a different protocol, and it fails at the wire.
+# AI Agents reach every provider through the core service. The CRM features
+# use specific OpenAI endpoints; OpenRouter is enabled only for inbox chat
+# completions, not for the separate transcription, label, or moderation calls.
 #
 # New consumers register here; the resolver needs no change.
 class Ai::ConsumerCompatibility
@@ -12,7 +12,7 @@ class Ai::ConsumerCompatibility
 
   CONSUMERS = {
     ai_agents: ALL_PROVIDERS,
-    inbox_assist: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
+    inbox_assist: Ai::Credential::INBOX_ASSIST_COMPATIBLE_PROVIDERS,
     audio_transcription: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     label_suggestion: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS,
     moderation: Ai::Credential::OPENAI_COMPATIBLE_PROVIDERS
