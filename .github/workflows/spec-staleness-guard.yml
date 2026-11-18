@@ -505,6 +505,10 @@ on:
       - 'app/listeners/evo_flow/scheduled_action_events_listener.rb'
       - 'spec/models/scheduled_action_spec.rb'
       - 'spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb'
+      # evo-flow orders a contact's events by this timestamp; without the
+      # milliseconds a label added and removed in the same second ties.
+      - 'app/services/evo_flow/payload_builder.rb'
+      - 'spec/services/evo_flow/payload_builder_spec.rb'
       - 'app/controllers/api/v1/scheduled_actions_controller.rb'
       - 'spec/requests/api/v1/scheduled_actions_spec.rb'
       # The advisory lock in ensure_display_id is what keeps two simultaneous
@@ -738,6 +742,7 @@ jobs:
             spec/models/scheduled_action_spec.rb \
             spec/services/pipeline_tasks/notification_service_spec.rb \
             spec/listeners/evo_flow/scheduled_action_events_listener_spec.rb \
+            spec/services/evo_flow/payload_builder_spec.rb \
             spec/requests/api/v1/scheduled_actions_spec.rb \
             spec/listeners/automation_rule_listener_contact_spec.rb \
             spec/listeners/pipeline_task_listener_webhook_spec.rb \

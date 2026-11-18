@@ -53,16 +53,18 @@ module EvoFlow
       Digest::SHA256.hexdigest("#{event_name}|#{contact_id}|#{source_event_uuid}")
     end
 
-    # Always emits UTC ISO-8601. A String is validated by re-parsing (fail
+    # Always emits UTC ISO-8601 with milliseconds: evo-flow orders a contact's
+    # events by this timestamp, so a label added and removed in the same
+    # second would otherwise tie. A String is validated by re-parsing (fail
     # fast with ArgumentError rather than shipping an unparseable timestamp
     # that evo-flow would silently misread/reject downstream). nil is also
     # rejected — the caller must be explicit about the event timestamp so a
     # missing occurred_at never silently becomes "now".
     def self.iso8601(time)
       raise ArgumentError, 'occurred_at is required (no implicit Time.current fallback)' if time.nil?
-      return Time.iso8601(time).utc.iso8601 if time.is_a?(String)
+      return Time.iso8601(time).utc.iso8601(3) if time.is_a?(String)
 
-      time.utc.iso8601
+      time.utc.iso8601(3)
     end
   end
 end

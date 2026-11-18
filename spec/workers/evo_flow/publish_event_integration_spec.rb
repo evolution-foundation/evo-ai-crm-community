@@ -26,7 +26,7 @@ RSpec.describe 'EvoFlow publish integration', type: :job do
     body = JSON.parse(request.body)
     body['messageId'] == message_id && body['contactId'] == '42' &&
       body['event'] == 'contact.created' && body['properties'] == { 'plan' => 'pro' } &&
-      body['timestamp'] == '2026-05-19T12:00:00Z' &&
+      body['timestamp'] == '2026-05-19T12:00:00.000Z' &&
       !body.key?('accountId') && !body.key?('eventType')
   end
 
