@@ -3,6 +3,8 @@
 module BotRuntime
   class SendEventJob < ApplicationJob
     queue_as :bot_runtime
+    # The event carries the bot's api_key.
+    self.log_arguments = false
     retry_on StandardError, wait: :polynomially_longer, attempts: 3
 
     discard_on BotRuntime::CircuitBreaker::CircuitOpenError do |_job, error|
