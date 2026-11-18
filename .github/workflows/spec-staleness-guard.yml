@@ -912,4 +912,5 @@ jobs:
             spec/models/access_token_spec.rb \
             spec/lib/evo_permission_concern_api_token_scope_spec.rb \
             spec/requests/api/v1/api_access_token_scopes_spec.rb \
+            spec/jobs/bot_runtime/send_event_job_spec.rb \
             --format progress
