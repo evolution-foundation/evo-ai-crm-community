@@ -147,26 +147,20 @@ class Api::V1::EvolutionGo::QrcodesController < Api::V1::BaseController
     # Evolution Go API retorna:
     # {
     #   "data": {
-    #     "Qrcode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
-    #     "Code": "2@C7BUZArTUkKYRlxxRvQxa3+qoKLOywu5QcewxlFtU1bbG2..."
+    #     "qrcode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+    #     "code": "2@C7BUZArTUkKYRlxxRvQxa3+qoKLOywu5QcewxlFtU1bbG2..."
     #   },
     #   "message": "success"
     # }
+    # Até a 0.7.1 os campos vinham sem tag JSON ("Qrcode"/"Code"); a 0.7.2
+    # passou a serializá-los em minúsculo. Aceita as duas grafias.
+    payload = parsed_response['data'] || parsed_response
 
-    if parsed_response['data']
-      {
-        base64: parsed_response['data']['Qrcode'],
-        code: parsed_response['data']['Code'],
-        connected: false
-      }
-    else
-      # Fallback se estrutura for diferente
-      {
-        base64: parsed_response['Qrcode'],
-        code: parsed_response['Code'],
-        connected: false
-      }
-    end
+    {
+      base64: payload['qrcode'] || payload['Qrcode'],
+      code: payload['code'] || payload['Code'],
+      connected: false
+    }
 
   rescue JSON::ParserError => e
     Rails.logger.error "Evolution Go API: QR code JSON parse error: #{e.message}, Body: #{response&.body}"
