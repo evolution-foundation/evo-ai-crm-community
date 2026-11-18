@@ -520,7 +520,7 @@ class AgentBotListener < BaseListener
   end
 
   def delegate_to_bot_runtime(agent_bot, payload)
-    return unless incoming_message_event?(payload)
+    return unless new_incoming_message_event?(payload)
 
     conversation = find_conversation_from_payload(payload)
     return unless conversation
@@ -539,8 +539,10 @@ class AgentBotListener < BaseListener
     Rails.logger.error "[BotRuntime] Backtrace: #{e.backtrace.first(5).join("\n")}"
   end
 
-  def incoming_message_event?(payload)
-    return false unless %w[message_created message_updated].include?(payload[:event])
+  # Only a new message: an update (status, edit) of one already delegated would
+  # hand the same text to the bot-runtime again.
+  def new_incoming_message_event?(payload)
+    return false unless payload[:event] == 'message_created'
 
     message_type = payload[:message_type]
     # Handle both string and integer message types

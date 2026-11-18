@@ -902,6 +902,7 @@ jobs:
             spec/requests/api/v1/pipeline_visibility_authz_spec.rb \
             spec/requests/api/v1/inboxes_spec.rb \
             spec/jobs/internal/remove_stale_redis_keys_job_spec.rb \
+            spec/listeners/agent_bot_listener_bot_runtime_delegation_spec.rb \
             spec/requests/api/v1/team_members_spec.rb \
             spec/services/scheduled_actions/executor_service_create_task_spec.rb \
             spec/services/scheduled_actions/executor_service_spec.rb \
